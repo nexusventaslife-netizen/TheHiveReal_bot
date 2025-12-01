@@ -1,96 +1,84 @@
-# main.py - CÓDIGO SEGURO Y COMPLETO PARA RAILWAY
+
 import os
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackContext, CallbackQueryHandler
-import logging
-import sqlite3
+import requests
+import telegram
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from flask import Flask # Nueva linea para abrir el puerto
+app = Flask(__name__) # Nueva linea para abrir el puerto
 
-# 1. CONFIGURACIÓN DE SEGURIDAD (¡SE LEE DESDE RAILWAY!)
-# El bot lee TUS 4 valores secretos desde Railway, no desde el código.
-TOKEN = os.environ.get('TELEGRAM_TOKEN') 
-HG_CODE = os.environ.get('HONEYGAIN_CODE')
-PA_CODE = os.environ.get('PAWNS_CODE')
-SB_CODE = os.environ.get('SWAGBUCKS_CODE')
+# --- CLAVES SECRETAS ---
+# Las claves están en las Variables de Entorno de Render.
+# Asegúrate de que los nombres sean EXACTOS: TELEGRAM_TOKEN, HONEYGAIN_CODE, etc.
 
-if not TOKEN or not HG_CODE or not PA_CODE or not SB_CODE:
-    raise ValueError("ERROR FATAL: Una o más variables (TOKEN, códigos de APP) no se configuraron en Railway.")
+TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
+HONEYGAIN_CODE = os.environ.get('HONEYGAIN_CODE')
+PAWNS_CODE = os.environ.get('PAWNS_CODE')
+SWAGBUCKS_CODE = os.environ.get('SWAGBUCKS_CODE')
 
-# 2. CONFIGURACIÓN DE APPS
-# Se construye el link de forma segura con los valores secretos.
-APPS = {
-    'honeygain': f'https://r.app/honeygain/{HG_CODE}',  
-    'pawns': f'https://pawns.app/r/{PA_CODE}',  
-    'swagbucks': f'https://www.swagbucks.com/?r={SB_CODE}'  
+# --- LINKS DE REFERIDOS ---
+LINKS = {
+    'Honeygain': f'https://r.honeygain.me/THEHIVE{HONEYGAIN_CODE}',
+    'Pawns App': f'https://pawns.app/?r={PAWNS_CODE}',
+    'Swagbucks': f'https://www.swagbucks.com/?r={SWAGBUCKS_CODE}'
 }
 
-# Configuración de Logging
-logging.basicConfig(level=logging.INFO)
+# --- COMANDOS DEL BOT ---
 
-# Base de datos (SQLite)
-conn = sqlite3.connect('referrals.db')
-cursor = conn.cursor()
-cursor.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, referrals INTEGER DEFAULT 0, points INTEGER DEFAULT 0, lang TEXT DEFAULT 'es')''')
-conn.commit()
-
-# Idiomas y Funciones... (el cuerpo del bot)
-LANG = {
-    'es': {'welcome': '¡Bienvenido al Referral Hive! Gana pasivo con apps. Usa /refer para tu link.',
-           'choose': 'Elige app para referral link:',
-           'your_link': 'Tu link referral al bot: {link}\nReferrals: {refs}\n¡Por cada referral, +1 punto!'}
-}
-
-async def start(update: Update, context: CallbackContext) -> None:
-    user_id = update.message.from_user.id
-    cursor.execute('INSERT OR IGNORE INTO users (id, lang) VALUES (?, "es")', (user_id,))
-    conn.commit()
-    texts = LANG['es']
-    keyboard = [[InlineKeyboardButton("Obtener Referrals", callback_data='get_refs')]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(texts['welcome'], reply_markup=reply_markup)
-
-async def button(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    texts = LANG['es']
+async def start_command(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
+    """Responde al comando /start y presenta el bot."""
     
-    if query.data == 'get_refs':
-        text = texts['choose']
-        keyboard = [[InlineKeyboardButton(app.capitalize(), callback_data=app)] for app in APPS]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(text=text, reply_markup=reply_markup)
+    # Construir el mensaje de bienvenida con los enlaces
+    message = (
+        "🤖 **¡Hola! Soy The Hive Real Bot.**\n\n"
+        "Estoy aquí para darte acceso a los enlaces de referido de nuestra comunidad "
+        "para que puedas empezar a ganar ingresos pasivos.\n\n"
+        "🔗 **Nuestros Enlaces:**\n"
+    )
+
+    for name, link in LINKS.items():
+        message += f"▪️ **{name}:** `{link}`\n"
     
-    elif query.data in APPS:
-        link = APPS[query.data]
-        await query.edit_message_text(f'Aquí está tu link para {query.data}: {link}')
+    message += "\n*Copia el enlace completo (incluyendo https://) para que funcione correctamente.*"
 
-async def refer(update: Update, context: CallbackContext) -> None:
-    user_id = update.message.from_user.id
-    cursor.execute('SELECT referrals FROM users WHERE id = ?', (user_id,))
-    refs = cursor.fetchone()[0] if cursor.fetchone() else 0
-    bot_link = f'https://t.me/{context.bot.username}?start={user_id}' 
-    await update.message.reply_text(LANG['es']['your_link'].format(link=bot_link, refs=refs))
+    await update.message.reply_text(message, parse_mode=telegram.constants.ParseMode.MARKDOWN)
 
-async def handle_start_with_ref(update: Update, context: CallbackContext) -> None:
-    if context.args:
-        try:
-            ref_id = int(context.args[0])
-            cursor.execute('UPDATE users SET referrals = referrals + 1 WHERE id = ?', (ref_id,))
-            conn.commit()
-        except Exception:
-            pass 
-    await start(update, context)
+async def help_command(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
+    """Responde al comando /help con una guía."""
+    await update.message.reply_text(
+        "📝 **Guía de Uso:**\n"
+        "Simplemente usa el comando /start para ver todos los enlaces de referido. "
+        "Si necesitas más ayuda, contacta al administrador del canal."
+    )
 
-# --- Función Principal ---
+async def handle_message(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
+    """Ignora cualquier mensaje que no sea un comando."""
+    # Opcional: Podrías responder aquí si quieres que el bot hable con usuarios.
+    pass
 
-def main() -> None:
-    app = Application.builder().token(TOKEN).build()
+# --- INICIO DEL BOT ---
+
+def main():
+    """Inicia el bot y lo mantiene escuchando."""
+    if not TELEGRAM_TOKEN:
+        print("ERROR: La variable TELEGRAM_TOKEN no está configurada. El bot no puede iniciar.")
+        return
+
+    # 1. Crear la aplicación del bot
+    application = Application.builder().token(TELEGRAM_TOKEN).build()
+
+    # 2. Asignar los comandos
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("help", help_command))
     
-    # Añade los Handlers
-    app.add_handler(CommandHandler('start', handle_start_with_ref))
-    app.add_handler(CommandHandler('refer', refer))
-    app.add_handler(CallbackQueryHandler(button))
+    # 3. Asignar el manejo de mensajes (Ignorar texto plano)
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("Bot iniciado. Conectando con Telegram...")
-    app.run_polling() 
+    # 4. Iniciar el bot (modo polling)
+    # Esto es más simple y funciona bien con Render/Uptime Robot.
+    print("Bot iniciado. Escuchando comandos...")
+    application.run_polling(poll_interval=1.0)
+
+# --- PUNTO DE ENTRADA PRINCIPAL ---
 
 if __name__ == '__main__':
     main()
