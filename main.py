@@ -2,35 +2,29 @@ import os
 import telegram
 import time
 import json
-# Importación correcta de clases para Python Telegram Bot 20.0
+import asyncio
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ContextTypes
 
 # --- DEPENDENCIAS DE FIREBASE ---
-# Se verifica la instalación de la librería 'firebase-admin'.
 try:
     import firebase_admin
     from firebase_admin import credentials, firestore
     FIREBASE_IMPORTED = True
 except ImportError:
-    # Este error ocurre si 'firebase-admin' no está en requirements.txt
     FIREBASE_IMPORTED = False
     print("🔴 ADVERTENCIA: La librería 'firebase-admin' no está instalada. La persistencia estará DESHABILITADA.")
 
 
-# Diccionario global para el Throttling (Seguridad)
+# Configuración global
 THROTTLE_LIMITS = {}
 THROTTLE_TIME_SECONDS = 5 
-
-# Variable para almacenar el nombre de usuario del bot (inicializada a None)
 BOT_USERNAME = None 
-
-# Variables de Base de Datos
 db = None # Instancia de Firestore
-DB_ENABLED = False # Flag para saber si la DB está activa
+DB_ENABLED = False 
 
 # --- CLAVES SECRETAS ---
-# Estas claves se cargan desde las variables de entorno de Render
+# Carga de variables de entorno (Render)
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 HONEYGAIN_CODE = os.environ.get('HONEYGAIN_CODE')
 PAWNS_CODE = os.environ.get('PAWNS_CODE')
@@ -56,23 +50,17 @@ def initialize_firebase():
     """Inicializa Firebase usando las credenciales secretas."""
     global db, DB_ENABLED
     
-    # 1. Verificar la importación y la clave
-    if not FIREBASE_IMPORTED:
-        return
-        
-    if not FIREBASE_CREDENTIALS:
-        print("🟡 ADVERTENCIA: La variable 'FIREBASE_CREDENTIALS' no está configurada. Persistencia deshabilitada.")
+    if not FIREBASE_IMPORTED or not FIREBASE_CREDENTIALS:
+        if not FIREBASE_CREDENTIALS:
+            print("🟡 ADVERTENCIA: La variable 'FIREBASE_CREDENTIALS' no está configurada. Persistencia deshabilitada.")
         return
 
     try:
-        # 2. Cargar las credenciales del JSON
         cred_dict = json.loads(FIREBASE_CREDENTIALS)
-        
-        # 3. Inicializar la aplicación de Firebase
         cred = credentials.Certificate(cred_dict)
-        firebase_admin.initialize_app(cred)
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app(cred)
         
-        # 4. Obtener el cliente de Firestore
         db = firestore.client()
         DB_ENABLED = True
         print("🟢 Firestore inicializado correctamente. Persistencia habilitada.")
@@ -81,24 +69,17 @@ def initialize_firebase():
         DB_ENABLED = False
 
 async def get_user_data(user_id: int):
-    """
-    Obtiene los datos del usuario de Firestore o crea un nuevo registro con valores iniciales.
-    Retorna los datos del usuario (dict) o un fallback dict si hay error.
-    """
-    # Retorna un fallback si la DB no está activa
+    """Obtiene los datos del usuario de Firestore o crea un nuevo registro."""
     if not DB_ENABLED:
         return {'referrals': 0, 'points': 0, 'level': 'N/A', 'streak': 0}
 
     try:
-        # Usar el ID del usuario como el ID del documento
         doc_ref = db.collection('users').document(str(user_id))
         doc = doc_ref.get()
 
         if doc.exists:
-            # Usuario existente: retorna sus datos
             return doc.to_dict()
         else:
-            # Nuevo usuario: crea el registro inicial para gamificación
             initial_data = {
                 'id': user_id,
                 'referrals': 0,
@@ -107,21 +88,20 @@ async def get_user_data(user_id: int):
                 'streak': 0,
                 'last_active': time.time()
             }
-            doc_ref.set(initial_data)
+            doc_ref.set(initial_data) 
             return initial_data
             
     except Exception as e:
         print(f"🔴 ERROR de Firestore al obtener/crear usuario {user_id}: {e}")
-        # Fallback en caso de fallo de DB durante la ejecución
         return {'referrals': 0, 'points': 0, 'level': 'N/A', 'streak': 0} 
 
 
-# --- FUNCIONES CENTRALES ---
+# --- HANDLERS Y LÓGICA DE INTERFAZ ---
 
 async def send_links_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Envía el menú de enlaces con Throttling y datos de usuario."""
     
-    # Determinar el origen de la actualización (mensaje o callback)
+    # Obtener el origen y user_id
     if update.callback_query:
         message_source = update.callback_query.message
         user_id = update.callback_query.from_user.id
@@ -129,18 +109,17 @@ async def send_links_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message_source = update.message
         user_id = update.effective_user.id
     else:
-        # Ignorar si no es ni mensaje ni callback
         return
 
     current_time = time.time()
 
-    # Throttling (Seguridad contra spam)
+    # Throttling (Seguridad contra spam) - Aplica antes de la lógica pesada
     if user_id in THROTTLE_LIMITS and (current_time - THROTTLE_LIMITS[user_id] < THROTTLE_TIME_SECONDS):
         return
     THROTTLE_LIMITS[user_id] = current_time
 
     # Lógica de Gamificación (Integración con DB)
-    user_data = await get_user_data(user_id)
+    user_data = await get_user_data(user_id) # Esta llamada es la más lenta
     
     gamification_text = ""
     if DB_ENABLED:
@@ -151,17 +130,16 @@ async def send_links_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"▪️ Nivel: {user_data.get('level', 'Bronze')}\n"
         )
     else:
-        # Advertencia si la DB no está activa
         gamification_text = "\n⚠️ *La persistencia (puntos/niveles) está deshabilitada. ¡Configura Firestore!*"
 
 
-    # Contenido del mensaje (Mejora de diseño y enganche)
+    # Contenido del mensaje (Texto actualizado)
     message = (
-        "👑 **BIENVENIDO A LA COLMENA REAL (THE HIVE)!** 👑\n\n"
+        "👑 **BIENVENIDO A ONEHIVE (THE HIVE)!** 👑\n\n" # Nombre del bot actualizado
         "Usa los enlaces de referido de nuestra comunidad para empezar a generar "
         "ingresos pasivos. ¡La forma más fácil de ganar dinero durmiendo!\n"
         
-        f"{gamification_text}\n" # Insertar la información de gamificación
+        f"{gamification_text}\n"
         
         "**— Servicios de Ingreso Pasivo —**\n"
         "▪️ *Honeygain:* {desc_hg}\n"
@@ -173,28 +151,26 @@ async def send_links_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         desc_s=SERVICE_DESCRIPTIONS['Swagbucks']
     )
     
-    # Crear los botones
+    # Crear los botones. Se usa BOT_USERNAME que es global.
     keyboard = [
         [InlineKeyboardButton("🍯 Honeygain", url=LINKS['Honeygain']),
          InlineKeyboardButton("🐾 Pawns App", url=LINKS['Pawns App'])],
         [InlineKeyboardButton("💵 Swagbucks", url=LINKS['Swagbucks']),
          InlineKeyboardButton("❓ Preguntas Frecuentes", callback_data='faq')],
-        # Botón de Compartir: Usa el nombre de usuario global (BOT_USERNAME)
+        # Este botón usa el BOT_USERNAME obtenido asíncronamente
         [InlineKeyboardButton("🔗 ¡Invita a la Colmena!", switch_inline_query=BOT_USERNAME)] 
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     if update.callback_query:
-        # Editar el mensaje si viene de un botón (para volver al menú)
-        await update.callback_query.answer() # Responder al callback para quitar el reloj
+        await update.callback_query.answer()
         await message_source.edit_text(
             message,
             reply_markup=reply_markup,
             parse_mode=telegram.constants.ParseMode.MARKDOWN
         )
     else:
-        # Responder con un nuevo mensaje si viene de un comando (/start, /links)
         await message_source.reply_text(
             message,
             reply_markup=reply_markup,
@@ -216,13 +192,10 @@ async def faq_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[InlineKeyboardButton("🔙 Volver al Menú", callback_data='menu')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # Determinar si la llamada viene de un callback o un comando
     if update.callback_query:
-        # Si es callback (botón "Preguntas Frecuentes")
-        await update.callback_query.answer() # Responder al callback
+        await update.callback_query.answer()
         await update.callback_query.message.edit_text(faq_message, reply_markup=reply_markup, parse_mode=telegram.constants.ParseMode.MARKDOWN)
     else:
-        # Si es un comando (/ayuda)
         await update.message.reply_text(faq_message, reply_markup=reply_markup, parse_mode=telegram.constants.ParseMode.MARKDOWN)
 
 
@@ -250,7 +223,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ignora cualquier mensaje que no sea un comando o un callback."""
     pass
 
-def main():
+# La función principal ahora es asíncrona para manejar correctamente el bot de Telegram
+async def main():
     """Inicia el bot y lo mantiene escuchando (Polling)."""
     global BOT_USERNAME
     
@@ -263,18 +237,21 @@ def main():
     if FIREBASE_IMPORTED:
         initialize_firebase()
     
-    # 3. Iniciar la aplicación de Telegram (Usa el patrón correcto para PTB 20.0)
-    # Corrección del AttributeError al usar el patrón Application.builder().build()
+    # 3. Iniciar la aplicación de Telegram
     application = Application.builder().token(TELEGRAM_TOKEN).build()
     
-    # 4. Obtener el username del bot para la viralidad
+    # 4. Obtener el username del bot de forma ASÍNCRONA y segura
     try:
-        # Esta línea puede fallar si el token es inválido
-        BOT_USERNAME = application.bot.username
-        print(f"Bot Username detectado: @{BOT_USERNAME}")
+        # get_me() inicializa el bot y obtiene sus datos
+        bot_info = await application.bot.get_me() 
+        BOT_USERNAME = bot_info.username
+        print(f"🟢 Bot Username detectado: @{BOT_USERNAME}")
+    except telegram.error.InvalidToken:
+        print("🔴 ERROR CRÍTICO: El TELEGRAM_TOKEN no es válido. La instancia fallará.")
+        exit(1)
     except Exception as e:
-        print(f"🔴 ERROR: No se pudo obtener el nombre de usuario del bot. Verifica TELEGRAM_TOKEN. Error: {e}")
-        BOT_USERNAME = "TheHiveReal_bot" # Fallback, asumiendo que este es el username del bot
+        print(f"🔴 ERROR: No se pudo obtener el nombre de usuario del bot. Error: {e}")
+        BOT_USERNAME = "TheOneHive_bot" # Fallback, usando el nombre que proporcionaste
 
     # 5. Handlers
     application.add_handler(CommandHandler("start", start_command))
@@ -285,9 +262,14 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     print("Bot listo. Iniciando Polling...")
-    # run_polling es el método recomendado para ambientes de instancia única como Render, lo que mitiga el error Conflict.
-    application.run_polling(poll_interval=5.0)
+    await application.run_polling(poll_interval=5.0)
 
 
 if __name__ == '__main__':
-    main()
+    # Esta línea ejecuta la función asíncrona 'main'
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Bot detenido manualmente.")
+    except Exception as e:
+        print(f"Ocurrió un error inesperado al ejecutar main: {e}")
