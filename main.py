@@ -1,24 +1,23 @@
-import os
+Import os
 import telegram
 import time
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
 
-# --- CONFIGURACIÓN DE SEGURIDAD ---
+# Diccionario global para el Throttling (Seguridad)
 THROTTLE_LIMITS = {}
-THROTTLE_TIME_SECONDS = 5
+THROTTLE_TIME_SECONDS = 5 
 
-# --- CLAVES SECRETAS (ASUMIMOS QUE YA ESTÁN CONFIGURADAS) ---
+# Variable para almacenar el nombre de usuario del bot (inicializada a None)
+BOT_USERNAME = None 
+
+# --- CLAVES SECRETAS ---
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 HONEYGAIN_CODE = os.environ.get('HONEYGAIN_CODE')
 PAWNS_CODE = os.environ.get('PAWNS_CODE')
 SWAGBUCKS_CODE = os.environ.get('SWAGBUCKS_CODE')
 
 # --- LINKS Y DESCRIPCIONES ---
-# El @nombre_de_tu_bot se puede obtener del contexto o si el usuario lo conoce,
-# pero usaremos un texto estático para el mensaje de compartir:
-BOT_USERNAME = "@" + context.bot.username if 'context' in locals() else "@TheHive2.0_bot" # Reemplazar con el nombre de tu bot
-
 LINKS = {
     'Honeygain': f'https://r.honeygain.me/THEHIVE{HONEYGAIN_CODE}',
     'Pawns App': f'https://pawns.app/?r={PAWNS_CODE}',
@@ -34,8 +33,9 @@ SERVICE_DESCRIPTIONS = {
 
 # --- FUNCIONES CENTRALES ---
 
-# Función de Seguridad (Throttling) y Contenido
 async def send_links_menu(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
+    """Envía el menú de enlaces con Throttling."""
+    
     user_id = update.effective_user.id
     current_time = time.time()
 
@@ -60,14 +60,14 @@ async def send_links_menu(update: telegram.Update, context: telegram.ext.Context
         desc_s=SERVICE_DESCRIPTIONS['Swagbucks']
     )
     
-    # Crear los botones de Enlaces
+    # Crear los botones
     keyboard = [
         [InlineKeyboardButton("🍯 Honeygain", url=LINKS['Honeygain']),
          InlineKeyboardButton("🐾 Pawns App", url=LINKS['Pawns App'])],
         [InlineKeyboardButton("💵 Swagbucks", url=LINKS['Swagbucks']),
-         InlineKeyboardButton("❓ Preguntas Frecuentes", callback_data='faq')], # Nuevo botón de Ayuda
-        # Mitigación de Viralidad: Botón de compartir nativo de Telegram
-        [InlineKeyboardButton("🔗 ¡Invita a la Colmena!", switch_inline_query=BOT_USERNAME)]
+         InlineKeyboardButton("❓ Preguntas Frecuentes", callback_data='faq')],
+        # Botón de Compartir: Usa el nombre de usuario global (BOT_USERNAME)
+        [InlineKeyboardButton("🔗 ¡Invita a la Colmena!", switch_inline_query=BOT_USERNAME)] 
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -79,45 +79,37 @@ async def send_links_menu(update: telegram.Update, context: telegram.ext.Context
     )
 
 async def faq_command(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
-    """Mitigación de Enganche: Función de Ayuda y Preguntas Frecuentes."""
+    """Función de Ayuda y Preguntas Frecuentes."""
     faq_message = (
         "📚 **PREGUNTAS FRECUENTES (FAQ)** 📚\n\n"
         "**1. ¿Qué hago si un enlace no funciona?**\n"
-        "R: Simplemente cópialo completo, incluyendo 'https://'. A veces el navegador tiene problemas.\n\n"
+        "R: Simplemente cópialo completo, incluyendo 'https://'.\n\n"
         "**2. ¿Es seguro usar estas apps?**\n"
-        "R: Sí. Todas las apps son revisadas y solo piden compartir ancho de banda.\n\n"
+        "R: Sí. Todas las apps son seguras y solo piden compartir ancho de banda.\n\n"
         "**3. ¿Cómo puedo apoyar más?**\n"
-        f"R: Comparte este bot con un amigo usando el botón 'Invita a la Colmena!' en el menú principal ({BOT_USERNAME})."
+        f"R: Comparte este bot con un amigo usando el botón 'Invita a la Colmena!'."
     )
     
-    # Botón para volver al menú principal
     keyboard = [[InlineKeyboardButton("🔙 Volver al Menú", callback_data='menu')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # El comando /ayuda puede venir de un mensaje o de un botón de callback
     if update.callback_query:
         await update.callback_query.message.edit_text(faq_message, reply_markup=reply_markup, parse_mode=telegram.constants.ParseMode.MARKDOWN)
     else:
         await update.message.reply_text(faq_message, reply_markup=reply_markup, parse_mode=telegram.constants.ParseMode.MARKDOWN)
 
 
-# Manejador de botones en línea (callback_query)
 async def button_handler(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     if query.data == 'faq':
-        await faq_command(update, context) # Llama a FAQ para editar el mensaje
+        await faq_command(update, context)
     elif query.data == 'menu':
-        # Simula el comando /start para volver al menú principal
         await send_links_menu(update, context)
         
         
-# Comandos
 async def start_command(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
-    # Aquí puedes obtener el BOT_USERNAME real si lo necesitas
-    global BOT_USERNAME
-    BOT_USERNAME = "@" + context.bot.username
     await send_links_menu(update, context)
 
 async def links_command(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
@@ -133,22 +125,30 @@ async def handle_message(update: telegram.Update, context: telegram.ext.ContextT
 
 def main():
     """Inicia el bot y lo mantiene escuchando (Polling)."""
-
-    if not TELEGRAM_TOKEN or not HONEYGAIN_CODE or not PAWNS_CODE or not SWAGBUCKS_CODE:
-        print("🔴 ERROR DE SEGURIDAD/CLAVES: Una o más variables esenciales (TOKENS/CÓDIGOS) no están configuradas en Render. Terminando el servicio.")
+    global BOT_USERNAME
+    
+    # Blue Team: Verificación de claves esenciales
+    if not all([TELEGRAM_TOKEN, HONEYGAIN_CODE, PAWNS_CODE, SWAGBUCKS_CODE]):
+        print("🔴 ERROR DE CLAVES: Una o más variables esenciales (TOKENS/CÓDIGOS) no están configuradas en Render.")
         exit(1)
 
+    # Iniciar la aplicación
     application = Application.builder().token(TELEGRAM_TOKEN).build()
+    
+    # Blue Team: Obtener el username del bot para el botón de compartir (Viralidad)
+    BOT_USERNAME = "@" + application.bot.username
+
 
     # Handlers
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("links", links_command))
-    application.add_handler(CommandHandler("ayuda", help_command)) # Nuevo comando /ayuda
-    application.add_handler(telegram.ext.CallbackQueryHandler(button_handler)) # Manejador de botones
+    application.add_handler(CommandHandler("ayuda", help_command))
+    application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("Bot iniciado, protegido con Throttling y optimizado para viralidad. Escuchando comandos...")
-    application.run_polling(poll_interval=1.0)
+    print("Bot optimizado, seguro y listo para la viralidad.")
+    # OPTIMIZACIÓN DE RENDIMIENTO: Polling reducido de 1.0s a 5.0s
+    application.run_polling(poll_interval=5.0)
 
 
 if __name__ == '__main__':
