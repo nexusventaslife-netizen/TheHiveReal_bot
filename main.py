@@ -16,32 +16,49 @@ except ImportError:
     print("🔴 ADVERTENCIA: La librería 'firebase-admin' no está instalada. La persistencia estará DESHABILITADA.")
 
 
-# Configuración global
+# Diccionario global para el Throttling (Seguridad)
 THROTTLE_LIMITS = {}
 THROTTLE_TIME_SECONDS = 5 
+
+# Variable para almacenar el nombre de usuario del bot (inicializada a None)
 BOT_USERNAME = None 
+
+# Variables de Base de Datos
 db = None # Instancia de Firestore
-DB_ENABLED = False 
+DB_ENABLED = False # Flag para saber si la DB está activa
 
 # --- CLAVES SECRETAS ---
-# Carga de variables de entorno (Render)
+# Estas claves se cargan desde las variables de entorno de Render
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
-HONEYGAIN_CODE = os.environ.get('HONEYGAIN_CODE')
-PAWNS_CODE = os.environ.get('PAWNS_CODE')
-SWAGBUCKS_CODE = os.environ.get('SWAGBUCKS_CODE')
 FIREBASE_CREDENTIALS = os.environ.get('FIREBASE_CREDENTIALS') 
 
-# --- LINKS Y DESCRIPCIONES ---
+# Variables de Plataformas (Se utiliza un fallback si no están configuradas)
+HONEYGAIN_CODE = os.environ.get('HONEYGAIN_CODE', 'YOUR_HG_CODE')
+PAWNS_CODE = os.environ.get('PAWNS_CODE', 'YOUR_PAWNS_CODE')
+SWAGBUCKS_CODE = os.environ.get('SWAGBUCKS_CODE', 'YOUR_SB_CODE')
+SURVEYJUNKIE_LINK = os.environ.get('SURVEYJUNKIE_LINK', 'https://surveyjunkie.link/example')
+CLICKWORKER_LINK = os.environ.get('CLICKWORKER_LINK', 'https://clickworker.link/example')
+ADMIN_CONTACT_URL = os.environ.get('ADMIN_CONTACT_URL', 'https://t.me/TheHiveAdmin') # Nuevo link para el admin
+
+# --- LINKS Y DESCRIPCIONES (5 VÍAS DE INGRESO) ---
 LINKS = {
+    # 1. Ingreso Pasivo
     'Honeygain': f'https://r.honeygain.me/THEHIVE{HONEYGAIN_CODE}',
     'Pawns App': f'https://pawns.app/?r={PAWNS_CODE}',
+    # 3. Encuestas de Alta Paga
+    'Survey Junkie': SURVEYJUNKIE_LINK,
+    # 4. Microtareas de Reputación
+    'Clickworker': CLICKWORKER_LINK,
+    # 5. Recompensas/Vídeos
     'Swagbucks': f'https://www.swagbucks.com/?r={SWAGBUCKS_CODE}'
 }
 
 SERVICE_DESCRIPTIONS = {
-    'Honeygain': "Te permite ganar ingresos pasivos compartiendo tu conexión a internet.",
-    'Pawns App': "Similar a Honeygain, te paga por compartir ancho de banda y completar encuestas.",
-    'Swagbucks': "Gana recompensas y dinero en efectivo por comprar, ver videos y responder encuestas."
+    'Honeygain': "Ganancia pasiva compartiendo ancho de banda. Ideal para empezar.",
+    'Pawns App': "Alternativa robusta a Honeygain. Más ancho de banda = más ingreso.",
+    'Survey Junkie': "Encuestas con alta tasa de pago y reputación. Enfocado en rentabilidad.",
+    'Clickworker': "Microtareas (traducción, clasificación, QA) con pago constante.",
+    'Swagbucks': "Gana por compras, ver videos y búsquedas. Un ingreso extra fácil."
 }
 
 # --- FUNCIONES DE BASE DE DATOS (FASE 1: PERSISTENCIA) ---
@@ -50,17 +67,21 @@ def initialize_firebase():
     """Inicializa Firebase usando las credenciales secretas."""
     global db, DB_ENABLED
     
-    if not FIREBASE_IMPORTED or not FIREBASE_CREDENTIALS:
-        if not FIREBASE_CREDENTIALS:
-            print("🟡 ADVERTENCIA: La variable 'FIREBASE_CREDENTIALS' no está configurada. Persistencia deshabilitada.")
+    if not FIREBASE_IMPORTED:
+        return
+        
+    if not FIREBASE_CREDENTIALS:
+        print("🟡 ADVERTENCIA: La variable 'FIREBASE_CREDENTIALS' no está configurada. Persistencia deshabilitada.")
         return
 
     try:
         cred_dict = json.loads(FIREBASE_CREDENTIALS)
         cred = credentials.Certificate(cred_dict)
+        
+        # Prevenir la inicialización múltiple
         if not firebase_admin._apps:
             firebase_admin.initialize_app(cred)
-        
+            
         db = firestore.client()
         DB_ENABLED = True
         print("🟢 Firestore inicializado correctamente. Persistencia habilitada.")
@@ -69,39 +90,41 @@ def initialize_firebase():
         DB_ENABLED = False
 
 async def get_user_data(user_id: int):
-    """Obtiene los datos del usuario de Firestore o crea un nuevo registro."""
+    """Obtiene los datos del usuario o crea un nuevo registro con valores iniciales."""
+    # Retorna un fallback si la DB no está activa
     if not DB_ENABLED:
-        return {'referrals': 0, 'points': 0, 'level': 'N/A', 'streak': 0}
+        return {'referrals': 0, 'points': 0, 'level': 'N/A', 'is_premium': False}
 
     try:
         doc_ref = db.collection('users').document(str(user_id))
         doc = doc_ref.get()
 
         if doc.exists:
+            # Usuario existente
             return doc.to_dict()
         else:
+            # Nuevo usuario: crea el registro inicial para gamificación
             initial_data = {
                 'id': user_id,
                 'referrals': 0,
                 'points': 0, 
-                'level': 'Bronze',
-                'streak': 0,
+                'level': 'Bronze Bee', # Nombre más temático
+                'is_premium': False, # Nuevo campo para la suscripción
                 'last_active': time.time()
             }
-            doc_ref.set(initial_data) 
+            doc_ref.set(initial_data)
             return initial_data
             
     except Exception as e:
         print(f"🔴 ERROR de Firestore al obtener/crear usuario {user_id}: {e}")
-        return {'referrals': 0, 'points': 0, 'level': 'N/A', 'streak': 0} 
+        return {'referrals': 0, 'points': 0, 'level': 'N/A', 'is_premium': False} 
 
 
-# --- HANDLERS Y LÓGICA DE INTERFAZ ---
+# --- FUNCIONES CENTRALES ---
 
 async def send_links_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Envía el menú de enlaces con Throttling y datos de usuario."""
     
-    # Obtener el origen y user_id
     if update.callback_query:
         message_source = update.callback_query.message
         user_id = update.callback_query.from_user.id
@@ -113,13 +136,15 @@ async def send_links_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     current_time = time.time()
 
-    # Throttling (Seguridad contra spam) - Aplica antes de la lógica pesada
+    # Throttling
     if user_id in THROTTLE_LIMITS and (current_time - THROTTLE_LIMITS[user_id] < THROTTLE_TIME_SECONDS):
         return
     THROTTLE_LIMITS[user_id] = current_time
 
-    # Lógica de Gamificación (Integración con DB)
-    user_data = await get_user_data(user_id) # Esta llamada es la más lenta
+    # Obtener los datos del usuario (Lectura inicial)
+    user_data = await get_user_data(user_id)
+    
+    premium_status = "✅ ACTIVO" if user_data.get('is_premium') else "❌ INACTIVO"
     
     gamification_text = ""
     if DB_ENABLED:
@@ -127,38 +152,44 @@ async def send_links_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"\n🔥 **Tu Colmena Stats** 🔥\n"
             f"▪️ Referidos: {user_data.get('referrals', 0)}\n"
             f"▪️ Puntos: {user_data.get('points', 0)}\n"
-            f"▪️ Nivel: {user_data.get('level', 'Bronze')}\n"
+            f"▪️ Nivel: {user_data.get('level', 'Bronze Bee')} (Premium: {premium_status})\n"
         )
     else:
         gamification_text = "\n⚠️ *La persistencia (puntos/niveles) está deshabilitada. ¡Configura Firestore!*"
 
 
-    # Contenido del mensaje (Texto actualizado)
+    # Contenido del mensaje: ¡Aumento de Enganche!
     message = (
-        "👑 **BIENVENIDO A ONEHIVE (THE HIVE)!** 👑\n\n" # Nombre del bot actualizado
-        "Usa los enlaces de referido de nuestra comunidad para empezar a generar "
-        "ingresos pasivos. ¡La forma más fácil de ganar dinero durmiendo!\n"
+        "👑 **BIENVENIDO A THE ONE HIVE!** 👑\n\n"
+        "¡Tu misión es generar ingresos pasivos y dominar la colmena! "
+        "Usa los enlaces de la comunidad para empezar a ganar hoy mismo.\n"
         
-        f"{gamification_text}\n"
+        f"{gamification_text}\n" 
         
-        "**— Servicios de Ingreso Pasivo —**\n"
-        "▪️ *Honeygain:* {desc_hg}\n"
-        "▪️ *Pawns App:* {desc_p}\n"
-        "▪️ *Swagbucks:* {desc_s}\n"
-    ).format(
-        desc_hg=SERVICE_DESCRIPTIONS['Honeygain'],
-        desc_p=SERVICE_DESCRIPTIONS['Pawns App'],
-        desc_s=SERVICE_DESCRIPTIONS['Swagbucks']
+        "**— Las 5 Vías de Ingreso de Alta Rentabilidad —**\n"
+        f"▪️ *{list(SERVICE_DESCRIPTIONS.keys())[0]}:* {SERVICE_DESCRIPTIONS['Honeygain']}\n"
+        f"▪️ *{list(SERVICE_DESCRIPTIONS.keys())[1]}:* {SERVICE_DESCRIPTIONS['Pawns App']}\n"
+        f"▪️ *{list(SERVICE_DESCRIPTIONS.keys())[2]}:* {SERVICE_DESCRIPTIONS['Survey Junkie']}\n"
+        f"▪️ *{list(SERVICE_DESCRIPTIONS.keys())[3]}:* {SERVICE_DESCRIPTIONS['Clickworker']}\n"
+        f"▪️ *{list(SERVICE_DESCRIPTIONS.keys())[4]}:* {SERVICE_DESCRIPTIONS['Swagbucks']}\n"
+        
+        "\n🚀 **¿QUIERES GANAR $25-$50 DIARIOS?** Presiona 'Acceso Premium' para desbloquear tareas de MÁXIMA PAGA."
     )
     
-    # Crear los botones. Se usa BOT_USERNAME que es global.
+    # Crear los botones para las 5 vías de ingreso + Premium
     keyboard = [
+        # Fila 1: Pasivo
         [InlineKeyboardButton("🍯 Honeygain", url=LINKS['Honeygain']),
          InlineKeyboardButton("🐾 Pawns App", url=LINKS['Pawns App'])],
+        # Fila 2: Tareas y Encuestas
+        [InlineKeyboardButton("📊 Survey Junkie", url=LINKS['Survey Junkie']),
+         InlineKeyboardButton("🏗️ Clickworker", url=LINKS['Clickworker'])],
+        # Fila 3: Recompensas y Premium
         [InlineKeyboardButton("💵 Swagbucks", url=LINKS['Swagbucks']),
-         InlineKeyboardButton("❓ Preguntas Frecuentes", callback_data='faq')],
-        # Este botón usa el BOT_USERNAME obtenido asíncronamente
-        [InlineKeyboardButton("🔗 ¡Invita a la Colmena!", switch_inline_query=BOT_USERNAME)] 
+         InlineKeyboardButton("🚀 ¡Acceso Premium!", callback_data='premium')],
+        # Fila 4: Ayuda y Viralidad
+        [InlineKeyboardButton("❓ Ayuda/FAQ", callback_data='faq'),
+         InlineKeyboardButton("🔗 ¡Invita a la Colmena!", switch_inline_query=BOT_USERNAME)] 
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -177,21 +208,47 @@ async def send_links_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=telegram.constants.ParseMode.MARKDOWN
         )
 
+
+async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Mensaje de marketing para la suscripción Premium."""
+    
+    premium_message = (
+        "👑 **NIVEL GOLD (PREMIUM ACCESS)** 👑\n\n"
+        "¡Deja de buscar tareas! Con Gold, garantizamos acceso a tareas exclusivas "
+        "con una rentabilidad de **$25 a $50 diarios** o más para usuarios avanzados.\n\n"
+        
+        "**Incluye:**\n"
+        "🔹 Acceso a listas de tareas de alta remuneración (MT, QA, Análisis).\n"
+        "🔹 Soporte 1:1 para optimizar tu tiempo.\n"
+        "🔹 Estrategias probadas para maximizar el ingreso pasivo.\n\n"
+        
+        "Para adquirir la suscripción y empezar a ganar más, contacta al administrador."
+    )
+    
+    # El botón usa la variable de entorno ADMIN_CONTACT_URL
+    keyboard = [[InlineKeyboardButton("💰 Contactar Admin para Gold", url=ADMIN_CONTACT_URL)]]
+    keyboard.append([InlineKeyboardButton("🔙 Volver al Menú", callback_data='menu')])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.callback_query.answer()
+    await update.callback_query.message.edit_text(premium_message, reply_markup=reply_markup, parse_mode=telegram.constants.ParseMode.MARKDOWN)
+
+
 async def faq_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Función de Ayuda y Preguntas Frecuentes."""
     faq_message = (
         "📚 **PREGUNTAS FRECUENTES (FAQ)** 📚\n\n"
-        "**1. ¿Qué hago si un enlace no funciona?**\n"
-        "R: Simplemente cópialo completo, incluyendo 'https://'.\n\n"
+        "**1. ¿Cómo funciona la Colmena (The Hive)?**\n"
+        "R: Te proporcionamos los enlaces de referido a las mejores apps para generar ingreso pasivo (compartir ancho de banda) y activo (encuestas, microtareas).\n\n"
         "**2. ¿Es seguro usar estas apps?**\n"
-        "R: Sí. Todas las apps son seguras y solo piden compartir ancho de banda.\n\n"
-        "**3. ¿Cómo puedo apoyar más?**\n"
-        f"R: Comparte este bot con un amigo usando el botón 'Invita a la Colmena!'."
+        "R: Sí. Todas son plataformas verificadas y solo piden compartir ancho de banda o completar tareas.\n\n"
+        "**3. ¿Cómo subo de Nivel?**\n"
+        f"R: Ganando puntos por referir nuevos usuarios. ¡Usa el botón 'Invita a la Colmena!'."
     )
     
     keyboard = [[InlineKeyboardButton("🔙 Volver al Menú", callback_data='menu')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     if update.callback_query:
         await update.callback_query.answer()
         await update.callback_query.message.edit_text(faq_message, reply_markup=reply_markup, parse_mode=telegram.constants.ParseMode.MARKDOWN)
@@ -204,8 +261,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if query.data == 'faq':
         await faq_command(update, context)
+    elif query.data == 'premium':
+        await premium_command(update, context)
     elif query.data == 'menu':
-        # Al volver al menú se llama a send_links_menu para refrescar las estadísticas del usuario
+        # Volver al menú refresca las estadísticas del usuario
         await send_links_menu(update, context)
         
         
@@ -216,6 +275,7 @@ async def links_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_links_menu(update, context)
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Llama a faq_command que tiene la lógica de respuesta para comandos
     await faq_command(update, context)
 
 
@@ -223,53 +283,45 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ignora cualquier mensaje que no sea un comando o un callback."""
     pass
 
-# La función principal ahora es asíncrona para manejar correctamente el bot de Telegram
 async def main():
     """Inicia el bot y lo mantiene escuchando (Polling)."""
     global BOT_USERNAME
     
-    # 1. Verificación de claves esenciales
-    if not all([TELEGRAM_TOKEN, HONEYGAIN_CODE, PAWNS_CODE, SWAGBUCKS_CODE]):
-        print("🔴 ERROR DE CLAVES: Una o más variables esenciales (TOKENS/CÓDIGOS) no están configuradas en Render.")
-        exit(1)
+    # 1. Verificar el Token de Telegram
+    if not TELEGRAM_TOKEN:
+        print("🔴 ERROR CRÍTICO: La variable TELEGRAM_TOKEN no está configurada. El bot no puede iniciar.")
+        return
 
-    # 2. Inicializar Firestore 
+    # 2. Inicializar Firestore (La inicialización es robusta y no detiene el bot)
     if FIREBASE_IMPORTED:
         initialize_firebase()
     
     # 3. Iniciar la aplicación de Telegram
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
-    
-    # 4. Obtener el username del bot de forma ASÍNCRONA y segura
     try:
-        # get_me() inicializa el bot y obtiene sus datos
-        bot_info = await application.bot.get_me() 
-        BOT_USERNAME = bot_info.username
-        print(f"🟢 Bot Username detectado: @{BOT_USERNAME}")
+        application = Application.builder().token(TELEGRAM_TOKEN).build()
+        
+        # 4. Obtener el username del bot de forma asíncrona (NECESARIO)
+        bot_info = await application.bot.get_me()
+        BOT_USERNAME = "@" + bot_info.username
+        print(f"🟢 CONEXIÓN EXITOSA. Bot Username: {BOT_USERNAME}")
     except telegram.error.InvalidToken:
-        print("🔴 ERROR CRÍTICO: El TELEGRAM_TOKEN no es válido. La instancia fallará.")
-        exit(1)
+        print("🔴 ERROR CRÍTICO: El TELEGRAM_TOKEN no es válido. ¡DEBE SER CAMBIADO!")
+        return
     except Exception as e:
-        print(f"🔴 ERROR: No se pudo obtener el nombre de usuario del bot. Error: {e}")
-        BOT_USERNAME = "TheOneHive_bot" # Fallback, usando el nombre que proporcionaste
+        print(f"🔴 ERROR INESPERADO al conectar con Telegram: {e}")
+        return
 
     # 5. Handlers
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("links", links_command))
     application.add_handler(CommandHandler("ayuda", help_command))
     application.add_handler(CallbackQueryHandler(button_handler))
-    # Mensajes de texto sin comandos
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("Bot listo. Iniciando Polling...")
+    print("Bot TheOneHive listo. Iniciando Polling...")
     await application.run_polling(poll_interval=5.0)
 
 
 if __name__ == '__main__':
-    # Esta línea ejecuta la función asíncrona 'main'
     try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("Bot detenido manualmente.")
-    except Exception as e:
-        print(f"Ocurrió un error inesperado al ejecutar main: {e}")
+        # Ejecutar la función main asíncrona
