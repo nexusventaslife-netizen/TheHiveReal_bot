@@ -125,6 +125,7 @@ async def get_user_data(user_id: int):
 async def send_links_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Envía el menú de enlaces con Throttling y datos de usuario."""
     
+    # Manejar el origen del mensaje (callback o comando)
     if update.callback_query:
         message_source = update.callback_query.message
         user_id = update.callback_query.from_user.id
@@ -325,3 +326,6 @@ async def main():
 if __name__ == '__main__':
     try:
         # Ejecutar la función main asíncrona
+        asyncio.run(main())
+    except Exception as e:
+        print(f"Ocurrió un error inesperado al ejecutar main (ASÍNC.): {e}")
