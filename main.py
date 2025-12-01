@@ -17,7 +17,7 @@ LINKS = {
 
 # --- FUNCIONES DEL BOT ---
 async def start_command(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
-    """Responde al comando /start y presenta el bot."""
+    """Responde al comando /start."""
     message = (
         "🤖 **¡Hola! Soy The Hive Real Bot.**\n\n"
         "Estoy aquí para darte acceso a los enlaces de referido de nuestra comunidad "
@@ -34,18 +34,13 @@ async def handle_message(update: telegram.Update, context: telegram.ext.ContextT
     pass
 
 def main():
-    """Inicia el bot y lo mantiene escuchando (Polling) en el Worker."""
+    """Inicia el bot y lo mantiene escuchando (Polling)."""
     if not TELEGRAM_TOKEN:
         print("ERROR: La variable TELEGRAM_TOKEN no está configurada. El bot no puede iniciar.")
         return
 
-    # *** ¡CORRECCIÓN FINAL! (Elimina el método get_updates_handler que falló) ***
-    application = (
-        Application.builder()
-        .token(TELEGRAM_TOKEN)
-        .ipv6_attachment_mode(False) # <- Mantiene la corrección de IPv4
-        .build()
-    )
+    # **CÓDIGO PURO Y SIMPLE compatible con v20.0**
+    application = Application.builder().token(TELEGRAM_TOKEN).build()
 
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
