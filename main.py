@@ -42,8 +42,14 @@ def run_bot():
         print("ERROR: La variable TELEGRAM_TOKEN no está configurada. El bot no puede iniciar.")
         return
 
-    # **¡CORRECCIÓN FINAL!** (Soluciona el AttributeError)
-    application = Application.builder().token(TELEGRAM_TOKEN).get_updates_handler(None).build()
+    # *** ¡CORRECCIÓN FINAL! (Soluciona el error de conexión por red - IPv4) ***
+    application = (
+        Application.builder()
+        .token(TELEGRAM_TOKEN)
+        .get_updates_handler(None)
+        .ipv6_attachment_mode(False) # <--- FUERZA IPv4 para la conexión
+        .build()
+    )
     
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
