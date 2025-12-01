@@ -34,17 +34,16 @@ async def handle_message(update: telegram.Update, context: telegram.ext.ContextT
     pass
 
 def main():
-    """Inicia el bot y lo mantiene escuchando (Polling)."""
+    """Inicia el bot y lo mantiene escuchando (Polling) en el Worker."""
     if not TELEGRAM_TOKEN:
         print("ERROR: La variable TELEGRAM_TOKEN no está configurada. El bot no puede iniciar.")
         return
 
-    # **¡LA ÚNICA CONEXIÓN DE POLLING QUE FUNCIONA!**
+    # *** ¡CORRECCIÓN FINAL! (Elimina el método get_updates_handler que falló) ***
     application = (
         Application.builder()
         .token(TELEGRAM_TOKEN)
-        .get_updates_handler(None)
-        .ipv6_attachment_mode(False) # <- Mantenemos la corrección de IPv4 por seguridad
+        .ipv6_attachment_mode(False) # <- Mantiene la corrección de IPv4
         .build()
     )
 
