@@ -1,5 +1,6 @@
 import os
 import telegram
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 # --- CLAVES SECRETAS ---
@@ -17,17 +18,30 @@ LINKS = {
 
 # --- FUNCIONES DEL BOT ---
 async def start_command(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
-    """Responde al comando /start."""
+    """Responde al comando /start con un menú de botones."""
+    
     message = (
         "🤖 **¡Hola! Soy The Hive Real Bot.**\n\n"
-        "Estoy aquí para darte acceso a los enlaces de referido de nuestra comunidad "
-        "para que puedas empezar a ganar ingresos pasivos.\n\n"
-        "🔗 **Nuestros Enlaces:**\n"
+        "Usa los botones de abajo para acceder a nuestros enlaces de referido "
+        "y empezar a ganar ingresos pasivos. ¡Gracias por unirte a la colmena! 🍯\n"
     )
-    for name, link in LINKS.items():
-        message += f"▪️ **{name}:** `{link}`\n"
-    message += "\n*Copia el enlace completo (incluyendo https://) para que funcione correctamente.*"
-    await update.message.reply_text(message, parse_mode=telegram.constants.ParseMode.MARKDOWN)
+    
+    # 1. CREAR LOS BOTONES (InlineKeyboardButton)
+    keyboard = [
+        [InlineKeyboardButton("🍯 Honeygain", url=LINKS['Honeygain'])],
+        [InlineKeyboardButton("🐾 Pawns App", url=LINKS['Pawns App'])],
+        [InlineKeyboardButton("💵 Swagbucks", url=LINKS['Swagbucks'])],
+    ]
+
+    # 2. AGRUPAR LOS BOTONES EN UN TECLADO (InlineKeyboardMarkup)
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # 3. ENVIAR EL MENSAJE CON LOS BOTONES
+    await update.message.reply_text(
+        message,
+        reply_markup=reply_markup,
+        parse_mode=telegram.constants.ParseMode.MARKDOWN
+    )
 
 async def handle_message(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
     """Ignora cualquier mensaje que no sea un comando."""
@@ -39,7 +53,7 @@ def main():
         print("ERROR: La variable TELEGRAM_TOKEN no está configurada. El bot no puede iniciar.")
         return
 
-    # **CÓDIGO PURO Y SIMPLE compatible con v20.0**
+    # Usamos la configuración limpia que ya funciona:
     application = Application.builder().token(TELEGRAM_TOKEN).build()
 
     application.add_handler(CommandHandler("start", start_command))
