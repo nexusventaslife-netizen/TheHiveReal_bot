@@ -1,9 +1,8 @@
 import os
-import requests
 import telegram
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
-from flask import Flask, request, jsonify # Importa flask para el puerto HTTP
-import threading # Necesario para iniciar el bot en un hilo separado
+from flask import Flask, request, jsonify 
+import threading 
 
 # --- CLAVES SECRETAS ---
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
@@ -19,7 +18,6 @@ LINKS = {
 }
 
 # --- FUNCIONES DEL BOT ---
-
 async def start_command(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
     """Responde al comando /start y presenta el bot."""
     message = (
@@ -28,12 +26,9 @@ async def start_command(update: telegram.Update, context: telegram.ext.ContextTy
         "para que puedas empezar a ganar ingresos pasivos.\n\n"
         "🔗 **Nuestros Enlaces:**\n"
     )
-
     for name, link in LINKS.items():
         message += f"▪️ **{name}:** `{link}`\n"
-    
     message += "\n*Copia el enlace completo (incluyendo https://) para que funcione correctamente.*"
-
     await update.message.reply_text(message, parse_mode=telegram.constants.ParseMode.MARKDOWN)
 
 async def handle_message(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
@@ -41,38 +36,32 @@ async def handle_message(update: telegram.Update, context: telegram.ext.ContextT
     pass
 
 # --- CONFIGURACIÓN DEL BOT (Telegram Polling) ---
-
 def run_bot():
-    """Inicia el bot y lo mantiene escuchando (Polling)."""
+    """Inicia el bot de Telegram en modo Polling."""
     if not TELEGRAM_TOKEN:
         print("ERROR: La variable TELEGRAM_TOKEN no está configurada. El bot no puede iniciar.")
         return
 
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
+    # **¡CORRECCIÓN FINAL!** (Soluciona el AttributeError)
+    application = Application.builder().token(TELEGRAM_TOKEN).get_updates_handler(None).build()
+    
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     print("Bot iniciado. Escuchando comandos...")
-    # El bot se inicia en modo polling (escucha constante)
     application.run_polling(poll_interval=1.0)
 
 
 # --- CONFIGURACIÓN DEL WEB SERVER (FLASK/RENDER) ---
 
-# 1. Creamos la aplicación Flask que Gunicorn va a ejecutar
+# 1. Creamos la aplicación Flask (el nombre 'app' es requerido por gunicorn)
 app = Flask(__name__)
 
-# 2. Definimos una ruta básica para que Render/Gunicorn sepa que el puerto está activo.
+# 2. Ruta para que Render/Gunicorn sepa que el puerto está abierto.
 @app.route('/', methods=['GET', 'POST'])
 def webhook():
-    """Ruta dummy para que Render sepa que la aplicación está viva."""
     return jsonify({'status': 'ok', 'message': 'Bot is running via Telegram Polling'}), 200
 
-# 3. Iniciamos el bot en un hilo separado
-# Esto permite que Gunicorn (el web server) se ejecute en el hilo principal
-# mientras el bot de Telegram se ejecuta en segundo plano.
-# Usamos un hilo para que la función run_bot no bloquee el inicio del web server.
+# 3. Iniciamos el bot de Telegram en un Hilo separado, para no bloquear el Web Server.
 bot_thread = threading.Thread(target=run_bot)
 bot_thread.start()
-
-# NOTA: Gunicorn (el comando de inicio de Render) ejecutará el objeto 'app' de Flask.
