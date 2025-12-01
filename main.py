@@ -2,8 +2,9 @@ import os
 import telegram
 import time
 import json
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
+# Importación correcta de clases para Python Telegram Bot 20.0
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ContextTypes
 
 # --- DEPENDENCIAS DE FIREBASE ---
 # Se verifica la instalación de la librería 'firebase-admin'.
@@ -64,7 +65,7 @@ def initialize_firebase():
         return
 
     try:
-        # 2. Cargar las credenciales del JSON (requerido para la autenticación en Render)
+        # 2. Cargar las credenciales del JSON
         cred_dict = json.loads(FIREBASE_CREDENTIALS)
         
         # 3. Inicializar la aplicación de Firebase
@@ -79,7 +80,7 @@ def initialize_firebase():
         print(f"🔴 ERROR al inicializar Firestore. Verifica el JSON: {e}")
         DB_ENABLED = False
 
-async def get_user_data(user_id):
+async def get_user_data(user_id: int):
     """
     Obtiene los datos del usuario de Firestore o crea un nuevo registro con valores iniciales.
     Retorna los datos del usuario (dict) o un fallback dict si hay error.
@@ -117,7 +118,7 @@ async def get_user_data(user_id):
 
 # --- FUNCIONES CENTRALES ---
 
-async def send_links_menu(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
+async def send_links_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Envía el menú de enlaces con Throttling y datos de usuario."""
     
     # Determinar el origen de la actualización (mensaje o callback)
@@ -133,7 +134,7 @@ async def send_links_menu(update: telegram.Update, context: telegram.ext.Context
 
     current_time = time.time()
 
-    # Throttling
+    # Throttling (Seguridad contra spam)
     if user_id in THROTTLE_LIMITS and (current_time - THROTTLE_LIMITS[user_id] < THROTTLE_TIME_SECONDS):
         return
     THROTTLE_LIMITS[user_id] = current_time
@@ -186,6 +187,7 @@ async def send_links_menu(update: telegram.Update, context: telegram.ext.Context
 
     if update.callback_query:
         # Editar el mensaje si viene de un botón (para volver al menú)
+        await update.callback_query.answer() # Responder al callback para quitar el reloj
         await message_source.edit_text(
             message,
             reply_markup=reply_markup,
@@ -199,7 +201,7 @@ async def send_links_menu(update: telegram.Update, context: telegram.ext.Context
             parse_mode=telegram.constants.ParseMode.MARKDOWN
         )
 
-async def faq_command(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
+async def faq_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Función de Ayuda y Preguntas Frecuentes."""
     faq_message = (
         "📚 **PREGUNTAS FRECUENTES (FAQ)** 📚\n\n"
@@ -217,34 +219,34 @@ async def faq_command(update: telegram.Update, context: telegram.ext.ContextType
     # Determinar si la llamada viene de un callback o un comando
     if update.callback_query:
         # Si es callback (botón "Preguntas Frecuentes")
+        await update.callback_query.answer() # Responder al callback
         await update.callback_query.message.edit_text(faq_message, reply_markup=reply_markup, parse_mode=telegram.constants.ParseMode.MARKDOWN)
     else:
         # Si es un comando (/ayuda)
         await update.message.reply_text(faq_message, reply_markup=reply_markup, parse_mode=telegram.constants.ParseMode.MARKDOWN)
 
 
-async def button_handler(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
-
+    
     if query.data == 'faq':
         await faq_command(update, context)
     elif query.data == 'menu':
-        # Volver al menú llama a send_links_menu para refrescar las estadísticas
+        # Al volver al menú se llama a send_links_menu para refrescar las estadísticas del usuario
         await send_links_menu(update, context)
         
         
-async def start_command(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_links_menu(update, context)
 
-async def links_command(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
+async def links_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_links_menu(update, context)
 
-async def help_command(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await faq_command(update, context)
 
 
-async def handle_message(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE):
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ignora cualquier mensaje que no sea un comando o un callback."""
     pass
 
@@ -254,19 +256,25 @@ def main():
     
     # 1. Verificación de claves esenciales
     if not all([TELEGRAM_TOKEN, HONEYGAIN_CODE, PAWNS_CODE, SWAGBUCKS_CODE]):
-        print("🔴 ERROR DE CLAVES: Una o más variables esenciales no están configuradas en Render.")
+        print("🔴 ERROR DE CLAVES: Una o más variables esenciales (TOKENS/CÓDIGOS) no están configuradas en Render.")
         exit(1)
 
     # 2. Inicializar Firestore 
     if FIREBASE_IMPORTED:
         initialize_firebase()
     
-    # 3. Iniciar la aplicación de Telegram (Usando el patrón correcto para PTB 20.0)
+    # 3. Iniciar la aplicación de Telegram (Usa el patrón correcto para PTB 20.0)
+    # Corrección del AttributeError al usar el patrón Application.builder().build()
     application = Application.builder().token(TELEGRAM_TOKEN).build()
     
     # 4. Obtener el username del bot para la viralidad
-    BOT_USERNAME = "@" + application.bot.username
-
+    try:
+        # Esta línea puede fallar si el token es inválido
+        BOT_USERNAME = application.bot.username
+        print(f"Bot Username detectado: @{BOT_USERNAME}")
+    except Exception as e:
+        print(f"🔴 ERROR: No se pudo obtener el nombre de usuario del bot. Verifica TELEGRAM_TOKEN. Error: {e}")
+        BOT_USERNAME = "TheHiveReal_bot" # Fallback, asumiendo que este es el username del bot
 
     # 5. Handlers
     application.add_handler(CommandHandler("start", start_command))
@@ -276,7 +284,8 @@ def main():
     # Mensajes de texto sin comandos
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("Bot listo para iniciar la persistencia con Firestore.")
+    print("Bot listo. Iniciando Polling...")
+    # run_polling es el método recomendado para ambientes de instancia única como Render, lo que mitiga el error Conflict.
     application.run_polling(poll_interval=5.0)
 
 
