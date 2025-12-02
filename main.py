@@ -1,192 +1,182 @@
-import telegram
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-from telegram import Update
-from telegram.error import Conflict
+# --- Importaciones ---
 import os
 import json
 import logging
-import signal
-from firebase_admin import credentials, initialize_app, firestore
+from http import HTTPStatus
+from flask import Flask, request
+from telegram import Update, Bot
+from telegram.ext import Application, MessageHandler, CommandHandler, filters, ContextTypes
+import telegram # Necesario para ReplyKeyboardMarkup
+
+# Para Firebase
+import firebase_admin
+from firebase_admin import credentials, firestore
 
 # --- Configuración de Logging ---
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- 1. Carga de Variables de Entorno ---
-# Render proporciona el puerto automáticamente
-PORT = int(os.environ.get('PORT', 8080))
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-ADMIN_USER_ID = os.getenv("ADMIN_USER_ID")
-FIREBASE_CREDENTIALS_JSON = os.getenv("FIREBASE_CREDENTIALS")
-RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
+# --- Variables Globales y Configuración CRÍTICA ---
+# ESTAS VARIABLES SON REQUERIDAS POR RENDER
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+ADMIN_USER_ID = os.environ.get("ADMIN_USER_ID")
+FIREBASE_CREDENTIALS_JSON = os.environ.get("FIREBASE_CREDENTIALS")
 
-# --- 2. Validación y Conversión de IDs ---
-try:
-    ADMIN_USER_ID = int(ADMIN_USER_ID)
-except (TypeError, ValueError):
-    ADMIN_USER_ID = 0
-    logger.warning("ADMIN_USER_ID no es un número válido o está ausente. La función de administrador no funcionará.")
+# ************** URL DE RENDER FORZADA EN EL CÓDIGO **************
+# Ya que Render te muestra el nombre 'TheHiveReal_bot', la URL externa sigue la convención.
+# NO CAMBIES ESTA LÍNEA A MENOS QUE HAYAS PUESTO OTRO NOMBRE AL SERVICIO WEB.
+RENDER_EXTERNAL_URL_FORZADA = "https://the-hivereal-bot.onrender.com"
+# ****************************************************************
 
-def is_admin(user_id):
-    """Verifica si el ID de usuario actual coincide con el ID del administrador."""
-    return user_id == ADMIN_USER_ID
-
-# --- 3. Inicialización de Firebase (Blindado contra fallos de JSON) ---
-db = None
+# --- Funciones de Utilidad ---
 def initialize_firebase():
-    global db
-    if not FIREBASE_CREDENTIALS_JSON:
-        logger.error("ERROR - FIREBASE_CREDENTIALS no está configurada. Operaciones de guardado fallarán.")
-        return
-
+    """Inicializa Firebase y Firestore, manejando el error de credenciales."""
     try:
-        # Intenta cargar el JSON directamente (mitiga problemas de formato)
-        creds_dict = json.loads(FIREBASE_CREDENTIALS_JSON)
+        if not FIREBASE_CREDENTIALS_JSON:
+            logger.error("FIREBASE_CREDENTIALS no está configurada. El bot no podrá guardar datos.")
+            return None
+
+        # Intenta cargar el JSON. Si falla, es un problema de formato.
+        try:
+            creds_dict = json.loads(FIREBASE_CREDENTIALS_JSON)
+        except json.JSONDecodeError as e:
+            logger.error(f"ERROR DE FORMATO DE FIREBASE_CREDENTIALS: El JSON no es válido. {e}")
+            return None
+
+        # Inicialización segura
         cred = credentials.Certificate(creds_dict)
-        
-        # El nombre del app debe ser único o no especificarlo para evitar el ValueError: "The default Firebase app does not exist."
-        initialize_app(cred, name="theonehive_bot_app") 
-        db = firestore.client()
-        logger.info("CONEXIÓN A FIRESTORE EXITOSA. Los datos de usuarios se guardarán correctamente.")
-        
-    except ValueError as ve:
-        logger.error(f"ERROR DE INICIALIZACIÓN DE FIREBASE: ValueError: {ve}. Verifique si el JSON ya se inicializó.")
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app(cred)
+            logger.info("CONEXIÓN A FIRESTORE EXITOSA. Los datos de usuarios se guardarán correctamente.")
+        return firestore.client()
+
     except Exception as e:
-        logger.error(f"ERROR DE CONEXIÓN CRÍTICO: Falló la conexión a Firebase. Detalle: {e}")
+        logger.error(f"ERROR FATAL DE INICIALIZACIÓN DE FIREBASE: {e}")
+        return None
 
-initialize_firebase()
+db = initialize_firebase()
 
-# --- 4. Funciones de Teclado (Menús) ---
+# --- Handlers de Telegram ---
 
-def get_keyboard(user_id):
-    """Genera el teclado dinámicamente basado en el rol del usuario."""
-    
-    # Teclado BÁSICO (Para todos los usuarios)
-    keyboard = [
-        [telegram.KeyboardButton("💰 Mis Estadísticas (APD V2)")],
-        [telegram.KeyboardButton("🚀 Reto Viral (Gana HVE Tokens)")],
-        [telegram.KeyboardButton("🛒 Marketplace GOLD (Cursos/Libros)")],
-        [telegram.KeyboardButton("👑 GOLD Premium ($15 USD)")],
-        [telegram.KeyboardButton("🔒 Privacidad y Datos (Bono HVE)")],
-    ]
-
-    # Lógica para insertar el botón de Administración (SOLO si es el Admin)
-    if is_admin(user_id):
-        # Insertamos el botón de 5 Vías de Ingreso al principio solo para el Admin
-        keyboard.insert(0, [telegram.KeyboardButton("📊 5 Vías de Ingreso (ADMIN)")])
-
-    # El teclado del bot
-    return telegram.ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
-# --- 5. Funciones de Manejadores (Handlers) ---
-
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Maneja el comando /start e inicializa el teclado."""
-    
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Maneja el comando /start y muestra el menú."""
     user = update.effective_user
-    user_id = user.id
+    is_admin = str(user.id) == ADMIN_USER_ID
     
-    # Mensaje de bienvenida, incluyendo el estado de Tokens
-    message_text = (
-        f"Somos el 'Booster' global para que ganes ingresos pasivos y activos. Tu misión es simple: "
-        f"maximiza tu actividad y sube tu Racha Diaria.\n\n"
-        f"Tu Status Actual: FREE\n"
-        f"Tokens HVE: 5"
-    )
-    
-    # Enviamos el mensaje con el teclado generado (que incluye o no el botón ADMIN)
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=message_text,
-        reply_markup=get_keyboard(user_id)
-    )
+    # Intenta obtener o crear el documento del usuario en Firestore
+    if db:
+        try:
+            user_doc_ref = db.collection('users').document(str(user.id))
+            user_data = user_doc_ref.get()
+            
+            if not user_data.exists:
+                user_doc_ref.set({'first_name': user.first_name, 'username': user.username, 'status': 'FREE', 'tokens_hve': 5, 'admin': is_admin, 'created_at': firestore.SERVER_TIMESTAMP})
+                logger.info(f"Nuevo usuario registrado: {user.id}")
+            else:
+                user_doc_ref.update({'first_name': user.first_name, 'username': user.username})
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Maneja todos los mensajes de texto del usuario."""
+        except Exception as e:
+            logger.error(f"Error al acceder a Firestore para el usuario {user.id}: {e}")
+
+    # Respuesta del bot
+    welcome_text = (
+        f"¡Hola, {user.first_name}!\n\n"
+        "Somos el 'Booster' global para que ganes ingresos pasivos y activos. Tu misión es simple: "
+        "maximiza tu actividad y sube tu Racha Diaria."
+    )
     
+    keyboard = [
+        ["5 Vías de Ingreso", "Mis Estadísticas (APD V2)"],
+        ["Reto Viral (Gana HVE Tokens)", "Marketplace GOLD (Cursos/Libros)"],
+        ["GOLD Premium ($15 USD)", "Privacidad y Datos (Bono HVE)"]
+    ]
+    
+    if is_admin:
+        keyboard.append(["🛠️ Panel Admin"])
+        
+    reply_markup = telegram.ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    await update.message.reply_text(welcome_text, reply_markup=reply_markup)
+
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Maneja el comando del panel de administrador (solo visible para admin)."""
+    user_id_str = str(update.effective_user.id)
+    if user_id_str == ADMIN_USER_ID:
+        await update.message.reply_text("👋 ¡Bienvenido al Panel de Administrador! ¿Qué acción deseas realizar hoy?",
+                                        reply_markup=telegram.ReplyKeyboardRemove())
+    else:
+        await update.message.reply_text("Acceso denegado. Este comando es solo para administradores.")
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Maneja los mensajes de texto que no son comandos."""
     text = update.message.text
-    user_id = update.effective_user.id
-    chat_id = update.effective_chat.id
-
-    # Lógica de Reto Viral
-    if "Reto Viral" in text:
-        message = (
+    response = "Has enviado: " + text
+    
+    # Aquí puedes añadir la lógica para responder a los botones del menú
+    if text == "5 Vías de Ingreso":
+        response = "Aquí están las 5 vías principales para generar ingresos..."
+    elif text == "Reto Viral (Gana HVE Tokens)":
+        response = (
             "🚀 RETO VIRAL (GANANCIA GRATUITA DE TOKENS)\n\n"
             "Queremos ser la plataforma más grande. Ayúdanos a crecer y gana HVE Tokens extra!\n\n"
             "¿CÓMO FUNCIONA?\n"
             "1. Crea un video en TikTok, Instagram Reels o YouTube Shorts mostrando tu Racha Diaria o tu Proyección de Ganancia en el bot.\n"
             "2. Usa el hashtag #TheOneHiveApp.\n"
-            "3. Envíanos el enlace por mensaje privado a este bot.\n\n"
-            "🎁 Recompensa: 200 HVE Tokens por video aprobado. (Solo 1 video por usuario)"
+            "3. Envíanos el enlace por mensaje privado a un administrador para que verifique tu video y acredite tus tokens."
         )
-        await context.bot.send_message(chat_id=chat_id, text=message)
-        
-    # Lógica de 5 Vías de Ingreso (Solo para el Admin)
-    elif "5 Vías de Ingreso" in text:
-        if is_admin(user_id):
-            message = (
-                "ADMIN: Este es el menú de 5 Vías de Ingreso para administrar el negocio.\n\n"
-                "Aquí puedes gestionar:\n"
-                "- Vía 1: Venta de Licencias (GOLD Premium)\n"
-                "- Vía 2: Venta de Cursos/Ebooks (Marketplace)\n"
-                "- Vía 3: Recompensa por Actividad (Tokens HVE)\n"
-                "- Vía 4: Bono por Privacidad\n"
-                "- Vía 5: Reto Viral (Marketing)\n\n"
-                "Este mensaje es de uso interno."
-            )
-        else:
-            message = "Opción no disponible. Por favor, selecciona una de las opciones del menú."
-
-        await context.bot.send_message(chat_id=chat_id, text=message)
-        
-    # Respuestas para otros botones (Lógica pendiente de implementación)
-    elif any(keyword in text for keyword in ["Mis Estadísticas", "Marketplace GOLD", "GOLD Premium", "Privacidad y Datos"]):
-        # Aquí se implementaría la lógica de la base de datos (db.collection...)
-        message = f"Opción seleccionada: {text}. Esta función se implementará con la base de datos activa."
-        await context.bot.send_message(chat_id=chat_id, text=message)
-        
-    else:
-        # Respuesta para mensajes de texto no reconocidos
-        await context.bot.send_message(chat_id=chat_id, text="¡Hola! Por favor, selecciona una de las opciones del menú para interactuar.")
-
-# --- 6. Función Principal de Arranque (WebHook) ---
-
-def main():
-    """Configura y ejecuta el bot en modo WebHook para Render."""
+    elif text == "🛠️ Panel Admin" and str(update.effective_user.id) == ADMIN_USER_ID:
+        response = "Acceso al Panel Admin confirmado."
     
-    if not TELEGRAM_TOKEN or not RENDER_EXTERNAL_URL:
-        logger.error("ERROR CRÍTICO: Falta TELEGRAM_TOKEN o RENDER_EXTERNAL_URL. Saliendo.")
+    await update.message.reply_text(response)
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Loggea los errores causados por las actualizaciones."""
+    logger.warning('La actualización "%s" causó el error "%s"', update, context.error)
+
+# --- Función Principal (Configuración de WebHook) ---
+
+def main() -> None:
+    """Inicia el bot con el modo WebHook, ideal para Render."""
+    if not TELEGRAM_TOKEN:
+        logger.error("ERROR - No se puede iniciar el bot. Falta TELEGRAM_TOKEN.")
         return
 
-    # 1. Creamos la Aplicación con el token
+    # 1. Crear la aplicación (el bot)
     application = Application.builder().token(TELEGRAM_TOKEN).build()
 
-    # 2. Registramos Handlers
-    application.add_handler(CommandHandler("start", start_command))
+    # 2. Agregar Handlers
+    application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(CommandHandler("admin", admin_panel))
+    
+    # 3. Configuración del Servidor Web (Flask)
+    app = Flask(__name__)
 
-    # 3. Configuración del WebHook
-    webhook_url = RENDER_EXTERNAL_URL
+    # 4. Manejar la URL de Telegram (el WebHook)
+    @app.route(f"/{TELEGRAM_TOKEN}", methods=['POST'])
+    def webhook_handler():
+        """Recibe y procesa las actualizaciones enviadas por Telegram."""
+        if request.method == "POST":
+            update = Update.de_json(request.get_json(force=True), application.bot)
+            application.process_update(update)
+        return "ok", HTTPStatus.OK
+
+    # 5. Configurar el WebHook en Telegram
+    # NOTA: Usamos la variable forzada RENDER_EXTERNAL_URL_FORZADA
+    webhook_url = f"{RENDER_EXTERNAL_URL_FORZADA}/{TELEGRAM_TOKEN}"
     
     try:
-        # Se necesita la URL para que Telegram sepa dónde enviar los mensajes
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            url_path=TELEGRAM_TOKEN, # La URL pública de Render termina en el token
-            webhook_url=f"{webhook_url}/{TELEGRAM_TOKEN}",
-            # Este es el manejo crítico para Render: detiene el bot limpiamente
-            stop_signals=[signal.SIGINT, signal.SIGTERM]
-        )
-        logger.info(f"Bot TheOneHive iniciado en modo WebHook. Escuchando en el puerto {PORT}.")
-        
-    except Conflict as c:
-        logger.error(f"ERROR DE CONFLICTO (esperado): El bot ya estaba corriendo. Detalle: {c}")
+        application.bot.set_webhook(url=webhook_url)
+        logger.info(f"WebHook configurado exitosamente: {webhook_url}")
     except Exception as e:
-        logger.error(f"ERROR FATAL DE WEBHOOK: {e}")
+        logger.error(f"ERROR al configurar el WebHook. Telegram no está aceptando la URL ({webhook_url}). Asegúrate que el servicio de Render sea 'Web Service' y esté operativo. Error: {e}")
+        return # Fallo al configurar el webhook
+
+    # 6. Iniciar el Servidor Flask
+    # Render usa la variable PORT. Si no existe, usa 8080.
+    port = int(os.environ.get("PORT", "8080"))
+    logger.info(f"Servicio WebHook iniciado en el puerto {port}")
+    app.run(host="0.0.0.0", port=port)
 
 if __name__ == '__main__':
     main()
