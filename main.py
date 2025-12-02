@@ -64,20 +64,6 @@ FREE_MULTIPLIER = 1.2    # Multiplicador base para usuarios FREE
 # Colección de Usuarios
 USERS_COLLECTION = 'theonehive_users'
 
-# --- MODELO DE DATOS DE USUARIO EN FIRESTORE ---
-# user_data = {
-#     'user_id': int,
-#     'username': str,
-#     'is_premium': bool,
-#     'tokens_hve': int,
-#     'total_clicks': int,
-#     'daily_clicks': int,
-#     'last_check_in': datetime,
-#     'check_in_streak': int,
-#     'consents_to_ads': bool,  # Vía de Ingreso 4: Monetización de Datos
-#     'referred_by': int,       # Vía de Ingreso 5: Ganancia por Referido
-# }
-
 # Función para obtener la hora actual de UTC-3 (Punta del Este)
 def get_now():
     utc_minus_3 = timezone(timedelta(hours=-3))
@@ -94,9 +80,10 @@ async def get_or_create_user(user_id, username, ref_id=None):
         user_data = doc.to_dict()
         # Verificar y resetear daily_clicks y racha si el día cambió
         last_check_in = user_data.get('last_check_in')
-        if last_check_in and (get_now() - last_check_in).days >= 1:
+        if last_check_in and (get_now() - last_check_in.replace(tzinfo=timezone.utc)).days >= 1: # Fix de Timezone
             user_data['daily_clicks'] = 0
             user_data['last_check_in'] = get_now()
+            # No resetear la racha aquí, se hace en register_click
             user_ref.set(user_data, merge=True)
         return user_data
     else:
@@ -124,49 +111,47 @@ async def get_or_create_user(user_id, username, ref_id=None):
                     'tokens_hve': ref_data.get('tokens_hve', 0) + 50,
                     'referred_count': ref_data.get('referred_count', 0) + 1
                 })
-                # No se notifica al referente para simplificar, el bono aparece en stats
         return new_data
 
 # Función para registrar actividad del usuario
 async def register_click(user_id, user_data, is_check_in=False):
     if not db:
-        return
+        return (0, "")
 
     tokens_earned = 1
     # Multiplicador del token para GOLD (Vía 2)
     if user_data.get('is_premium'):
         tokens_earned *= 2
 
-    # Lógica de Racha Diaria (Vía 5: Adicción)
+    # Lógica de Racha Diaria (Vía 7: Adicción)
     current_time = get_now()
     last_check_in = user_data.get('last_check_in')
 
+    # Convertir last_check_in a datetime con zona horaria si es necesario
+    if isinstance(last_check_in, datetime):
+        last_check_in = last_check_in.replace(tzinfo=timezone.utc)
+        
     streak = user_data.get('check_in_streak', 0)
+    message = ""
+    day_difference = (current_time.date() - last_check_in.date()).days if last_check_in else 100
 
-    # Si es el primer click del día O es un check-in
-    if is_check_in or (current_time - last_check_in).days >= 1:
-        # Si el usuario NO perdió la racha, la incrementa
-        if (current_time - last_check_in).days == 1:
+    if day_difference >= 1:
+        # El día ha cambiado
+        
+        if day_difference == 1:
+            # Racha continua
             streak += 1
             tokens_earned += streak * 5  # Bono por Racha
             message = f"✅ ¡Racha de {streak} días! Ganaste un bono de {streak * 5} HVE Tokens."
-        # Si la racha se rompió, la resetea
-        elif (current_time - last_check_in).days > 1:
+        elif day_difference > 1:
+            # Racha rota
             streak = 1
             message = "⚠️ ¡Racha reiniciada! Empieza tu racha de nuevo."
-        else: # Primer click del día, pero hoy mismo
-             message = ""
-
+        
         # Actualizar datos de check-in
         user_data['daily_clicks'] = 1
         user_data['last_check_in'] = current_time
         user_data['check_in_streak'] = streak
-
-    # Actualizar solo si es un click normal (no check-in repetido)
-    elif not is_check_in:
-        user_data['daily_clicks'] += 1
-        message = ""
-
 
     # Actualizar datos generales
     user_data['total_clicks'] = user_data.get('total_clicks', 0) + 1
@@ -199,11 +184,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await update.message.reply_html(
-        f"👋 **¡Hola, {user.first_name}! Bienvenido a TheOneHive.**\n\n"
+        f"👋 <b>¡Hola, {user.first_name}! Bienvenido a TheOneHive.</b>\n\n"
         "Somos el 'Booster' global para que ganes ingresos pasivos y activos. "
         "Tu misión es simple: maximiza tu actividad y sube tu Racha Diaria.\n\n"
-        "**Tu Status Actual:** {'👑 GOLD' if user_data.get('is_premium') else '🆓 FREE'}\n"
-        "**Tokens HVE:** {user_data.get('tokens_hve', 0)}\n\n"
+        f"<b>Tu Status Actual:</b> {'👑 GOLD' if user_data.get('is_premium') else '🆓 FREE'}\n"
+        f"<b>Tokens HVE:</b> {user_data.get('tokens_hve', 0)}\n\n"
         "Selecciona una opción abajo para empezar a generar ingresos.",
         reply_markup=reply_markup
     )
@@ -213,20 +198,21 @@ async def links_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     user = update.effective_user
     user_data = await get_or_create_user(user.id, user.username)
 
+    # El click aquí suma a la racha diaria (Vía 7)
     tokens_earned, check_in_message = await register_click(user.id, user_data, is_check_in=True)
 
     message = (
-        f"{check_in_message}\n"
+        f"**{check_in_message}**\n\n"
         "🔗 **PASO 1: REGISTRA TUS 5 VÍAS DE INGRESO**\n\n"
-        "Cada registro te da una fuente de ingreso residual de por vida.\n\n"
+        "Cada registro te da una fuente de ingreso residual de por vida (Vía 1). Tienes que hacer clic en cada uno y registrarte.\n\n"
         "**1. Ingreso Pasivo (Datos):** \n"
-        f"   - **Honeygain:** Código: `{HONEYGAIN_CODE}`\n"
-        f"   - **Pawns App:** Código: `{PAWNS_CODE}`\n"
+        f"   - **Honeygain:** Código: `{HONEYGAIN_CODE}`. [Enlace para registrarte](https://www.honeygain.com/r/{HONEYGAIN_CODE})\n"
+        f"   - **Pawns App:** Código: `{PAWNS_CODE}`. [Enlace para registrarte](https://pawns.app/r/{PAWNS_CODE})\n"
         f"   - **Peer2Profit:** Enlace: [Regístrate Aquí]({PEER2PROFIT_LINK})\n\n"
         "**2. Ingreso Activo (Tareas/Crypto):**\n"
         f"   - **Hive Micro:** Enlace: [Regístrate Aquí]({HIVE_MICRO_LINK})\n"
         f"   - **Coinbase Earn:** Enlace: [Regístrate Aquí]({COINBASE_EARN_LINK})\n\n"
-        "**¡Importante!** Debes registrarte en cada una de ellas para activar tu potencial completo. Cada click aquí suma a tu Racha Diaria."
+        "**¡Importante!** Cada click aquí confirma tu actividad para la Racha Diaria. Tokens ganados: {tokens_earned} HVE."
     )
     await update.callback_query.edit_message_text(message, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Volver al Menú", callback_data='start_menu')]]))
 
@@ -241,19 +227,17 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     streak = user_data.get('check_in_streak', 0)
     
     # 1. Tasa de Proyección APD
-    # Usuario GOLD usa un multiplicador mayor (3.0x) para justificar el precio
-    # Usuario FREE usa un multiplicador base (1.2x)
     multiplier = GOLD_MULTIPLIER if is_premium else FREE_MULTIPLIER
     
     # Ganancia Proyectada: Clicks * Valor Base * Multiplicador
     projected_today = daily_clicks * BASE_CLICKS_VALUE * multiplier
     projected_month = projected_today * 30
 
-    # 2. Proyección de Optimización (Gancho)
-    # Si el usuario es más rápido/trabaja más (ej: 50% más clicks)
+    # 2. Proyección de Optimización (Gancho GOLD)
     optimized_clicks = daily_clicks * 1.5
-    optimized_multiplier = 2.5 if is_premium else 1.5 # GOLD tiene un mejor potencial de mejora
+    optimized_multiplier = 2.5 if is_premium else 1.5 
     
+    # Cálculo del potencial extra si mejoran
     potential_increase = (optimized_clicks * BASE_CLICKS_VALUE * optimized_multiplier) - projected_today
 
     status_str = '👑 GOLD' if is_premium else '🆓 FREE'
@@ -277,7 +261,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         f"🚀 **POTENCIAL DE OPTIMIZACIÓN**\n"
         f"Si optimizas tu tiempo de respuesta y dedicas más horas, puedes proyectar una ganancia adicional de:\n"
         f"**+{potential_increase:.2f} USD por día**\n"
-        f"*(¡Mejora tu velocidad de respuesta!)*\n\n"
+        f"*(Solo el status GOLD te da un potencial de hasta 2.5x)*\n\n"
         
         f"**🤝 Bucle Viral (Vía 5):**\n"
         f"Referidos ganados: {referred_count}\n"
@@ -292,18 +276,12 @@ async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     user = update.effective_user
     user_data = await get_or_create_user(user.id, user.username)
     
-    status_str = '👑 GOLD' if user_data.get('is_premium', False) else '🆓 FREE'
-    
     if user_data.get('is_premium'):
         message = (
             f"👑 **¡YA ERES GOLD!**\n\n"
-            f"Disfrutas de:\n"
-            f"✅ Acelerador HVE x2\n"
-            f"✅ Acceso a 3 Vías de Ingreso Élite\n"
-            f"✅ Análisis de Velocidad (HVA Insight)\n"
-            f"✅ Soporte Prioritario VIP\n\n"
-            f"**Tu clave de acceso:** {user.id}"
+            f"Disfrutas de los beneficios que te garantizan alcanzar tu potencial máximo."
         )
+        keyboard = [[InlineKeyboardButton("⬅️ Volver al Menú", callback_data='start_menu')]]
     else:
         message = (
             f"👑 **MEJORA A GOLD PREMIUM**\n\n"
@@ -311,36 +289,39 @@ async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             f"¿Por qué pagar {PREMIUM_PRICE}? Porque el estatus GOLD es la única manera de acelerar tu potencial de ganancia y alcanzar el objetivo de ingresos dignos.\n\n"
             f"**BENEFICIOS EXCLUSIVOS:**\n"
             f"⚡ **Acelerador HVE x2:** Gana el doble de Tokens para canjes y bonos.\n"
-            f"💎 **Acceso a 3 Vías de Élite:** Plataformas de micro-tareas y encuestas más estables y mejor remuneradas.\n"
-            f"📈 **Potencial APD 2.5x:** Desbloquea el multiplicador de potencial de ganancia en tus estadísticas.\n"
+            f"💎 **Acceso a 3 Vías de Élite:** Plataformas mejor remuneradas (solo para GOLD).\n"
+            f"📈 **Potencial APD 2.5x:** Desbloquea el multiplicador de potencial en tus estadísticas.\n"
             f"🆘 **Soporte Prioritario VIP:** Resuelve tus dudas rápidamente.\n\n"
-            f"**PROCESO DE PAGO:**\n"
+            f"**PROCESO DE PAGO (Vía 2):**\n"
             f"1. Haz clic en el botón de contacto.\n"
             f"2. Paga la suscripción de {PREMIUM_PRICE} por el método acordado.\n"
             f"3. Te activaremos el acceso GOLD con tu ID: `{user.id}`."
         )
+        keyboard = [
+            [InlineKeyboardButton("📞 Contáctame para Pagar", url=ADMIN_CONTACT_URL)],
+            [InlineKeyboardButton("⬅️ Volver al Menú", callback_data='start_menu')]
+        ]
         
-    keyboard = [[InlineKeyboardButton("📞 Contáctame para Pagar", url=ADMIN_CONTACT_URL)]]
     reply_markup = InlineKeyboardMarkup(keyboard)
-
     await update.callback_query.edit_message_text(message, parse_mode='Markdown', reply_markup=reply_markup)
 
 
 async def marketplace_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Vía 3: Marketplace de Alto Margen
+    # Registrar el click aquí aumenta la actividad del usuario
     await register_click(update.effective_user.id, await get_or_create_user(update.effective_user.id, update.effective_user.username))
 
     message = (
         "🛒 **MARKETPLACE DE OPTIMIZACIÓN**\n\n"
-        "Si quieres alcanzar el Potencial Máximo que ves en tus estadísticas, ¡necesitas optimizar tu trabajo!\n\n"
+        "Si quieres alcanzar el Potencial Máximo (el 2.5x) que ves en tus estadísticas, ¡necesitas optimizar tu trabajo!\n\n"
         "Aquí encontrarás los mejores cursos y libros sobre:\n"
         "📚 Cursos de Freelancing de Alto Valor.\n"
         "⏱️ Técnicas de respuesta rápida para Encuestas.\n"
         "💰 Estrategias avanzadas de Ingreso Pasivo.\n\n"
-        "**¡Gana más invirtiendo en conocimiento!**"
+        "**¡Gana más invirtiendo en conocimiento!** (Vía 3: Comisión para mí)"
     )
     keyboard = [
-        [InlineKeyboardButton("🔗 Acceder al Marketplace (Comisiones para mí)", url=MARKETPLACE_LINK)],
+        [InlineKeyboardButton("🔗 Acceder al Marketplace", url=MARKETPLACE_LINK)],
         [InlineKeyboardButton("⬅️ Volver al Menú", callback_data='start_menu')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -358,7 +339,7 @@ async def video_viral_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         "**¿CÓMO FUNCIONA?**\n"
         "1. Crea un video en TikTok, Instagram Reels o YouTube Shorts mostrando tu **Racha Diaria** o tu **Proyección de Ganancia** en el bot.\n"
         "2. Usa el hashtag **#TheOneHiveApp**.\n"
-        "3. Envíanos el enlace por mensaje privado a [Contáctame Aquí]({ADMIN_CONTACT_URL}).\n\n"
+        f"3. Envíanos el enlace por mensaje privado a [Contáctame Aquí]({ADMIN_CONTACT_URL}).\n\n"
         "**BONO:** Por cada video aprobado, ganas **100 HVE Tokens** (Vía de Ingreso 5). ¡Máximo tráfico gratuito para nosotros!"
     )
     keyboard = [[InlineKeyboardButton("⬅️ Volver al Menú", callback_data='start_menu')]]
@@ -376,9 +357,9 @@ async def privacidad_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     message = (
         "🔒 **POLÍTICA DE PRIVACIDAD Y DATOS**\n\n"
-        "Para mantener nuestro servicio gratuito, podemos compartir patrones de uso anónimos con terceros (NUNCA tu nombre, ID o datos personales).\n\n"
-        "**Status Actual:** {consent_status}\n\n"
-        "Si **Aceptas**, nos permites generar ingresos pasivos adicionales (Vía 4) y a cambio, obtienes un **BONO ÚNICO de 25 HVE Tokens**."
+        "Para mantener nuestro servicio gratuito, podemos compartir patrones de uso anónimos con terceros (Vía 4), **NUNCA** tu nombre o ID.\n\n"
+        f"**Status Actual:** {consent_status}\n\n"
+        "Si **Aceptas**, nos permites generar ingresos pasivos adicionales y a cambio, obtienes un **BONO ÚNICO de 25 HVE Tokens**."
     )
     
     keyboard = []
@@ -430,10 +411,14 @@ async def upgrade_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # 3. Ejecución: Actualizar Firebase
     try:
         target_user_ref = db.collection(USERS_COLLECTION).document(target_user_id)
-        target_user_ref.update({'is_premium': True})
-        
-        await update.message.reply_text(f"✅ Usuario {target_user_id} ha sido actualizado a PREMIUM GOLD. ¡Dinero en la cuenta!")
-        
+        # Verificar si el usuario existe antes de actualizar
+        doc = target_user_ref.get()
+        if doc.exists:
+            target_user_ref.update({'is_premium': True})
+            await update.message.reply_text(f"✅ Usuario {target_user_id} ha sido actualizado a PREMIUM GOLD. ¡Dinero en la cuenta!")
+        else:
+            await update.message.reply_text(f"❌ Error: No se encontró el usuario {target_user_id} en la base de datos.")
+            
     except Exception as e:
         logger.error(f"Error al actualizar usuario: {e}")
         await update.message.reply_text(f"❌ Error al actualizar al usuario {target_user_id}. Verifica el ID y el estado de la base de datos.")
@@ -441,7 +426,7 @@ async def upgrade_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def start_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Manejador para volver al menú principal
-    await start_command(update, context)
+    await start_command(update.callback_query, context)
 
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -470,7 +455,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 def main():
     """Iniciar el bot."""
     if not TELEGRAM_TOKEN or not db:
-        logger.error("No se puede iniciar el bot. Falta TELEGRAM_TOKEN o la conexión a Firebase falló.")
+        # Se lanza este error si las credenciales de Render son incorrectas
+        logger.error("No se puede iniciar el bot. Falta TELEGRAM_TOKEN o la conexión a Firebase falló (Verificar FIREBASE_CREDENTIALS).")
         return
 
     # Crear la aplicación y pasarle el token del bot
