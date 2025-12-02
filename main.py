@@ -11,8 +11,8 @@ from urllib.parse import urlparse
 from tenacity import retry, stop_after_attempt, wait_fixed
 import requests
 from web3 import Web3
-# Descomentar la línea siguiente si la red RPC es PoA (Proof of Authority), como Binance Smart Chain (BSC)
-from web3.middleware import geth_poa_middleware 
+# ESTA LÍNEA DE IMPORTACIÓN FUE COMENTADA PARA EVITAR EL CRASH DE 'ImportError' EN RENDER:
+# from web3.middleware import geth_poa_middleware 
 
 # --- Configuración de Logging ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -41,6 +41,10 @@ def setup_db_pool():
         return False
     try:
         url = urlparse(DATABASE_URL)
+        # Ajuste para psycopg2 si la URL tiene un esquema 'postgresql' en lugar de 'postgres'
+        if url.scheme in ('postgresql', 'postgresqls'):
+            url = url._replace(scheme='postgres') 
+            
         connection_pool = psycopg2.pool.SimpleConnectionPool(
             1, 20, # Min 1 conexión, Max 20 conexiones
             user=url.username, 
@@ -116,8 +120,8 @@ def setup_web3():
         return False
     try:
         W3 = Web3(Web3.HTTPProvider(RPC_URL))
-        # Si usas BSC o Polygon (Proof of Authority), descomenta la siguiente línea:
-        W3.middleware_onion.inject(geth_poa_middleware, layer=0)
+        # Se ha comentado la siguiente línea para evitar el error de ImportError:
+        # W3.middleware_onion.inject(geth_poa_middleware, layer=0)
         
         if W3.is_connected():
             logger.info(f"Conexión Web3 exitosa a: {RPC_URL}")
@@ -308,9 +312,9 @@ application = None
 async def webhook_handler():
     """Recibe y procesa las actualizaciones enviadas por Telegram."""
     if request.method == "POST":
-        update = Update.de_json(await request.get_json(), application.bot)
-        # Usamos try/except para capturar cualquier error durante el procesamiento del update
+        # Asegúrate de que request.get_json() se use con await ya que Quart es asíncrono
         try:
+            update = Update.de_json(await request.get_json(), application.bot)
             await application.process_update(update) 
         except Exception as e:
             logger.error(f"Error al procesar el Update de Telegram: {e}")
@@ -342,9 +346,6 @@ def main() -> None:
     # 4. Configurar el WebHook en Telegram
     webhook_url = f"{RENDER_EXTERNAL_URL_FORZADA}/{TELEGRAM_TOKEN}"
     try:
-        # Esto es asíncrono, pero se ejecuta al inicio del main antes del app.run
-        # Necesitamos el bot para poder llamar a set_webhook
-        # Usamos application.bot porque la instancia ya está creada
         application.bot.set_webhook(url=webhook_url)
         logger.info(f"WebHook configurado exitosamente: {webhook_url}")
     except Exception as e:
