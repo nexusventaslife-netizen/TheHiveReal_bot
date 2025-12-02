@@ -1,5 +1,6 @@
-Import os
+import os # <--- ¡IMPORTANTE: "import" en minúsculas!
 import logging
+import asyncio
 from http import HTTPStatus
 from quart import Quart, request
 from telegram import Update, Bot
@@ -9,8 +10,6 @@ import psycopg2.pool
 from urllib.parse import urlparse
 from tenacity import retry, stop_after_attempt, wait_fixed
 from web3 import Web3
-
-# COMENTADO: from web3.middleware import geth_poa_middleware 
 
 # --- Configuración de Logging ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -22,19 +21,21 @@ ADMIN_USER_ID = os.environ.get("ADMIN_USER_ID")
 DATABASE_URL = os.environ.get('DATABASE_URL') 
 RPC_URL = os.environ.get('RPC_URL') 
 NUMBEO_API_KEY = os.environ.get('NUMBEO_API_KEY') 
+# IMPORTANTE: Asegúrese de que esta URL sea la correcta de su servicio Render
 RENDER_EXTERNAL_URL_FORZADA = "https://the-hivereal-bot.onrender.com" 
 
 # --- Instancias Globales ---
 W3 = None 
 connection_pool = None
-application = None 
+application: Application = None 
 app = Quart(__name__) 
 
-# --- Funciones de Conexión (sin cambios) ---
+# --- Funciones de Conexión y Setup (Sin cambios mayores) ---
+
 def setup_db_pool():
     global connection_pool
     if not DATABASE_URL:
-        logger.error("ERROR FATAL: DATABASE_URL no está configurada. EL BOT NO PUEDE FUNCIONAR.")
+        logger.error("ERROR FATAL: DATABASE_URL no está configurada.")
         return False
     try:
         url = urlparse(DATABASE_URL)
@@ -71,12 +72,10 @@ def put_db_conn(conn):
 def init_db():
     if not setup_db_pool():
         return False
-
     conn = get_db_conn()
     if conn is None:
         logger.error("ERROR DB: No se pudo obtener la conexión inicial para crear el esquema.")
         return False
-        
     try:
         with conn.cursor() as cur:
             cur.execute("""
@@ -164,6 +163,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 cur.execute("SELECT tokens_hve, is_admin, country, effort_hours, wallet_address FROM users WHERE id = %s;", (user_id,))
                 user_data = cur.fetchone()
                 if user_data is None:
+                    # Generar una wallet si no existe (simulación)
                     wallet = "0x" + os.urandom(20).hex() 
                     cur.execute("""
                         INSERT INTO users (id, first_name, username, is_admin, wallet_address) 
@@ -275,35 +275,43 @@ async def webhook_handler():
             logger.error(f"Error al procesar el Update de Telegram: {e}")
     return "ok", HTTPStatus.OK
 
-def initialize_application():
-    """Inicializa DB, Web3, y establece el WebHook."""
+async def startup_bot():
+    """Función asíncrona que inicializa el bot y el WebHook."""
     global application
     
+    # 1. Inicializar la DB (síncrona)
     db_initialized = init_db() 
+    
+    # 2. Inicializar Web3 (síncrona)
     setup_web3() 
     
     if not TELEGRAM_TOKEN or not db_initialized:
         logger.error("El bot no puede iniciar. Revisa TELEGRAM_TOKEN o DATABASE_URL.")
-        return False
+        return 
 
+    # 3. Construir la aplicación Telegram
     application = Application.builder().token(TELEGRAM_TOKEN).build()
 
+    # 4. Agregar Handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("proyeccion", proyeccion))
     application.add_handler(CommandHandler("cashout", cashout))
     application.add_handler(CommandHandler("balance", balance)) 
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
+    # 5. Configurar el WebHook (asíncrono y esperado)
     webhook_url = f"{RENDER_EXTERNAL_URL_FORZADA}/{TELEGRAM_TOKEN}"
     try:
-        application.bot.set_webhook(url=webhook_url)
+        # Aquí se usa await para evitar el RuntimeWarning
+        await application.bot.set_webhook(url=webhook_url)
         logger.info(f"WebHook configurado exitosamente: {webhook_url}")
-        return True
+        
+        # 6. Iniciar el motor de Telegram (solo necesario en modo webhook)
+        await application.start() 
+        logger.info("Motor de Telegram iniciado (en modo webhook).")
+        
     except Exception as e:
         logger.error(f"ERROR FATAL DE WEBHOOK: Falló al configurar el WebHook. Error: {e}")
-        return False
 
-if initialize_application():
-    logger.info("Inicialización del Bot completa. Listo para ser servido por Hypercorn.")
-else:
-    logger.error("El bot no pudo completar la inicialización y NO responderá.")
+# Ejecutar la inicialización asíncrona antes de que Quart empiece a servir
+app.before_serving(startup_bot)
