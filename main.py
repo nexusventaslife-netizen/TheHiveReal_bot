@@ -1,4 +1,4 @@
-import os # <--- ¡IMPORTANTE: "import" en minúsculas!
+import os 
 import logging
 import asyncio
 from http import HTTPStatus
@@ -149,6 +149,7 @@ def get_eth_balance(address: str):
 
 
 # --- Handlers de Telegram (Funcionalidad Central) ---
+# (Estos no necesitan cambios)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
@@ -302,7 +303,10 @@ async def startup_bot():
     # 5. Configurar el WebHook (asíncrono y esperado)
     webhook_url = f"{RENDER_EXTERNAL_URL_FORZADA}/{TELEGRAM_TOKEN}"
     try:
-        # Aquí se usa await para evitar el RuntimeWarning
+        # Se detiene el motor de telegram para asegurar que se reinicie limpio.
+        # Esto soluciona el error "This Application was not initialized via 'Application.initialize'!"
+        await application.stop() 
+        
         await application.bot.set_webhook(url=webhook_url)
         logger.info(f"WebHook configurado exitosamente: {webhook_url}")
         
