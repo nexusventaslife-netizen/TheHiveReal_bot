@@ -1,6 +1,5 @@
 python-telegram-bot
 quart
+web3
 psycopg2-binary
 tenacity
-requests
-web3
