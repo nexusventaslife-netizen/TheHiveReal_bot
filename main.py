@@ -5,6 +5,7 @@ from telegram import Update, error
 import os
 import json
 import logging
+import asyncio # Necesario para compatibilidad total con async
 from firebase_admin import credentials, initialize_app, firestore
 
 # --- Configuración de Logging ---
@@ -25,31 +26,33 @@ if not TELEGRAM_TOKEN:
     logger.critical("ERROR CRÍTICO: Falta TELEGRAM_TOKEN. El bot NO SE INICIARÁ.")
     exit(1)
 if not FIREBASE_CREDENTIALS_JSON:
+    # Se considera crítico ya que la funcionalidad principal depende de Firestore
     logger.critical("ERROR CRÍTICO: FIREBASE_CREDENTIALS no está configurada. La base de datos no funcionará.")
     exit(1)
 
 
-# --- 3. Inicialización de Firebase (Estabilización de Conexión) ---
+# --- 3. Inicialización de Firebase (Fortificado) ---
 db = None
 try:
     creds_dict = json.loads(FIREBASE_CREDENTIALS_JSON)
     cred = credentials.Certificate(creds_dict)
     
-    # Usamos un nombre de aplicación para asegurar la inicialización correcta en ambientes como Render
+    # Usamos un nombre de aplicación para asegurar la inicialización correcta
     initialize_app(cred, name='TheOneHiveApp') 
     db = firestore.client()
-    logger.info("CONEXIÓN A FIRESTORE EXITOSA.")
+    logger.info("CONEXIÓN A FIRESTORE EXITOSA. La base de datos está lista.")
     
 except Exception as e:
-    # Capturamos errores de JSON o credenciales malformadas
-    logger.error(f"ERROR DE CONEXIÓN A FIREBASE: Falló la inicialización. Detalle: {e}")
-    # Permitimos que el bot inicie, pero con funcionalidad limitada (sin guardar datos)
-    pass
+    # Registramos el error de manera específica para facilitar el diagnóstico
+    logger.error(f"ERROR DE INICIALIZACIÓN DE FIREBASE: {type(e).__name__}: {e}")
+    # Salimos del proceso si Firebase falla, ya que es fundamental para el bot.
+    exit(1)
 
 # --- 4. Funciones de Ayuda y Administración ---
 
 try:
-    ADMIN_USER_ID = int(ADMIN_USER_ID)
+    # Convertimos el ID de administrador a entero y manejamos el caso de que sea None
+    ADMIN_USER_ID = int(ADMIN_USER_ID) if ADMIN_USER_ID else 0
 except (TypeError, ValueError):
     ADMIN_USER_ID = 0
     logger.warning("ADMIN_USER_ID no es un número válido. La función de administrador no funcionará.")
@@ -84,12 +87,21 @@ def get_keyboard(user_id):
 
 # --- 6. Funciones de Manejadores (Handlers) ---
 
-# CRUCIAL: Las funciones deben ser asíncronas (async) y usar await
+# Manejador simple para confirmar que el bot está respondiendo
+async def ping_command(update: Update, context):
+    """Responde al /ping para verificar la operatividad."""
+    await update.message.reply_text("Pong! Bot TheOneHive operativo.")
+
+
+# CRUCIAL: Las funciones deben ser asíncronas (async)
 async def start_command(update: Update, context):
     """Maneja el comando /start e inicializa el teclado."""
     
-    user = update.effective_user
-    user_id = user.id
+    # Verificar si el update y el mensaje son válidos
+    if not update.effective_user or not update.message:
+        return
+        
+    user_id = update.effective_user.id
     
     # Mensaje de bienvenida, incluyendo el estado de Tokens
     message_text = (
@@ -99,43 +111,44 @@ async def start_command(update: Update, context):
         f"Tokens HVE: 5"
     )
     
-    # Enviamos el mensaje con el teclado generado (que incluye o no el botón ADMIN)
     try:
-        await update.message.reply_text( # Uso reply_text en lugar de send_message para simplificar
+        # Usamos await para la operación de red
+        await update.message.reply_text( 
             text=message_text,
             reply_markup=get_keyboard(user_id)
         )
+        logger.info(f"Comando /start enviado a usuario {user_id}")
     except error.TelegramError as e:
-        logger.error(f"Error al enviar /start: {e}")
+        logger.error(f"Error al enviar /start a {user_id}: {e}")
 
 
-# CRUCIAL: La función debe ser asíncrona (async) y usar await
+# CRUCIAL: La función debe ser asíncrona (async)
 async def handle_message(update: Update, context):
     """Maneja todos los mensajes de texto del usuario."""
     
-    # Comprobación de seguridad: Si no hay mensaje de texto, salimos.
     if not update.message or not update.message.text:
         return
         
     text = update.message.text
     user_id = update.effective_user.id
     
-    response_text = "Opción no reconocida. Por favor, selecciona un botón del menú."
+    response_text = "¡Hola! Por favor, selecciona una de las opciones del menú para interactuar."
 
     # Lógica de 5 Vías de Ingreso (Solo para el Admin)
-    if "5 Vías de Ingreso" in text and is_admin(user_id):
-        response_text = (
-            "ADMIN: Este es el menú de 5 Vías de Ingreso para administrar el negocio.\n\n"
-            "Aquí puedes gestionar:\n"
-            "- Vía 1: Venta de Licencias (GOLD Premium)\n"
-            "- Vía 2: Venta de Cursos/Ebooks (Marketplace)\n"
-            "- Vía 3: Recompensa por Actividad (Tokens HVE)\n"
-            "- Vía 4: Bono por Privacidad\n"
-            "- Vía 5: Reto Viral (Marketing)\n\n"
-            "Este mensaje es de uso interno."
-        )
-    elif "5 Vías de Ingreso" in text and not is_admin(user_id):
-        response_text = "Opción no disponible. Por favor, selecciona una de las opciones del menú."
+    if "5 Vías de Ingreso" in text:
+        if is_admin(user_id):
+            response_text = (
+                "ADMIN: Este es el menú de 5 Vías de Ingreso para administrar el negocio.\n\n"
+                "Aquí puedes gestionar:\n"
+                "- Vía 1: Venta de Licencias (GOLD Premium)\n"
+                "- Vía 2: Venta de Cursos/Ebooks (Marketplace)\n"
+                "- Vía 3: Recompensa por Actividad (Tokens HVE)\n"
+                "- Vía 4: Bono por Privacidad\n"
+                "- Vía 5: Reto Viral (Marketing)\n\n"
+                "Este mensaje es de uso interno."
+            )
+        else:
+            response_text = "Opción no disponible. Por favor, selecciona una de las opciones del menú."
         
     # Lógica de Reto Viral
     elif "Reto Viral" in text:
@@ -157,7 +170,7 @@ async def handle_message(update: Update, context):
     try:
         await update.message.reply_text(response_text)
     except error.TelegramError as e:
-        logger.error(f"Error al enviar mensaje: {e}")
+        logger.error(f"Error al enviar mensaje a {user_id}: {e}")
 
 
 # --- 7. Función Principal de Arranque ---
@@ -176,14 +189,24 @@ def main():
         logger.critical("ERROR - El TELEGRAM_TOKEN no es válido. Saliendo.")
         return
 
-    # 2. Registramos Handlers (Con sintaxis de filtros corregida)
+    # 2. Registramos Handlers
     application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("ping", ping_command)) # Handler de prueba de conectividad
+    # Se usa la sintaxis correcta para los filtros: filters.TEXT y filters.COMMAND
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # 3. Inicia el bot (Polling)
+    # 3. Inicia el bot (Polling) con manejo de errores de conflicto
     logger.info("Bot TheOneHive listo. Iniciando Polling...")
-    application.run_polling(poll_interval=0.5) # Usamos poll_interval para mejor respuesta
-    
+    try:
+        # poll_interval=1.0 para que Render no sature el servidor de Telegram
+        application.run_polling(poll_interval=1.0) 
+    except error.Conflict as e:
+        # Este error es común en Render si hay un despliegue previo que no se cerró bien.
+        logger.warning(f"Conflicto detectado (Conflicto): {e}. Reintentando o asumiendo el cierre de la instancia anterior.")
+        # Se podría reintentar o simplemente dejar que la nueva instancia asuma el control.
+    except Exception as e:
+        logger.error(f"Error fatal durante el polling: {e}")
+        
     logger.info("El bot se ha detenido.")
 
 if __name__ == '__main__':
