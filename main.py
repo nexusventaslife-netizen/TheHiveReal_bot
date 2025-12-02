@@ -1,4 +1,4 @@
-Import os
+import os
 import logging
 import json
 from http import HTTPStatus
@@ -11,26 +11,99 @@ from urllib.parse import urlparse
 from tenacity import retry, stop_after_attempt, wait_fixed
 import requests
 from web3 import Web3
-# from web3.middleware import geth_poa_middleware # Descomentar si usas PoA/sidechains
+# Descomentar la línea siguiente si la red RPC es PoA (Proof of Authority), como Binance Smart Chain (BSC)
+from web3.middleware import geth_poa_middleware 
 
 # --- Configuración de Logging ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- Variables Globales ---
+# --- Variables Globales (Configuradas en Render) ---
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 ADMIN_USER_ID = os.environ.get("ADMIN_USER_ID")
 DATABASE_URL = os.environ.get('DATABASE_URL') 
-RPC_URL = os.environ.get('RPC_URL') # URL del nodo RPC (ej: Infura/Alchemy)
+RPC_URL = os.environ.get('RPC_URL') # URL del nodo RPC (ej: Infura/Alchemy/BSC)
 NUMBEO_API_KEY = os.environ.get('NUMBEO_API_KEY') 
+# Reemplaza con la URL pública de tu servicio en Render
 RENDER_EXTERNAL_URL_FORZADA = "https://the-hivereal-bot.onrender.com" 
 
-# --- Web3 Global Instance ---
+# --- Instancias Globales ---
 W3 = None # Instancia global de Web3
-
-# ... (El código de setup_db_pool, get_db_conn, put_db_conn, init_db es igual) ...
 connection_pool = None
 db_initialized = False # Inicialmente False
+
+# --- Configuración de Pool de Conexiones a PostgreSQL ---
+def setup_db_pool():
+    """Configura el pool de conexiones a la DB."""
+    global connection_pool
+    if not DATABASE_URL:
+        logger.error("ERROR FATAL: DATABASE_URL no está configurada.")
+        return False
+    try:
+        url = urlparse(DATABASE_URL)
+        connection_pool = psycopg2.pool.SimpleConnectionPool(
+            1, 20, # Min 1 conexión, Max 20 conexiones
+            user=url.username, 
+            password=url.password,
+            host=url.hostname,
+            port=url.port,
+            database=url.path[1:]
+        )
+        logger.info("Pool de Conexiones a PostgreSQL configurado exitosamente.")
+        return True
+    except Exception as e:
+        logger.error(f"ERROR al configurar el Pool de Conexiones a PostgreSQL: {e}")
+        return False
+
+def get_db_conn():
+    """Obtiene una conexión del pool."""
+    if connection_pool:
+        try:
+            return connection_pool.getconn()
+        except Exception as e:
+            logger.error(f"Error al obtener conexión del pool: {e}")
+            return None
+    return None
+
+def put_db_conn(conn):
+    """Devuelve una conexión al pool."""
+    if connection_pool and conn:
+        connection_pool.putconn(conn)
+
+def init_db():
+    """Inicializa el esquema de la base de datos (crea la tabla 'users')."""
+    if not setup_db_pool():
+        return False
+
+    conn = get_db_conn()
+    if conn is None:
+        return False
+        
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id BIGINT PRIMARY KEY,
+                    first_name VARCHAR(255),
+                    username VARCHAR(255),
+                    status VARCHAR(50) DEFAULT 'FREE',
+                    tokens_hve INTEGER DEFAULT 5,
+                    wallet_address VARCHAR(42),
+                    country VARCHAR(50) DEFAULT 'Global', 
+                    effort_hours FLOAT DEFAULT 0,
+                    is_admin BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+        conn.commit()
+        logger.info("Base de datos PostgreSQL inicializada y esquema verificado.")
+        return True
+    except Exception as e:
+        logger.error(f"ERROR al inicializar la base de datos (esquema): {e}")
+        conn.rollback()
+        return False
+    finally:
+        put_db_conn(conn)
 
 # --- Inicialización de Web3 ---
 
@@ -43,8 +116,8 @@ def setup_web3():
         return False
     try:
         W3 = Web3(Web3.HTTPProvider(RPC_URL))
-        # Si usas una red PoA (ej: Polygon, Binance Smart Chain), descomenta la siguiente línea:
-        # W3.middleware_onion.inject(geth_poa_middleware, layer=0)
+        # Si usas BSC o Polygon (Proof of Authority), descomenta la siguiente línea:
+        W3.middleware_onion.inject(geth_poa_middleware, layer=0)
         
         if W3.is_connected():
             logger.info(f"Conexión Web3 exitosa a: {RPC_URL}")
@@ -57,24 +130,35 @@ def setup_web3():
         W3 = None
         return False
 
-# --- Funciones de Datos Económicos (Iguales) ---
-# ...
+# --- Funciones de Datos Económicos y Web3 ---
 
-# --- Funciones de Web3 ---
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+def get_econ_data(country):
+    """Obtiene datos económicos (ejemplo con Numbeo)."""
+    if not NUMBEO_API_KEY:
+        return 5.0, 50.0 # Fallback global USD/h y Costo de vida index
+    # Lógica de API de Numbeo...
+    return 5.0, 50.0 # Fallback
+
+def calc_max_earnings(min_wage, effort_hours, cost_living):
+    """Calcula la proyección de ingresos diarios."""
+    base = min_wage * effort_hours
+    adjusted = base - (cost_living / 100 * base * 0.2) 
+    return max(0, round(adjusted, 2))
 
 def get_eth_balance(address: str):
-    """Obtiene el saldo de ETH (o la moneda nativa) de una dirección."""
+    """Obtiene el saldo de la moneda nativa (ETH/BNB) de una dirección."""
     if not W3 or not W3.is_connected():
         return "ERROR: Conexión Web3 no disponible."
     
     try:
-        # 1. Obtener el saldo en Wei
+        # Generar una dirección de prueba si es "N/A"
+        if address == "N/A":
+            return "0.0000"
+
         checksum_address = W3.to_checksum_address(address)
         balance_wei = W3.eth.get_balance(checksum_address)
-        
-        # 2. Convertir de Wei a Ether
         balance_eth = W3.from_wei(balance_wei, 'ether')
-        
         return f"{balance_eth:.4f}"
     except Exception as e:
         logger.error(f"Error al obtener el saldo para {address}: {e}")
@@ -83,10 +167,92 @@ def get_eth_balance(address: str):
 
 # --- Handlers de Telegram ---
 
-# ... (El handler 'start' es igual, pero ahora usa la wallet_address) ...
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Maneja el comando /start e interactúa con la DB."""
+    user = update.effective_user
+    user_id = user.id
+    is_admin = str(user_id) == ADMIN_USER_ID
+    
+    conn = get_db_conn()
+    wallet = "N/A"
+    
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT tokens_hve, is_admin, country, effort_hours, wallet_address FROM users WHERE id = %s;", (user_id,))
+                user_data = cur.fetchone()
+
+                if user_data is None:
+                    # Generar wallet de prueba (se reemplazará por la wallet real de Hive)
+                    wallet = "0x" + os.urandom(20).hex() 
+                    cur.execute("""
+                        INSERT INTO users (id, first_name, username, is_admin, wallet_address) 
+                        VALUES (%s, %s, %s, %s, %s);
+                    """, (user_id, user.first_name, user.username, is_admin, wallet))
+                    conn.commit()
+                    tokens, hours, country = 5, 0, 'Global'
+                else:
+                    tokens, is_admin_db, country, hours, wallet = user_data
+                    cur.execute("""
+                        UPDATE users SET first_name = %s, username = %s WHERE id = %s;
+                    """, (user.first_name, user.username, user_id))
+                    conn.commit()
+
+            min_wage, cost_living = get_econ_data(country)
+            max_daily = calc_max_earnings(min_wage, hours if hours > 0 else 4, cost_living)
+            
+        except Exception as e:
+            logger.error(f"Error de SQL al procesar /start: {e}")
+            max_daily = "5.00 (Default)"
+        finally:
+            put_db_conn(conn)
+    else:
+        max_daily = "Error (DB Fallback)"
+        
+    # Texto final de bienvenida
+    welcome_text = (
+        f"¡Hola, {user.first_name}! ¡Bienvenido a The Hive Real!\n"
+        f"Tu Wallet (HVE/BSC): `{wallet}`\n"
+        f"Proyección Máx Diaria ({country}): **${max_daily}**\n\n"
+        "📈 Maximiza tu actividad y sube tu Racha Diaria."
+    )
+    
+    keyboard = [
+        ["5 Vías de Ingreso", "Mis Estadísticas (APD V2)"],
+        ["Reto Viral (Gana HVE Tokens)", "Marketplace GOLD (Cursos/Libros)"],
+        ["GOLD Premium ($15 USD)", "Privacidad y Datos (Bono HVE)"],
+        ["/proyeccion", "/cashout", "/balance"]
+    ]
+    if is_admin:
+        keyboard.append(["🛠️ Panel Admin"])
+        
+    reply_markup = telegram.ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode=telegram.constants.ParseMode.MARKDOWN)
+
+async def proyeccion(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Muestra la proyección detallada de ingresos."""
+    response = (
+        "📊 **PROYECCIÓN DIARIA**\n"
+        "Tu ingreso potencial se basa en:\n"
+        "- **Horas de Esfuerzo:** 4h (actual)\n"
+        "- **Salario Mínimo Regional:** $5.00/h (Default)\n"
+        "- **Índice de Costo de Vida:** 50%\n\n"
+        "Próximamente: podrás configurar tu país para una proyección más precisa."
+    )
+    await update.message.reply_text(response, parse_mode=telegram.constants.ParseMode.MARKDOWN)
+
+async def cashout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Proceso de retiro (Cashout)."""
+    response = (
+        "💰 **RETIRO (CASHOUT) DE HVE TOKENS**\n"
+        "Actualmente, la función de Cashout está en desarrollo.\n"
+        "Pronto podrás retirar tus HVE Tokens directamente a tu Wallet BSC/ETH."
+    )
+    await update.message.reply_text(response, parse_mode=telegram.constants.ParseMode.MARKDOWN)
 
 async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Muestra el saldo de ETH/HVE del usuario."""
+    """Muestra el saldo de la moneda nativa (BNB/ETH) y HVE del usuario."""
     user_id = update.effective_user.id
     conn = get_db_conn()
     response = "Error: Conexión a DB fallida."
@@ -94,48 +260,73 @@ async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if conn:
         try:
             with conn.cursor() as cur:
-                cur.execute("SELECT wallet_address FROM users WHERE id = %s;", (user_id,))
+                cur.execute("SELECT wallet_address, tokens_hve FROM users WHERE id = %s;", (user_id,))
                 data = cur.fetchone()
                 
                 if data and data[0]:
                     wallet_address = data[0]
-                    # 1. Obtener saldo nativo (ETH)
+                    hve_tokens = data[1]
+
+                    # 1. Obtener saldo nativo (BNB/ETH) usando Web3
                     eth_balance_str = get_eth_balance(wallet_address)
-                    
-                    # 2. Obtener saldo HVE (Requiere contrato, aquí solo placeholder)
-                    hve_tokens = "5" # Placeholder DB o Contrato
                     
                     response = (
                         f"💳 **SALDOS DE BILLETERA** 💳\n"
-                        f"Dirección: `{wallet_address}`\n\n"
-                        f"**Saldo ETH/BNB (Nativo):** **{eth_balance_str}**\n"
+                        f"Dirección (BSC/ETH): `{wallet_address}`\n\n"
+                        f"**Saldo BNB/ETH (Nativo):** **{eth_balance_str}**\n"
                         f"**Saldo HVE Tokens:** **{hve_tokens} HVE**\n"
-                        f"\n_Nota: El saldo de HVE requiere la integración del contrato inteligente._"
+                        f"\n_El saldo nativo (BNB/ETH) es usado para pagar gas._"
                     )
                 else:
                     response = "Tu billetera aún no está registrada. Usa /start para inicializarla."
         except Exception as e:
             logger.error(f"Error en el handler /balance: {e}")
-            response = "Error interno al consultar la base de datos."
+            response = "Error interno al consultar la base de datos o la cadena."
         finally:
             put_db_conn(conn)
 
     await update.message.reply_text(response, parse_mode=telegram.constants.ParseMode.MARKDOWN)
 
-# ... (Los handlers 'proyeccion', 'cashout', 'handle_message' son iguales) ...
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Maneja los mensajes de texto que no son comandos."""
+    text = update.message.text
+    # Lógica simplificada del menú principal (ejemplo)
+    if text == "5 Vías de Ingreso":
+        response = "Estas son las 5 vías que te permiten obtener ingresos en HVE..."
+    elif text == "Mis Estadísticas (APD V2)":
+        response = "Aquí verás tu Racha Diaria, Puntos de Esfuerzo y más."
+    else:
+        response = f"Has enviado el mensaje: **{text}**. Por favor, usa el teclado o los comandos para interactuar."
+        
+    await update.message.reply_text(response, parse_mode=telegram.constants.ParseMode.MARKDOWN)
 
-# --- Función Principal (Inicia todo) ---
+# --- Configuración del Servidor Web (Quart) ---
+app = Quart(__name__)
+application = None 
+
+@app.route(f"/{TELEGRAM_TOKEN}", methods=['POST'])
+async def webhook_handler():
+    """Recibe y procesa las actualizaciones enviadas por Telegram."""
+    if request.method == "POST":
+        update = Update.de_json(await request.get_json(), application.bot)
+        # Usamos try/except para capturar cualquier error durante el procesamiento del update
+        try:
+            await application.process_update(update) 
+        except Exception as e:
+            logger.error(f"Error al procesar el Update de Telegram: {e}")
+            # Retornamos OK para evitar que Telegram reenvíe el mensaje
+    return "ok", HTTPStatus.OK
 
 def main() -> None:
-    """Inicia el bot con el modo WebHook, optimizado para Render/Quart."""
+    """Inicia el bot con el modo WebHook."""
     global application, db_initialized
 
     # 1. Configurar la DB y Web3
-    db_initialized = init_db() # Inicializa DB Pool y la tabla
-    setup_web3() # Inicializa Web3
+    db_initialized = init_db() 
+    setup_web3() 
     
     if not TELEGRAM_TOKEN or not db_initialized:
-        logger.error("El bot no puede iniciar. Revisa TOKEN, DATABASE_URL y logs de inicialización.")
+        logger.error("El bot no puede iniciar. Revisa TELEGRAM_TOKEN o DATABASE_URL.")
         return
 
     # 2. Crear la aplicación
@@ -145,20 +336,22 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("proyeccion", proyeccion))
     application.add_handler(CommandHandler("cashout", cashout))
-    application.add_handler(CommandHandler("balance", balance)) # NUEVO HANDLER
+    application.add_handler(CommandHandler("balance", balance)) 
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    # 4. Configurar el WebHook en Telegram (Usa la URL forzada)
+    # 4. Configurar el WebHook en Telegram
     webhook_url = f"{RENDER_EXTERNAL_URL_FORZADA}/{TELEGRAM_TOKEN}"
-    
     try:
+        # Esto es asíncrono, pero se ejecuta al inicio del main antes del app.run
+        # Necesitamos el bot para poder llamar a set_webhook
+        # Usamos application.bot porque la instancia ya está creada
         application.bot.set_webhook(url=webhook_url)
         logger.info(f"WebHook configurado exitosamente: {webhook_url}")
     except Exception as e:
         logger.error(f"ERROR al configurar el WebHook. Error: {e}")
         return
 
-    # 5. Iniciar el Servidor Quart
+    # 5. Iniciar el Servidor Quart (Quart escucha por HTTP/HTTPS)
     port = int(os.environ.get("PORT", "8080"))
     logger.info(f"Servicio WebHook (Quart) iniciado en el puerto {port}")
     app.run(host="0.0.0.0", port=port)
