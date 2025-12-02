@@ -1,12 +1,12 @@
 import telegram
-from telegram.ext import Updater, CommandHandler, MessageHandler, filters
+# Importamos Application y Handler directamente de la sintaxis moderna
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 import os
 import json
 import logging
 from firebase_admin import credentials, initialize_app, firestore
 
 # --- Configuración de Logging ---
-# Se configura el logging para ver mensajes de error en la consola de Render.
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -14,7 +14,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # --- 1. Carga de Variables de Entorno ---
-# Estas variables deben estar configuradas en Render.
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_USER_ID = os.getenv("ADMIN_USER_ID")
 FIREBASE_CREDENTIALS_JSON = os.getenv("FIREBASE_CREDENTIALS")
@@ -22,33 +21,27 @@ FIREBASE_CREDENTIALS_JSON = os.getenv("FIREBASE_CREDENTIALS")
 # --- 2. Validación de Credenciales Críticas ---
 if not TELEGRAM_TOKEN or not FIREBASE_CREDENTIALS_JSON:
     logger.error("ERROR CRÍTICO: FIREBASE_CREDENTIALS no está configurada o falta TELEGRAM_TOKEN. El bot NO SE INICIARÁ.")
-    # El bot debe fallar aquí para que Render sepa que hay un problema de configuración.
     exit(1)
 
-# --- 3. Inicialización de Firebase (El Cofre del Tesoro) ---
+# --- 3. Inicialización de Firebase (Verificado como EXITOSO) ---
 db = None
 try:
-    # 1. Intenta convertir la llave JSON (que debe estar en una sola línea)
     creds_dict = json.loads(FIREBASE_CREDENTIALS_JSON)
     cred = credentials.Certificate(creds_dict)
     
-    # 2. Inicializa la conexión
     initialize_app(cred)
     db = firestore.client()
     logger.info("CONEXIÓN A FIRESTORE EXITOSA. Los datos de usuarios se guardarán correctamente.")
     
 except Exception as e:
-    logger.error(f"ERROR DE CONEXIÓN: Falló la conexión a Firebase. Verifica que el JSON esté en una SOLA LÍNEA en Render. Detalle: {e}")
-    # El bot sigue, pero sin poder guardar datos (es decir, NO FUNCIONARÁ el negocio).
+    logger.error(f"ERROR DE CONEXIÓN: Falló la conexión a Firebase. Detalle: {e}")
     pass
 
 # --- 4. Funciones de Ayuda y Administración ---
 
-# Convierte el ID de administrador a entero para comparaciones seguras.
 try:
     ADMIN_USER_ID = int(ADMIN_USER_ID)
 except (TypeError, ValueError):
-    # Si la variable no está seteada o no es un número, usamos 0 para evitar errores.
     ADMIN_USER_ID = 0
     logger.warning("ADMIN_USER_ID no es un número válido o está ausente. La función de administrador no funcionará.")
 
@@ -93,7 +86,7 @@ def start_command(update, context):
         f"Somos el 'Booster' global para que ganes ingresos pasivos y activos. Tu misión es simple: "
         f"maximiza tu actividad y sube tu Racha Diaria.\n\n"
         f"Tu Status Actual: FREE\n"
-        f"Tokens HVE: 5"  # Valor por defecto. Se conectaría a Firestore para el valor real.
+        f"Tokens HVE: 5"
     )
     
     # Enviamos el mensaje con el teclado generado (que incluye o no el botón ADMIN)
@@ -137,7 +130,6 @@ def handle_message(update, context):
                 "Este mensaje es de uso interno."
             )
         else:
-            # Si un usuario normal intenta enviar el texto del admin
             message = "Opción no disponible. Por favor, selecciona una de las opciones del menú."
 
         context.bot.send_message(chat_id=chat_id, text=message)
@@ -161,26 +153,23 @@ def main():
         logger.error("Token de Telegram no encontrado. Saliendo.")
         return
 
-    # Inicializa el Updater y el Dispatcher
+    # CORRECCIÓN FINAL: Usamos la sintaxis moderna de la librería (Application en lugar de Updater)
     try:
-        # CORRECCIÓN FINAL: Se usa el constructor actualizado de Updater.
-        # Se remueve el uso de use_context y se usa la sintaxis que es compatible con la última versión de la librería.
-        updater = Updater(TELEGRAM_TOKEN, update_queue=None) # Se añade update_queue=None
+        # 1. Creamos la Aplicación con el token
+        application = Application.builder().token(TELEGRAM_TOKEN).build()
     except telegram.error.InvalidToken:
         logger.error("ERROR - El TELEGRAM_TOKEN no es válido. Saliendo.")
         return
 
-    dp = updater.dispatcher
+    # 2. Registramos Handlers usando el método moderno
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(MessageHandler(filters.Filters.text & ~filters.Filters.command, handle_message))
 
-    # Registro de Handlers
-    dp.add_handler(CommandHandler("start", start_command))
-    dp.add_handler(MessageHandler(filters.Filters.text & ~filters.Filters.command, handle_message))
-
-    # Inicia el bot (Polling es el método de conexión usado en Render)
+    # 3. Inicia el bot (Polling)
     logger.info("Bot TheOneHive listo. Iniciando Polling...")
-    updater.start_polling()
-    # Mantiene el bot corriendo
-    updater.idle()
+    application.run_polling()
+    # application.idle() ya está implícito en run_polling
+    logger.info("El bot se ha detenido.")
 
 if __name__ == '__main__':
     main()
