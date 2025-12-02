@@ -1,6 +1,6 @@
-python-telegram-bot
-quart
-web3
-psycopg2-binary
-tenacity
-hypercorn
+python-telegram-bot==20.7
+quart==0.19.4
+hypercorn==0.16.0
+psycopg2-binary==2.9.9
+web3==6.15.1
+tenacity==8.2.3
