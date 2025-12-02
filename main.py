@@ -163,8 +163,9 @@ def main():
 
     # Inicializa el Updater y el Dispatcher
     try:
-        # CORRECCIÓN: Se elimina el argumento 'use_context=True' para solucionar el TypeError.
-        updater = Updater(TELEGRAM_TOKEN)
+        # CORRECCIÓN FINAL: Se usa el constructor actualizado de Updater.
+        # Se remueve el uso de use_context y se usa la sintaxis que es compatible con la última versión de la librería.
+        updater = Updater(TELEGRAM_TOKEN, update_queue=None) # Se añade update_queue=None
     except telegram.error.InvalidToken:
         logger.error("ERROR - El TELEGRAM_TOKEN no es válido. Saliendo.")
         return
