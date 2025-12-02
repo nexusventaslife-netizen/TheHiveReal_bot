@@ -1,477 +1,184 @@
-# -*- coding: utf-8 -*-
-# TheOneHive Telegram Bot - Sistema de Ganancia Hiper-Escalable y Cero Fricción
-# Diseñado para generar ingresos por 7 vías: Afiliación, Suscripción, Marketplace, y Datos.
-
-# IMPORTACIONES NECESARIAS
-import logging
+import telegram
+from telegram.ext import Updater, CommandHandler, MessageHandler, filters
 import os
 import json
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+import logging
+from firebase_admin import credentials, initialize_app, firestore
 
-# Importaciones de Firebase
-import firebase_admin
-from firebase_admin import credentials, firestore
-from datetime import datetime, timedelta, timezone
-
-# --- CONFIGURACIÓN CRÍTICA DEL BOT ---
-
-# Nivel de logging para ver errores y actividad
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
-logging.getLogger("httpx").setLevel(logging.WARNING)
+# --- Configuración de Logging ---
+# Se configura el logging para ver mensajes de error en la consola de Render.
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
-# Cargar variables de entorno (CRÍTICAS PARA EL DINERO Y SEGURIDAD)
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-FIREBASE_CREDENTIALS = os.environ.get("FIREBASE_CREDENTIALS")
-ADMIN_USER_ID = os.environ.get("ADMIN_USER_ID")  # Tu ID numérico de Telegram
-ADMIN_CONTACT_URL = os.environ.get("ADMIN_CONTACT_URL") # Tu URL de contacto para pagos
-MARKETPLACE_LINK = os.environ.get("MARKETPLACE_LINK") # Tu enlace de afiliado al Marketplace
+# --- 1. Carga de Variables de Entorno ---
+# Estas variables deben estar configuradas en Render.
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+ADMIN_USER_ID = os.getenv("ADMIN_USER_ID")
+FIREBASE_CREDENTIALS_JSON = os.getenv("FIREBASE_CREDENTIALS")
 
-# Enlaces de Afiliación (CRÍTICAS PARA EL MOTOR DE INGRESO)
-HONEYGAIN_CODE = os.environ.get("HONEYGAIN_CODE", "DEFAULT_HG_CODE")
-PAWNS_CODE = os.environ.get("PAWNS_CODE", "DEFAULT_PAWNS_CODE")
-HIVE_MICRO_LINK = os.environ.get("HIVE_MICRO_LINK", "http://default-hive-micro.com")
-PEER2PROFIT_LINK = os.environ.get("PEER2PROFIT_LINK", "http://default-peer2profit.com")
-COINBASE_EARN_LINK = os.environ.get("COINBASE_EARN_LINK", "http://default-coinbase-earn.com")
+# --- 2. Validación de Credenciales Críticas ---
+if not TELEGRAM_TOKEN or not FIREBASE_CREDENTIALS_JSON:
+    logger.error("ERROR CRÍTICO: FIREBASE_CREDENTIALS no está configurada o falta TELEGRAM_TOKEN. El bot NO SE INICIARÁ.")
+    # El bot debe fallar aquí para que Render sepa que hay un problema de configuración.
+    exit(1)
 
-# Precio de la Suscripción GOLD
-PREMIUM_PRICE = "15.00 USD/mes"
+# --- 3. Inicialización de Firebase (El Cofre del Tesoro) ---
+db = None
+try:
+    # 1. Intenta convertir la llave JSON (que debe estar en una sola línea)
+    creds_dict = json.loads(FIREBASE_CREDENTIALS_JSON)
+    cred = credentials.Certificate(creds_dict)
+    
+    # 2. Inicializa la conexión
+    initialize_app(cred)
+    db = firestore.client()
+    logger.info("CONEXIÓN A FIRESTORE EXITOSA. Los datos de usuarios se guardarán correctamente.")
+    
+except Exception as e:
+    logger.error(f"ERROR DE CONEXIÓN: Falló la conexión a Firebase. Verifica que el JSON esté en una SOLA LÍNEA en Render. Detalle: {e}")
+    # El bot sigue, pero sin poder guardar datos (es decir, NO FUNCIONARÁ el negocio).
+    pass
 
-# Inicializar Firebase
-if FIREBASE_CREDENTIALS:
-    try:
-        # La clave de servicio debe estar en formato JSON de una sola línea
-        cred_json = json.loads(FIREBASE_CREDENTIALS)
-        cred = credentials.Certificate(cred_json)
-        firebase_admin.initialize_app(cred)
-        db = firestore.client()
-        logger.info("Firebase inicializado correctamente.")
-    except Exception as e:
-        logger.error(f"Error al inicializar Firebase: {e}")
-        db = None
-else:
-    logger.error("FIREBASE_CREDENTIALS no está configurada. El bot no podrá guardar datos.")
-    db = None
+# --- 4. Funciones de Ayuda y Administración ---
 
-# --- CONSTANTES Y UTILIDADES ---
+# Convierte el ID de administrador a entero para comparaciones seguras.
+try:
+    ADMIN_USER_ID = int(ADMIN_USER_ID)
+except (TypeError, ValueError):
+    # Si la variable no está seteada o no es un número, usamos 0 para evitar errores.
+    ADMIN_USER_ID = 0
+    logger.warning("ADMIN_USER_ID no es un número válido o está ausente. La función de administrador no funcionará.")
 
-# Tasa Base de Ganancia y Multiplicadores
-BASE_CLICKS_VALUE = 0.05  # Valor base proyectado en USD por "clic" de actividad
-GOLD_MULTIPLIER = 3.0    # El potencial de ganancias del usuario GOLD (3x el FREE)
-FREE_MULTIPLIER = 1.2    # Multiplicador base para usuarios FREE
 
-# Colección de Usuarios
-USERS_COLLECTION = 'theonehive_users'
+def is_admin(user_id):
+    """Verifica si el ID de usuario actual coincide con el ID del administrador."""
+    return user_id == ADMIN_USER_ID
 
-# Función para obtener la hora actual de UTC-3 (Punta del Este)
-def get_now():
-    utc_minus_3 = timezone(timedelta(hours=-3))
-    return datetime.now(utc_minus_3)
+# --- 5. Funciones de Teclado (Menús) ---
 
-# Función para obtener o crear el perfil del usuario
-async def get_or_create_user(user_id, username, ref_id=None):
-    if not db:
-        return None
-    user_ref = db.collection(USERS_COLLECTION).document(str(user_id))
-    doc = user_ref.get()
-
-    if doc.exists:
-        user_data = doc.to_dict()
-        # Verificar y resetear daily_clicks y racha si el día cambió
-        last_check_in = user_data.get('last_check_in')
-        if last_check_in and (get_now() - last_check_in.replace(tzinfo=timezone.utc)).days >= 1: # Fix de Timezone
-            user_data['daily_clicks'] = 0
-            user_data['last_check_in'] = get_now()
-            # No resetear la racha aquí, se hace en register_click
-            user_ref.set(user_data, merge=True)
-        return user_data
-    else:
-        # Crear nuevo usuario
-        new_data = {
-            'user_id': user_id,
-            'username': username,
-            'is_premium': False,
-            'tokens_hve': 5,
-            'total_clicks': 0,
-            'daily_clicks': 0,
-            'last_check_in': get_now(),
-            'check_in_streak': 0,
-            'consents_to_ads': False,
-            'referred_by': ref_id, # Si viene de un referido (Vía 5)
-        }
-        user_ref.set(new_data)
-
-        # Si hay un referente, darle un bono (Vía 5)
-        if ref_id and str(ref_id) != str(user_id):
-            ref_ref = db.collection(USERS_COLLECTION).document(str(ref_id))
-            ref_data = ref_ref.get().to_dict()
-            if ref_data:
-                ref_ref.update({
-                    'tokens_hve': ref_data.get('tokens_hve', 0) + 50,
-                    'referred_count': ref_data.get('referred_count', 0) + 1
-                })
-        return new_data
-
-# Función para registrar actividad del usuario
-async def register_click(user_id, user_data, is_check_in=False):
-    if not db:
-        return (0, "")
-
-    tokens_earned = 1
-    # Multiplicador del token para GOLD (Vía 2)
-    if user_data.get('is_premium'):
-        tokens_earned *= 2
-
-    # Lógica de Racha Diaria (Vía 7: Adicción)
-    current_time = get_now()
-    last_check_in = user_data.get('last_check_in')
-
-    # Convertir last_check_in a datetime con zona horaria si es necesario
-    if isinstance(last_check_in, datetime):
-        last_check_in = last_check_in.replace(tzinfo=timezone.utc)
-        
-    streak = user_data.get('check_in_streak', 0)
-    message = ""
-    day_difference = (current_time.date() - last_check_in.date()).days if last_check_in else 100
-
-    if day_difference >= 1:
-        # El día ha cambiado
-        
-        if day_difference == 1:
-            # Racha continua
-            streak += 1
-            tokens_earned += streak * 5  # Bono por Racha
-            message = f"✅ ¡Racha de {streak} días! Ganaste un bono de {streak * 5} HVE Tokens."
-        elif day_difference > 1:
-            # Racha rota
-            streak = 1
-            message = "⚠️ ¡Racha reiniciada! Empieza tu racha de nuevo."
-        
-        # Actualizar datos de check-in
-        user_data['daily_clicks'] = 1
-        user_data['last_check_in'] = current_time
-        user_data['check_in_streak'] = streak
-
-    # Actualizar datos generales
-    user_data['total_clicks'] = user_data.get('total_clicks', 0) + 1
-    user_data['tokens_hve'] = user_data.get('tokens_hve', 0) + tokens_earned
-
-    db.collection(USERS_COLLECTION).document(str(user_id)).set(user_data)
-
-    return tokens_earned, message
-
-# --- COMANDOS PRINCIPALES ---
-
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    ref_id = context.args[0] if context.args else None # Vía 5: Referido
-    user_data = await get_or_create_user(user.id, user.username, ref_id)
-
-    if not user_data:
-        await update.message.reply_text("Error al conectar con la base de datos. Por favor, inténtalo más tarde.")
-        return
-
-    # Teclado con el menú principal (Vía 2: Premium, Vía 3: Marketplace, Vía 6: Viral)
+def get_keyboard(user_id):
+    """Genera el teclado dinámicamente basado en el rol del usuario."""
+    
+    # Teclado BÁSICO (Para todos los usuarios)
     keyboard = [
-        [InlineKeyboardButton("🔗 5 Vías de Ingreso", callback_data='links')],
-        [InlineKeyboardButton("📈 Mis Estadísticas (APD V2)", callback_data='stats')],
-        [InlineKeyboardButton("🚀 Reto Viral (Gana HVE Tokens)", callback_data='video_viral')],
-        [InlineKeyboardButton("🛒 Marketplace GOLD (Cursos/Libros)", callback_data='marketplace')],
-        [InlineKeyboardButton("👑 GOLD Premium ($15 USD)", callback_data='premium')],
-        [InlineKeyboardButton("🔒 Privacidad y Datos (Bono HVE)", callback_data='privacidad')]
+        [telegram.KeyboardButton("💰 Mis Estadísticas (APD V2)")],
+        [telegram.KeyboardButton("🚀 Reto Viral (Gana HVE Tokens)")],
+        [telegram.KeyboardButton("🛒 Marketplace GOLD (Cursos/Libros)")],
+        [telegram.KeyboardButton("👑 GOLD Premium ($15 USD)")],
+        [telegram.KeyboardButton("🔒 Privacidad y Datos (Bono HVE)")],
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
 
-    await update.message.reply_html(
-        f"👋 <b>¡Hola, {user.first_name}! Bienvenido a TheOneHive.</b>\n\n"
-        "Somos el 'Booster' global para que ganes ingresos pasivos y activos. "
-        "Tu misión es simple: maximiza tu actividad y sube tu Racha Diaria.\n\n"
-        f"<b>Tu Status Actual:</b> {'👑 GOLD' if user_data.get('is_premium') else '🆓 FREE'}\n"
-        f"<b>Tokens HVE:</b> {user_data.get('tokens_hve', 0)}\n\n"
-        "Selecciona una opción abajo para empezar a generar ingresos.",
-        reply_markup=reply_markup
+    # Lógica para insertar el botón de Administración (SOLO si es el Admin)
+    if is_admin(user_id):
+        # Insertamos el botón de 5 Vías de Ingreso al principio solo para el Admin
+        keyboard.insert(0, [telegram.KeyboardButton("📊 5 Vías de Ingreso (ADMIN)")])
+
+    # El teclado del bot
+    return telegram.ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+
+# --- 6. Funciones de Manejadores (Handkers) ---
+
+def start_command(update, context):
+    """Maneja el comando /start e inicializa el teclado."""
+    
+    user = update.effective_user
+    user_id = user.id
+    
+    # Mensaje de bienvenida, incluyendo el estado de Tokens
+    message_text = (
+        f"Somos el 'Booster' global para que ganes ingresos pasivos y activos. Tu misión es simple: "
+        f"maximiza tu actividad y sube tu Racha Diaria.\n\n"
+        f"Tu Status Actual: FREE\n"
+        f"Tokens HVE: 5"  # Valor por defecto. Se conectaría a Firestore para el valor real.
+    )
+    
+    # Enviamos el mensaje con el teclado generado (que incluye o no el botón ADMIN)
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=message_text,
+        reply_markup=get_keyboard(user_id)
     )
 
-async def links_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Vía de Ingreso 1: Afiliación a las 5 plataformas
-    user = update.effective_user
-    user_data = await get_or_create_user(user.id, user.username)
-
-    # El click aquí suma a la racha diaria (Vía 7)
-    tokens_earned, check_in_message = await register_click(user.id, user_data, is_check_in=True)
-
-    message = (
-        f"**{check_in_message}**\n\n"
-        "🔗 **PASO 1: REGISTRA TUS 5 VÍAS DE INGRESO**\n\n"
-        "Cada registro te da una fuente de ingreso residual de por vida (Vía 1). Tienes que hacer clic en cada uno y registrarte.\n\n"
-        "**1. Ingreso Pasivo (Datos):** \n"
-        f"   - **Honeygain:** Código: `{HONEYGAIN_CODE}`. [Enlace para registrarte](https://www.honeygain.com/r/{HONEYGAIN_CODE})\n"
-        f"   - **Pawns App:** Código: `{PAWNS_CODE}`. [Enlace para registrarte](https://pawns.app/r/{PAWNS_CODE})\n"
-        f"   - **Peer2Profit:** Enlace: [Regístrate Aquí]({PEER2PROFIT_LINK})\n\n"
-        "**2. Ingreso Activo (Tareas/Crypto):**\n"
-        f"   - **Hive Micro:** Enlace: [Regístrate Aquí]({HIVE_MICRO_LINK})\n"
-        f"   - **Coinbase Earn:** Enlace: [Regístrate Aquí]({COINBASE_EARN_LINK})\n\n"
-        "**¡Importante!** Cada click aquí confirma tu actividad para la Racha Diaria. Tokens ganados: {tokens_earned} HVE."
-    )
-    await update.callback_query.edit_message_text(message, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Volver al Menú", callback_data='start_menu')]]))
-
-
-async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Vía 3: Algoritmo de Proyección Dinámica (APD V2) y Vía 7: Adicción
-    user = update.effective_user
-    user_data = await get_or_create_user(user.id, user.username)
-
-    is_premium = user_data.get('is_premium', False)
-    daily_clicks = user_data.get('daily_clicks', 0)
-    streak = user_data.get('check_in_streak', 0)
+def handle_message(update, context):
+    """Maneja todos los mensajes de texto del usuario."""
     
-    # 1. Tasa de Proyección APD
-    multiplier = GOLD_MULTIPLIER if is_premium else FREE_MULTIPLIER
-    
-    # Ganancia Proyectada: Clicks * Valor Base * Multiplicador
-    projected_today = daily_clicks * BASE_CLICKS_VALUE * multiplier
-    projected_month = projected_today * 30
+    text = update.message.text
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
 
-    # 2. Proyección de Optimización (Gancho GOLD)
-    optimized_clicks = daily_clicks * 1.5
-    optimized_multiplier = 2.5 if is_premium else 1.5 
-    
-    # Cálculo del potencial extra si mejoran
-    potential_increase = (optimized_clicks * BASE_CLICKS_VALUE * optimized_multiplier) - projected_today
-
-    status_str = '👑 GOLD' if is_premium else '🆓 FREE'
-    
-    # Base de referidos (Vía 5)
-    referred_count = user_data.get('referred_count', 0)
-    
-    message = (
-        f"📈 **TU PANEL DE RENDIMIENTO**\n"
-        f"-------------------------------\n"
-        f"**Status:** {status_str}\n"
-        f"**Racha Diaria (Streak):** {streak} días\n"
-        f"**Clicks de Actividad Hoy:** {daily_clicks}\n"
-        f"**Tokens HVE Balance:** {user_data.get('tokens_hve', 0)}\n\n"
-        
-        f"**💸 PROYECCIÓN DE GANANCIA (APD V2) 💸**\n"
-        f"*(Basado en tu esfuerzo de hoy y tu tasa de conversión)*\n"
-        f"**Ganancia Proyectada HOY:** **{projected_today:.2f} USD**\n"
-        f"**Ganancia Proyectada MES:** **{projected_month:.2f} USD**\n\n"
-        
-        f"🚀 **POTENCIAL DE OPTIMIZACIÓN**\n"
-        f"Si optimizas tu tiempo de respuesta y dedicas más horas, puedes proyectar una ganancia adicional de:\n"
-        f"**+{potential_increase:.2f} USD por día**\n"
-        f"*(Solo el status GOLD te da un potencial de hasta 2.5x)*\n\n"
-        
-        f"**🤝 Bucle Viral (Vía 5):**\n"
-        f"Referidos ganados: {referred_count}\n"
-        f"Tu enlace de invitación: `/start {user.id}`"
-    )
-
-    await update.callback_query.edit_message_text(message, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Volver al Menú", callback_data='start_menu')]]))
-
-
-async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Vía 2: Suscripción de Alto Margen ($15 USD)
-    user = update.effective_user
-    user_data = await get_or_create_user(user.id, user.username)
-    
-    if user_data.get('is_premium'):
+    # Lógica de Reto Viral
+    if "Reto Viral" in text:
         message = (
-            f"👑 **¡YA ERES GOLD!**\n\n"
-            f"Disfrutas de los beneficios que te garantizan alcanzar tu potencial máximo."
+            "🚀 RETO VIRAL (GANANCIA GRATUITA DE TOKENS)\n\n"
+            "Queremos ser la plataforma más grande. Ayúdanos a crecer y gana HVE Tokens extra!\n\n"
+            "¿CÓMO FUNCIONA?\n"
+            "1. Crea un video en TikTok, Instagram Reels o YouTube Shorts mostrando tu Racha Diaria o tu Proyección de Ganancia en el bot.\n"
+            "2. Usa el hashtag #TheOneHiveApp.\n"
+            "3. Envíanos el enlace por mensaje privado a este bot.\n\n"
+            "🎁 Recompensa: 200 HVE Tokens por video aprobado. (Solo 1 video por usuario)"
         )
-        keyboard = [[InlineKeyboardButton("⬅️ Volver al Menú", callback_data='start_menu')]]
-    else:
-        message = (
-            f"👑 **MEJORA A GOLD PREMIUM**\n\n"
-            f"**PRECIO:** **{PREMIUM_PRICE}**\n\n"
-            f"¿Por qué pagar {PREMIUM_PRICE}? Porque el estatus GOLD es la única manera de acelerar tu potencial de ganancia y alcanzar el objetivo de ingresos dignos.\n\n"
-            f"**BENEFICIOS EXCLUSIVOS:**\n"
-            f"⚡ **Acelerador HVE x2:** Gana el doble de Tokens para canjes y bonos.\n"
-            f"💎 **Acceso a 3 Vías de Élite:** Plataformas mejor remuneradas (solo para GOLD).\n"
-            f"📈 **Potencial APD 2.5x:** Desbloquea el multiplicador de potencial en tus estadísticas.\n"
-            f"🆘 **Soporte Prioritario VIP:** Resuelve tus dudas rápidamente.\n\n"
-            f"**PROCESO DE PAGO (Vía 2):**\n"
-            f"1. Haz clic en el botón de contacto.\n"
-            f"2. Paga la suscripción de {PREMIUM_PRICE} por el método acordado.\n"
-            f"3. Te activaremos el acceso GOLD con tu ID: `{user.id}`."
-        )
-        keyboard = [
-            [InlineKeyboardButton("📞 Contáctame para Pagar", url=ADMIN_CONTACT_URL)],
-            [InlineKeyboardButton("⬅️ Volver al Menú", callback_data='start_menu')]
-        ]
+        context.bot.send_message(chat_id=chat_id, text=message)
         
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.callback_query.edit_message_text(message, parse_mode='Markdown', reply_markup=reply_markup)
-
-
-async def marketplace_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Vía 3: Marketplace de Alto Margen
-    # Registrar el click aquí aumenta la actividad del usuario
-    await register_click(update.effective_user.id, await get_or_create_user(update.effective_user.id, update.effective_user.username))
-
-    message = (
-        "🛒 **MARKETPLACE DE OPTIMIZACIÓN**\n\n"
-        "Si quieres alcanzar el Potencial Máximo (el 2.5x) que ves en tus estadísticas, ¡necesitas optimizar tu trabajo!\n\n"
-        "Aquí encontrarás los mejores cursos y libros sobre:\n"
-        "📚 Cursos de Freelancing de Alto Valor.\n"
-        "⏱️ Técnicas de respuesta rápida para Encuestas.\n"
-        "💰 Estrategias avanzadas de Ingreso Pasivo.\n\n"
-        "**¡Gana más invirtiendo en conocimiento!** (Vía 3: Comisión para mí)"
-    )
-    keyboard = [
-        [InlineKeyboardButton("🔗 Acceder al Marketplace", url=MARKETPLACE_LINK)],
-        [InlineKeyboardButton("⬅️ Volver al Menú", callback_data='start_menu')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await update.callback_query.edit_message_text(message, parse_mode='Markdown', reply_markup=reply_markup)
-
-
-async def video_viral_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Vía 6: Bucle Viral Obligatorio (UGC)
-    await register_click(update.effective_user.id, await get_or_create_user(update.effective_user.id, update.effective_user.username))
-    
-    message = (
-        "🚀 **RETO VIRAL (GANANCIA GRATUITA DE TOKENS)**\n\n"
-        "Queremos ser la plataforma más grande. Ayúdanos a crecer y gana HVE Tokens extra!\n\n"
-        "**¿CÓMO FUNCIONA?**\n"
-        "1. Crea un video en TikTok, Instagram Reels o YouTube Shorts mostrando tu **Racha Diaria** o tu **Proyección de Ganancia** en el bot.\n"
-        "2. Usa el hashtag **#TheOneHiveApp**.\n"
-        f"3. Envíanos el enlace por mensaje privado a [Contáctame Aquí]({ADMIN_CONTACT_URL}).\n\n"
-        "**BONO:** Por cada video aprobado, ganas **100 HVE Tokens** (Vía de Ingreso 5). ¡Máximo tráfico gratuito para nosotros!"
-    )
-    keyboard = [[InlineKeyboardButton("⬅️ Volver al Menú", callback_data='start_menu')]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.callback_query.edit_message_text(message, parse_mode='Markdown', reply_markup=reply_markup)
-
-
-async def privacidad_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Vía 4: Monetización de Datos (Legal)
-    user = update.effective_user
-    user_data = await get_or_create_user(user.id, user.username)
-    
-    consent_status = "✅ ACEPTADO" if user_data.get('consents_to_ads') else "❌ NO ACEPTADO"
-
-    message = (
-        "🔒 **POLÍTICA DE PRIVACIDAD Y DATOS**\n\n"
-        "Para mantener nuestro servicio gratuito, podemos compartir patrones de uso anónimos con terceros (Vía 4), **NUNCA** tu nombre o ID.\n\n"
-        f"**Status Actual:** {consent_status}\n\n"
-        "Si **Aceptas**, nos permites generar ingresos pasivos adicionales y a cambio, obtienes un **BONO ÚNICO de 25 HVE Tokens**."
-    )
-    
-    keyboard = []
-    if not user_data.get('consents_to_ads'):
-        keyboard.append([InlineKeyboardButton("✔️ Aceptar y Recibir Bono (25 HVE Tokens)", callback_data='consent_accept')])
-    
-    keyboard.append([InlineKeyboardButton("⬅️ Volver al Menú", callback_data='start_menu')])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await update.callback_query.edit_message_text(message, parse_mode='Markdown', reply_markup=reply_markup)
-
-
-async def consent_accept_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    user_ref = db.collection(USERS_COLLECTION).document(str(user.id))
-    user_data = user_ref.get().to_dict()
-
-    if not user_data.get('consents_to_ads'):
-        user_data['consents_to_ads'] = True
-        user_data['tokens_hve'] = user_data.get('tokens_hve', 0) + 25
-        user_ref.set(user_data, merge=True)
-        
-        await update.callback_query.answer("✅ ¡Bono de 25 HVE Tokens recibido!", show_alert=True)
-        message = f"🔒 **¡GRACIAS!** Has aceptado. Tienes un bono de 25 HVE Tokens. Tu nuevo balance: {user_data['tokens_hve']}."
-    else:
-        message = "Ya habías aceptado el consentimiento de datos."
-        
-    keyboard = [[InlineKeyboardButton("⬅️ Volver al Menú", callback_data='start_menu')]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.callback_query.edit_message_text(message, reply_markup=reply_markup)
-
-
-async def upgrade_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Comando de Administrador (Vía 2: Activación de Suscripción)
-    user = update.effective_user
-    
-    # 1. Seguridad: Solo el administrador puede usar este comando
-    if str(user.id) != str(ADMIN_USER_ID):
-        await update.message.reply_text("⛔ Acceso denegado. Este comando es solo para administradores.")
-        return
-
-    # 2. Sintaxis: Espera el ID del usuario a actualizar
-    if not context.args:
-        await update.message.reply_text("Uso: /upgrade [ID_DEL_USUARIO]. Ejemplo: /upgrade 123456789")
-        return
-
-    target_user_id = context.args[0]
-    
-    # 3. Ejecución: Actualizar Firebase
-    try:
-        target_user_ref = db.collection(USERS_COLLECTION).document(target_user_id)
-        # Verificar si el usuario existe antes de actualizar
-        doc = target_user_ref.get()
-        if doc.exists:
-            target_user_ref.update({'is_premium': True})
-            await update.message.reply_text(f"✅ Usuario {target_user_id} ha sido actualizado a PREMIUM GOLD. ¡Dinero en la cuenta!")
+    # Lógica de 5 Vías de Ingreso (Solo para el Admin)
+    elif "5 Vías de Ingreso" in text:
+        if is_admin(user_id):
+            message = (
+                "ADMIN: Este es el menú de 5 Vías de Ingreso para administrar el negocio.\n\n"
+                "Aquí puedes gestionar:\n"
+                "- Vía 1: Venta de Licencias (GOLD Premium)\n"
+                "- Vía 2: Venta de Cursos/Ebooks (Marketplace)\n"
+                "- Vía 3: Recompensa por Actividad (Tokens HVE)\n"
+                "- Vía 4: Bono por Privacidad\n"
+                "- Vía 5: Reto Viral (Marketing)\n\n"
+                "Este mensaje es de uso interno."
+            )
         else:
-            await update.message.reply_text(f"❌ Error: No se encontró el usuario {target_user_id} en la base de datos.")
-            
-    except Exception as e:
-        logger.error(f"Error al actualizar usuario: {e}")
-        await update.message.reply_text(f"❌ Error al actualizar al usuario {target_user_id}. Verifica el ID y el estado de la base de datos.")
+            # Si un usuario normal intenta enviar el texto del admin
+            message = "Opción no disponible. Por favor, selecciona una de las opciones del menú."
+
+        context.bot.send_message(chat_id=chat_id, text=message)
+        
+    # Respuestas para otros botones (Lógica pendiente de implementación)
+    elif any(keyword in text for keyword in ["Mis Estadísticas", "Marketplace GOLD", "GOLD Premium", "Privacidad y Datos"]):
+        message = f"Opción seleccionada: {text}. Esta función se implementará con la base de datos activa."
+        context.bot.send_message(chat_id=chat_id, text=message)
+        
+    else:
+        # Respuesta para mensajes de texto no reconocidos
+        context.bot.send_message(chat_id=chat_id, text="¡Hola! Por favor, selecciona una de las opciones del menú para interactuar.")
 
 
-async def start_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Manejador para volver al menú principal
-    await start_command(update.callback_query, context)
-
-
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-
-    # Redirigir a los comandos según el callback_data
-    if query.data == 'start_menu':
-        await start_menu_callback(update, context)
-    elif query.data == 'links':
-        await links_command(update, context)
-    elif query.data == 'stats':
-        await stats_command(update, context)
-    elif query.data == 'premium':
-        await premium_command(update, context)
-    elif query.data == 'marketplace':
-        await marketplace_command(update, context)
-    elif query.data == 'video_viral':
-        await video_viral_command(update, context)
-    elif query.data == 'privacidad':
-        await privacidad_command(update, context)
-    elif query.data == 'consent_accept':
-        await consent_accept_callback(update, context)
-
+# --- 7. Función Principal de Arranque ---
 
 def main():
-    """Iniciar el bot."""
-    if not TELEGRAM_TOKEN or not db:
-        # Se lanza este error si las credenciales de Render son incorrectas
-        logger.error("No se puede iniciar el bot. Falta TELEGRAM_TOKEN o la conexión a Firebase falló (Verificar FIREBASE_CREDENTIALS).")
+    """Función de inicio del bot."""
+    
+    if not TELEGRAM_TOKEN:
+        logger.error("Token de Telegram no encontrado. Saliendo.")
         return
 
-    # Crear la aplicación y pasarle el token del bot
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
+    # Inicializa el Updater y el Dispatcher
+    try:
+        updater = Updater(TELEGRAM_TOKEN, use_context=True)
+    except telegram.error.InvalidToken:
+        logger.error("ERROR - El TELEGRAM_TOKEN no es válido. Saliendo.")
+        return
 
-    # Manejadores de Comandos
-    application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CommandHandler("upgrade", upgrade_command))
+    dp = updater.dispatcher
 
-    # Manejadores de Botones (callback)
-    application.add_handler(CallbackQueryHandler(button_handler))
+    # Registro de Handlers
+    dp.add_handler(CommandHandler("start", start_command))
+    dp.add_handler(MessageHandler(filters.Filters.text & ~filters.Filters.command, handle_message))
 
-    # Iniciar el bot (polling)
-    logger.info("Bot iniciado. Escuchando...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Inicia el bot (Polling es el método de conexión usado en Render)
+    logger.info("Bot TheOneHive listo. Iniciando Polling...")
+    updater.start_polling()
+    # Mantiene el bot corriendo
+    updater.idle()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
