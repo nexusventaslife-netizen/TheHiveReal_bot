@@ -202,8 +202,7 @@ def main():
         application.run_polling(poll_interval=1.0) 
     except error.Conflict as e:
         # Este error es común en Render si hay un despliegue previo que no se cerró bien.
-        logger.warning(f"Conflicto detectado (Conflicto): {e}. Reintentando o asumiendo el cierre de la instancia anterior.")
-        # Se podría reintentar o simplemente dejar que la nueva instancia asuma el control.
+        logger.warning(f"Conflicto detectado (Conflict): {e}. Asumiendo el cierre de la instancia anterior.")
     except Exception as e:
         logger.error(f"Error fatal durante el polling: {e}")
         
