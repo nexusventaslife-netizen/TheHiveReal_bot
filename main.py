@@ -5,11 +5,11 @@ from telegram import Update, error
 import os
 import json
 import logging
-import asyncio # Necesario para compatibilidad total con async
+import sys
+import signal # CRÍTICO: Para manejar la señal de cierre de Render (SIGTERM)
 from firebase_admin import credentials, initialize_app, firestore
 
 # --- Configuración de Logging ---
-# Configuración que permite ver todos los mensajes de diagnóstico en Render
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -24,11 +24,10 @@ FIREBASE_CREDENTIALS_JSON = os.getenv("FIREBASE_CREDENTIALS")
 # --- 2. Validación de Credenciales Críticas ---
 if not TELEGRAM_TOKEN:
     logger.critical("ERROR CRÍTICO: Falta TELEGRAM_TOKEN. El bot NO SE INICIARÁ.")
-    exit(1)
+    sys.exit(1)
 if not FIREBASE_CREDENTIALS_JSON:
-    # Se considera crítico ya que la funcionalidad principal depende de Firestore
     logger.critical("ERROR CRÍTICO: FIREBASE_CREDENTIALS no está configurada. La base de datos no funcionará.")
-    exit(1)
+    sys.exit(1)
 
 
 # --- 3. Inicialización de Firebase (Fortificado) ---
@@ -43,15 +42,12 @@ try:
     logger.info("CONEXIÓN A FIRESTORE EXITOSA. La base de datos está lista.")
     
 except Exception as e:
-    # Registramos el error de manera específica para facilitar el diagnóstico
     logger.error(f"ERROR DE INICIALIZACIÓN DE FIREBASE: {type(e).__name__}: {e}")
-    # Salimos del proceso si Firebase falla, ya que es fundamental para el bot.
-    exit(1)
+    sys.exit(1)
 
 # --- 4. Funciones de Ayuda y Administración ---
 
 try:
-    # Convertimos el ID de administrador a entero y manejamos el caso de que sea None
     ADMIN_USER_ID = int(ADMIN_USER_ID) if ADMIN_USER_ID else 0
 except (TypeError, ValueError):
     ADMIN_USER_ID = 0
@@ -67,7 +63,6 @@ def is_admin(user_id):
 def get_keyboard(user_id):
     """Genera el teclado dinámicamente basado en el rol del usuario."""
     
-    # Teclado BÁSICO (Para todos los usuarios)
     keyboard = [
         [telegram.KeyboardButton("💰 Mis Estadísticas (APD V2)")],
         [telegram.KeyboardButton("🚀 Reto Viral (Gana HVE Tokens)")],
@@ -76,34 +71,23 @@ def get_keyboard(user_id):
         [telegram.KeyboardButton("🔒 Privacidad y Datos (Bono HVE)")],
     ]
 
-    # Lógica para insertar el botón de Administración (SOLO si es el Admin)
     if is_admin(user_id):
-        # Insertamos el botón de 5 Vías de Ingreso al principio solo para el Admin
         keyboard.insert(0, [telegram.KeyboardButton("📊 5 Vías de Ingreso (ADMIN)")])
 
-    # El teclado del bot
     return telegram.ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
 # --- 6. Funciones de Manejadores (Handlers) ---
 
-# Manejador simple para confirmar que el bot está respondiendo
-async def ping_command(update: Update, context):
-    """Responde al /ping para verificar la operatividad."""
-    await update.message.reply_text("Pong! Bot TheOneHive operativo.")
-
-
-# CRUCIAL: Las funciones deben ser asíncronas (async)
+# CRÍTICO: Las funciones DEBEN ser asíncronas (async) y usar await
 async def start_command(update: Update, context):
     """Maneja el comando /start e inicializa el teclado."""
     
-    # Verificar si el update y el mensaje son válidos
     if not update.effective_user or not update.message:
         return
         
     user_id = update.effective_user.id
     
-    # Mensaje de bienvenida, incluyendo el estado de Tokens
     message_text = (
         f"Somos el 'Booster' global para que ganes ingresos pasivos y activos. Tu misión es simple: "
         f"maximiza tu actividad y sube tu Racha Diaria.\n\n"
@@ -112,7 +96,6 @@ async def start_command(update: Update, context):
     )
     
     try:
-        # Usamos await para la operación de red
         await update.message.reply_text( 
             text=message_text,
             reply_markup=get_keyboard(user_id)
@@ -122,7 +105,7 @@ async def start_command(update: Update, context):
         logger.error(f"Error al enviar /start a {user_id}: {e}")
 
 
-# CRUCIAL: La función debe ser asíncrona (async)
+# CRÍTICO: La función debe ser asíncrona (async) y usar await
 async def handle_message(update: Update, context):
     """Maneja todos los mensajes de texto del usuario."""
     
@@ -134,7 +117,6 @@ async def handle_message(update: Update, context):
     
     response_text = "¡Hola! Por favor, selecciona una de las opciones del menú para interactuar."
 
-    # Lógica de 5 Vías de Ingreso (Solo para el Admin)
     if "5 Vías de Ingreso" in text:
         if is_admin(user_id):
             response_text = (
@@ -150,7 +132,6 @@ async def handle_message(update: Update, context):
         else:
             response_text = "Opción no disponible. Por favor, selecciona una de las opciones del menú."
         
-    # Lógica de Reto Viral
     elif "Reto Viral" in text:
         response_text = (
             "🚀 RETO VIRAL (GANANCIA GRATUITA DE TOKENS)\n\n"
@@ -162,11 +143,9 @@ async def handle_message(update: Update, context):
             "🎁 Recompensa: 200 HVE Tokens por video aprobado. (Solo 1 video por usuario)"
         )
         
-    # Respuestas para otros botones (Lógica pendiente de implementación)
     elif any(keyword in text for keyword in ["Mis Estadísticas", "Marketplace GOLD", "GOLD Premium", "Privacidad y Datos"]):
         response_text = f"Opción seleccionada: {text}. Esta función se implementará con la base de datos activa."
     
-    # Enviar la respuesta
     try:
         await update.message.reply_text(response_text)
     except error.TelegramError as e:
@@ -179,10 +158,8 @@ def main():
     """Función de inicio del bot."""
     
     if not TELEGRAM_TOKEN:
-        logger.error("Token de Telegram no encontrado. Saliendo.")
         return
 
-    # 1. Creamos la Aplicación con la sintaxis moderna (Application)
     try:
         application = Application.builder().token(TELEGRAM_TOKEN).build()
     except error.InvalidToken:
@@ -191,18 +168,18 @@ def main():
 
     # 2. Registramos Handlers
     application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CommandHandler("ping", ping_command)) # Handler de prueba de conectividad
-    # Se usa la sintaxis correcta para los filtros: filters.TEXT y filters.COMMAND
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # 3. Inicia el bot (Polling) con manejo de errores de conflicto
+    # 3. Inicia el bot (Polling) con el manejo de señales de cierre de Render (SIGTERM)
     logger.info("Bot TheOneHive listo. Iniciando Polling...")
     try:
-        # poll_interval=1.0 para que Render no sature el servidor de Telegram
-        application.run_polling(poll_interval=1.0) 
+        # Se incluyen las señales de stop, CRÍTICO para Render y evitar el ConflictError
+        application.run_polling(
+            poll_interval=1.0, 
+            stop_signals=[signal.SIGINT, signal.SIGTERM]
+        )
     except error.Conflict as e:
-        # Este error es común en Render si hay un despliegue previo que no se cerró bien.
-        logger.warning(f"Conflicto detectado (Conflict): {e}. Asumiendo el cierre de la instancia anterior.")
+        logger.warning(f"Conflicto detectado (Conflict): {e}. El bot intentará asumir el control.")
     except Exception as e:
         logger.error(f"Error fatal durante el polling: {e}")
         
