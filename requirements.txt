@@ -3,3 +3,4 @@ quart
 web3
 psycopg2-binary
 tenacity
+hypercorn  <-- ASEGÚRESE DE QUE ESTA LÍNEA ESTÉ
