@@ -37,7 +37,7 @@ def setup_db_pool():
     """Configura el pool de conexiones a la DB."""
     global connection_pool
     if not DATABASE_URL:
-        logger.error("ERROR FATAL: DATABASE_URL no está configurada.")
+        logger.error("ERROR FATAL: DATABASE_URL no está configurada. EL BOT NO PUEDE FUNCIONAR.")
         return False
     try:
         url = urlparse(DATABASE_URL)
@@ -56,7 +56,8 @@ def setup_db_pool():
         logger.info("Pool de Conexiones a PostgreSQL configurado exitosamente.")
         return True
     except Exception as e:
-        logger.error(f"ERROR al configurar el Pool de Conexiones a PostgreSQL: {e}")
+        # LOGGING EXPLÍCITO DE FALLO DE CONEXIÓN
+        logger.error(f"ERROR FATAL DE CONEXIÓN DB: Falló al configurar el Pool. Revise DATABASE_URL. Detalles: {e}")
         return False
 
 def get_db_conn():
@@ -65,7 +66,7 @@ def get_db_conn():
         try:
             return connection_pool.getconn()
         except Exception as e:
-            logger.error(f"Error al obtener conexión del pool: {e}")
+            logger.error(f"Error al obtener conexión del pool (runtime): {e}")
             return None
     return None
 
@@ -81,6 +82,7 @@ def init_db():
 
     conn = get_db_conn()
     if conn is None:
+        logger.error("ERROR DB: No se pudo obtener la conexión inicial para crear el esquema.")
         return False
         
     try:
@@ -103,7 +105,8 @@ def init_db():
         logger.info("Base de datos PostgreSQL inicializada y esquema verificado.")
         return True
     except Exception as e:
-        logger.error(f"ERROR al inicializar la base de datos (esquema): {e}")
+        # LOGGING EXPLÍCITO DE FALLO DE ESQUEMA
+        logger.error(f"ERROR FATAL DE ESQUEMA DB: Falló al inicializar o crear la tabla 'users'. Detalles: {e}")
         conn.rollback()
         return False
     finally:
@@ -127,15 +130,16 @@ def setup_web3():
             logger.info(f"Conexión Web3 exitosa a: {RPC_URL}")
             return True
         else:
-            logger.error("Conexión Web3 fallida. Revisa la RPC_URL y la red.")
+            # LOGGING EXPLÍCITO DE FALLO DE WEB3
+            logger.error("ERROR FATAL DE WEB3: Conexión Web3 fallida. La RPC está rechazada o es inválida.")
             return False
     except Exception as e:
-        logger.error(f"Error al inicializar Web3: {e}")
+        # LOGGING EXPLÍCITO DE ERROR GENÉRICO WEB3
+        logger.error(f"ERROR WEB3 GENÉRICO: Error al inicializar Web3. Detalles: {e}")
         W3 = None
         return False
 
-# --- Funciones de Datos Económicos y Web3 ---
-
+# --- Resto del código (sin cambios) ---
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def get_econ_data(country):
     """Obtiene datos económicos (ejemplo con Numbeo)."""
