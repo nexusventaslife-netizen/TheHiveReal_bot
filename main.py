@@ -1,5 +1,6 @@
 import telegram
 # Importamos Application y Handler directamente de la sintaxis moderna
+# NOTA: En la última versión, 'filters' debe importarse como 'filters' (todo en minúsculas) y usarse directamente.
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 import os
 import json
@@ -153,7 +154,7 @@ def main():
         logger.error("Token de Telegram no encontrado. Saliendo.")
         return
 
-    # CORRECCIÓN FINAL: Usamos la sintaxis moderna de la librería (Application en lugar de Updater)
+    # Usamos la sintaxis moderna de la librería (Application)
     try:
         # 1. Creamos la Aplicación con el token
         application = Application.builder().token(TELEGRAM_TOKEN).build()
@@ -163,12 +164,13 @@ def main():
 
     # 2. Registramos Handlers usando el método moderno
     application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(MessageHandler(filters.Filters.text & ~filters.Filters.command, handle_message))
+    # CORRECCIÓN: Se usa la sintaxis correcta para los filtros en la nueva versión: filters.TEXT y filters.COMMAND
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # 3. Inicia el bot (Polling)
     logger.info("Bot TheOneHive listo. Iniciando Polling...")
     application.run_polling()
-    # application.idle() ya está implícito en run_polling
+    
     logger.info("El bot se ha detenido.")
 
 if __name__ == '__main__':
