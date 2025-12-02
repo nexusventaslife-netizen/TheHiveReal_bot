@@ -1,13 +1,14 @@
 import telegram
 # Importamos las clases necesarias para el manejo asíncrono
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
-from telegram import Update
+from telegram import Update, error
 import os
 import json
 import logging
 from firebase_admin import credentials, initialize_app, firestore
 
 # --- Configuración de Logging ---
+# Configuración que permite ver todos los mensajes de diagnóstico en Render
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -20,24 +21,29 @@ ADMIN_USER_ID = os.getenv("ADMIN_USER_ID")
 FIREBASE_CREDENTIALS_JSON = os.getenv("FIREBASE_CREDENTIALS")
 
 # --- 2. Validación de Credenciales Críticas ---
-if not TELEGRAM_TOKEN or not FIREBASE_CREDENTIALS_JSON:
-    logger.error("ERROR CRÍTICO: FIREBASE_CREDENTIALS no está configurada o falta TELEGRAM_TOKEN. El bot NO SE INICIARÁ.")
+if not TELEGRAM_TOKEN:
+    logger.critical("ERROR CRÍTICO: Falta TELEGRAM_TOKEN. El bot NO SE INICIARÁ.")
+    exit(1)
+if not FIREBASE_CREDENTIALS_JSON:
+    logger.critical("ERROR CRÍTICO: FIREBASE_CREDENTIALS no está configurada. La base de datos no funcionará.")
     exit(1)
 
-# --- 3. Inicialización de Firebase (Ya verificado como EXITOSO) ---
+
+# --- 3. Inicialización de Firebase (Estabilización de Conexión) ---
 db = None
 try:
     creds_dict = json.loads(FIREBASE_CREDENTIALS_JSON)
     cred = credentials.Certificate(creds_dict)
     
-    # El app_name es necesario para evitar el error si se llama initialize_app dos veces
+    # Usamos un nombre de aplicación para asegurar la inicialización correcta en ambientes como Render
     initialize_app(cred, name='TheOneHiveApp') 
     db = firestore.client()
-    logger.info("CONEXIÓN A FIRESTORE EXITOSA. Los datos de usuarios se guardarán correctamente.")
+    logger.info("CONEXIÓN A FIRESTORE EXITOSA.")
     
 except Exception as e:
-    # Captura y loggea cualquier error de inicialización, pero permite que el bot continúe sin db
-    logger.error(f"ERROR DE CONEXIÓN: Falló la conexión a Firebase. Detalle: {e}")
+    # Capturamos errores de JSON o credenciales malformadas
+    logger.error(f"ERROR DE CONEXIÓN A FIREBASE: Falló la inicialización. Detalle: {e}")
+    # Permitimos que el bot inicie, pero con funcionalidad limitada (sin guardar datos)
     pass
 
 # --- 4. Funciones de Ayuda y Administración ---
@@ -46,7 +52,7 @@ try:
     ADMIN_USER_ID = int(ADMIN_USER_ID)
 except (TypeError, ValueError):
     ADMIN_USER_ID = 0
-    logger.warning("ADMIN_USER_ID no es un número válido o está ausente. La función de administrador no funcionará.")
+    logger.warning("ADMIN_USER_ID no es un número válido. La función de administrador no funcionará.")
 
 
 def is_admin(user_id):
@@ -94,11 +100,14 @@ async def start_command(update: Update, context):
     )
     
     # Enviamos el mensaje con el teclado generado (que incluye o no el botón ADMIN)
-    await context.bot.send_message( # Usamos await
-        chat_id=update.effective_chat.id,
-        text=message_text,
-        reply_markup=get_keyboard(user_id)
-    )
+    try:
+        await update.message.reply_text( # Uso reply_text en lugar de send_message para simplificar
+            text=message_text,
+            reply_markup=get_keyboard(user_id)
+        )
+    except error.TelegramError as e:
+        logger.error(f"Error al enviar /start: {e}")
+
 
 # CRUCIAL: La función debe ser asíncrona (async) y usar await
 async def handle_message(update: Update, context):
@@ -110,11 +119,27 @@ async def handle_message(update: Update, context):
         
     text = update.message.text
     user_id = update.effective_user.id
-    chat_id = update.effective_chat.id
+    
+    response_text = "Opción no reconocida. Por favor, selecciona un botón del menú."
 
+    # Lógica de 5 Vías de Ingreso (Solo para el Admin)
+    if "5 Vías de Ingreso" in text and is_admin(user_id):
+        response_text = (
+            "ADMIN: Este es el menú de 5 Vías de Ingreso para administrar el negocio.\n\n"
+            "Aquí puedes gestionar:\n"
+            "- Vía 1: Venta de Licencias (GOLD Premium)\n"
+            "- Vía 2: Venta de Cursos/Ebooks (Marketplace)\n"
+            "- Vía 3: Recompensa por Actividad (Tokens HVE)\n"
+            "- Vía 4: Bono por Privacidad\n"
+            "- Vía 5: Reto Viral (Marketing)\n\n"
+            "Este mensaje es de uso interno."
+        )
+    elif "5 Vías de Ingreso" in text and not is_admin(user_id):
+        response_text = "Opción no disponible. Por favor, selecciona una de las opciones del menú."
+        
     # Lógica de Reto Viral
-    if "Reto Viral" in text:
-        message = (
+    elif "Reto Viral" in text:
+        response_text = (
             "🚀 RETO VIRAL (GANANCIA GRATUITA DE TOKENS)\n\n"
             "Queremos ser la plataforma más grande. Ayúdanos a crecer y gana HVE Tokens extra!\n\n"
             "¿CÓMO FUNCIONA?\n"
@@ -123,34 +148,16 @@ async def handle_message(update: Update, context):
             "3. Envíanos el enlace por mensaje privado a este bot.\n\n"
             "🎁 Recompensa: 200 HVE Tokens por video aprobado. (Solo 1 video por usuario)"
         )
-        await context.bot.send_message(chat_id=chat_id, text=message) # Usamos await
-        
-    # Lógica de 5 Vías de Ingreso (Solo para el Admin)
-    elif "5 Vías de Ingreso" in text:
-        if is_admin(user_id):
-            message = (
-                "ADMIN: Este es el menú de 5 Vías de Ingreso para administrar el negocio.\n\n"
-                "Aquí puedes gestionar:\n"
-                "- Vía 1: Venta de Licencias (GOLD Premium)\n"
-                "- Vía 2: Venta de Cursos/Ebooks (Marketplace)\n"
-                "- Vía 3: Recompensa por Actividad (Tokens HVE)\n"
-                "- Vía 4: Bono por Privacidad\n"
-                "- Vía 5: Reto Viral (Marketing)\n\n"
-                "Este mensaje es de uso interno."
-            )
-        else:
-            message = "Opción no disponible. Por favor, selecciona una de las opciones del menú."
-
-        await context.bot.send_message(chat_id=chat_id, text=message) # Usamos await
         
     # Respuestas para otros botones (Lógica pendiente de implementación)
     elif any(keyword in text for keyword in ["Mis Estadísticas", "Marketplace GOLD", "GOLD Premium", "Privacidad y Datos"]):
-        message = f"Opción seleccionada: {text}. Esta función se implementará con la base de datos activa."
-        await context.bot.send_message(chat_id=chat_id, text=message) # Usamos await
-        
-    else:
-        # Respuesta para mensajes de texto no reconocidos
-        await context.bot.send_message(chat_id=chat_id, text="¡Hola! Por favor, selecciona una de las opciones del menú para interactuar.") # Usamos await
+        response_text = f"Opción seleccionada: {text}. Esta función se implementará con la base de datos activa."
+    
+    # Enviar la respuesta
+    try:
+        await update.message.reply_text(response_text)
+    except error.TelegramError as e:
+        logger.error(f"Error al enviar mensaje: {e}")
 
 
 # --- 7. Función Principal de Arranque ---
@@ -162,21 +169,20 @@ def main():
         logger.error("Token de Telegram no encontrado. Saliendo.")
         return
 
-    # Usamos la sintaxis moderna de la librería (Application)
+    # 1. Creamos la Aplicación con la sintaxis moderna (Application)
     try:
-        # 1. Creamos la Aplicación con el token
         application = Application.builder().token(TELEGRAM_TOKEN).build()
-    except telegram.error.InvalidToken:
-        logger.error("ERROR - El TELEGRAM_TOKEN no es válido. Saliendo.")
+    except error.InvalidToken:
+        logger.critical("ERROR - El TELEGRAM_TOKEN no es válido. Saliendo.")
         return
 
-    # 2. Registramos Handlers
+    # 2. Registramos Handlers (Con sintaxis de filtros corregida)
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # 3. Inicia el bot (Polling)
     logger.info("Bot TheOneHive listo. Iniciando Polling...")
-    application.run_polling()
+    application.run_polling(poll_interval=0.5) # Usamos poll_interval para mejor respuesta
     
     logger.info("El bot se ha detenido.")
 
