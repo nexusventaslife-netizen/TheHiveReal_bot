@@ -1,7 +1,7 @@
 import telegram
-# Importamos Application y Handler directamente de la sintaxis moderna
-# NOTA: En la última versión, 'filters' debe importarse como 'filters' (todo en minúsculas) y usarse directamente.
+# Importamos las clases necesarias para el manejo asíncrono
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram import Update
 import os
 import json
 import logging
@@ -24,17 +24,19 @@ if not TELEGRAM_TOKEN or not FIREBASE_CREDENTIALS_JSON:
     logger.error("ERROR CRÍTICO: FIREBASE_CREDENTIALS no está configurada o falta TELEGRAM_TOKEN. El bot NO SE INICIARÁ.")
     exit(1)
 
-# --- 3. Inicialización de Firebase (Verificado como EXITOSO) ---
+# --- 3. Inicialización de Firebase (Ya verificado como EXITOSO) ---
 db = None
 try:
     creds_dict = json.loads(FIREBASE_CREDENTIALS_JSON)
     cred = credentials.Certificate(creds_dict)
     
-    initialize_app(cred)
+    # El app_name es necesario para evitar el error si se llama initialize_app dos veces
+    initialize_app(cred, name='TheOneHiveApp') 
     db = firestore.client()
     logger.info("CONEXIÓN A FIRESTORE EXITOSA. Los datos de usuarios se guardarán correctamente.")
     
 except Exception as e:
+    # Captura y loggea cualquier error de inicialización, pero permite que el bot continúe sin db
     logger.error(f"ERROR DE CONEXIÓN: Falló la conexión a Firebase. Detalle: {e}")
     pass
 
@@ -74,9 +76,10 @@ def get_keyboard(user_id):
     return telegram.ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
-# --- 6. Funciones de Manejadores (Handkers) ---
+# --- 6. Funciones de Manejadores (Handlers) ---
 
-def start_command(update, context):
+# CRUCIAL: Las funciones deben ser asíncronas (async) y usar await
+async def start_command(update: Update, context):
     """Maneja el comando /start e inicializa el teclado."""
     
     user = update.effective_user
@@ -91,15 +94,20 @@ def start_command(update, context):
     )
     
     # Enviamos el mensaje con el teclado generado (que incluye o no el botón ADMIN)
-    context.bot.send_message(
+    await context.bot.send_message( # Usamos await
         chat_id=update.effective_chat.id,
         text=message_text,
         reply_markup=get_keyboard(user_id)
     )
 
-def handle_message(update, context):
+# CRUCIAL: La función debe ser asíncrona (async) y usar await
+async def handle_message(update: Update, context):
     """Maneja todos los mensajes de texto del usuario."""
     
+    # Comprobación de seguridad: Si no hay mensaje de texto, salimos.
+    if not update.message or not update.message.text:
+        return
+        
     text = update.message.text
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
@@ -115,7 +123,7 @@ def handle_message(update, context):
             "3. Envíanos el enlace por mensaje privado a este bot.\n\n"
             "🎁 Recompensa: 200 HVE Tokens por video aprobado. (Solo 1 video por usuario)"
         )
-        context.bot.send_message(chat_id=chat_id, text=message)
+        await context.bot.send_message(chat_id=chat_id, text=message) # Usamos await
         
     # Lógica de 5 Vías de Ingreso (Solo para el Admin)
     elif "5 Vías de Ingreso" in text:
@@ -133,16 +141,16 @@ def handle_message(update, context):
         else:
             message = "Opción no disponible. Por favor, selecciona una de las opciones del menú."
 
-        context.bot.send_message(chat_id=chat_id, text=message)
+        await context.bot.send_message(chat_id=chat_id, text=message) # Usamos await
         
     # Respuestas para otros botones (Lógica pendiente de implementación)
     elif any(keyword in text for keyword in ["Mis Estadísticas", "Marketplace GOLD", "GOLD Premium", "Privacidad y Datos"]):
         message = f"Opción seleccionada: {text}. Esta función se implementará con la base de datos activa."
-        context.bot.send_message(chat_id=chat_id, text=message)
+        await context.bot.send_message(chat_id=chat_id, text=message) # Usamos await
         
     else:
         # Respuesta para mensajes de texto no reconocidos
-        context.bot.send_message(chat_id=chat_id, text="¡Hola! Por favor, selecciona una de las opciones del menú para interactuar.")
+        await context.bot.send_message(chat_id=chat_id, text="¡Hola! Por favor, selecciona una de las opciones del menú para interactuar.") # Usamos await
 
 
 # --- 7. Función Principal de Arranque ---
@@ -162,9 +170,8 @@ def main():
         logger.error("ERROR - El TELEGRAM_TOKEN no es válido. Saliendo.")
         return
 
-    # 2. Registramos Handlers usando el método moderno
+    # 2. Registramos Handlers
     application.add_handler(CommandHandler("start", start_command))
-    # CORRECCIÓN: Se usa la sintaxis correcta para los filtros en la nueva versión: filters.TEXT y filters.COMMAND
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # 3. Inicia el bot (Polling)
