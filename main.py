@@ -26,7 +26,7 @@ TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 ADMIN_USER_ID = os.environ.get("ADMIN_USER_ID", "")
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL", "")
-PORT = int(os.environ.get("PORT", 10000))
+PORT = int(os.environ. get("PORT", 10000))
 
 # APIs Plataformas de Tareas
 CPALEAD_ID = os.environ.get("CPALEAD_ID", "")
@@ -82,7 +82,7 @@ MARKETPLACE_PLATFORMS = {
     },
     "upwork": {
         "name": "👔 Upwork",
-        "url": "https://upwork.com",
+        "url": "https://upwork. com",
         "commission": 10,
         "description": "Consigue clientes a largo plazo"
     }
@@ -192,7 +192,7 @@ def get_or_create_user(user_id, first_name, username, country="Global", ref_code
         return None
     
     try:
-        with conn.cursor() as cur:
+        with conn. cursor() as cur:
             cur.execute("SELECT * FROM users WHERE id = %s;", (user_id,))
             user = cur.fetchone()
             
@@ -332,7 +332,7 @@ async def show_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     context.user_data["tasks"] = tasks
     
-    await update.message.reply_text(tasks_msg, parse_mode=ParseMode.MARKDOWN)
+    await update.message. reply_text(tasks_msg, parse_mode=ParseMode.MARKDOWN)
 
 async def handle_task_num(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Maneja número de tarea."""
@@ -342,7 +342,7 @@ async def handle_task_num(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     task_num = int(text)
-    tasks = context.user_data. get("tasks", [])
+    tasks = context.user_data.get("tasks", [])
     
     if task_num < 1 or task_num > len(tasks):
         return
@@ -356,7 +356,7 @@ async def handle_task_num(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🎁 +10 tokens
 
 🎯 *Pasos:*
-1.  Abre el link
+1. Abre el link
 2. Completa
 3. Presiona ✅
 """
@@ -487,7 +487,7 @@ async def marketplace(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         msg,
-        parse_mode=ParseMode.MARKDOWN,
+        parse_mode=ParseMode. MARKDOWN,
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -617,7 +617,7 @@ async def webhook():
     """Webhook."""
     try:
         data = await request.get_json()
-        update = Update.de_json(data, application. bot)
+        update = Update. de_json(data, application. bot)
         await application.process_update(update)
     except Exception as e:
         logger.error(f"Error webhook: {e}")
@@ -633,23 +633,24 @@ async def index():
     """Root endpoint."""
     return {"status": "GRIDDLED V3 Bot", "version": "3.0"}, HTTPStatus.OK
 
+@app.before_serving
 async def startup():
-    """Startup."""
+    """Startup event."""
     global application, http_session
     
     logger.info("🚀 Iniciando bot...")
     
     if not init_db():
         logger.error("❌ BD failed")
-        return
+        raise RuntimeError("Database initialization failed")
     
     http_session = aiohttp.ClientSession()
-    application = Application. builder().token(TELEGRAM_TOKEN). build()
+    application = Application. builder().token(TELEGRAM_TOKEN).build()
     
     application.add_handler(CommandHandler("start", start))
-    application. add_handler(CommandHandler("dashboard", dashboard))
+    application.add_handler(CommandHandler("dashboard", dashboard))
     
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^💼 Ver Tareas$"), show_tasks))
+    application.add_handler(MessageHandler(filters.TEXT & filters. Regex(r"^💼 Ver Tareas$"), show_tasks))
     application.add_handler(MessageHandler(filters. TEXT & filters.Regex(r"^💰 Dashboard$"), dashboard))
     application. add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^🛒 Marketplace$"), marketplace))
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^🎁 Referir$"), refer))
@@ -671,8 +672,9 @@ async def startup():
     await application.start()
     logger.info("✅ Bot ON")
 
+@app.after_serving
 async def shutdown():
-    """Shutdown."""
+    """Shutdown event."""
     global application, http_session, connection_pool
     
     logger.info("🛑 Cerrando bot...")
@@ -692,23 +694,4 @@ async def shutdown():
 # === MAIN ===
 
 if __name__ == "__main__":
-    import hypercorn.asyncio
-    from hypercorn.config import Config
-    
-    config = Config()
-    config.bind = [f"0.0.0.0:{PORT}"]
-    config.use_reloader = False
-    config.accesslog = "-"
-    config.errorlog = "-"
-    
-    async def main():
-        """Main function."""
-        await startup()
-        try:
-            await hypercorn. asyncio.serve(app, config)
-        except KeyboardInterrupt:
-            pass
-        finally:
-            await shutdown()
-    
-    asyncio. run(main())
+    app. run(host="0.0. 0.0", port=PORT)
