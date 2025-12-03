@@ -9,7 +9,7 @@ from datetime import datetime
 from quart import Quart, request
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
-from telegram.constants import ParseMode
+from telegram. constants import ParseMode
 
 import psycopg2
 from psycopg2 import pool
@@ -36,7 +36,7 @@ POLLFISH_KEY = os.environ.get('POLLFISH_KEY', '')
 
 # APIs Marketplace
 UDEMY_AFFILIATE = os.environ.get('UDEMY_AFFILIATE', 'griddled')
-FIVERR_AFFILIATE = os.environ.get('FIVERR_AFFILIATE', 'griddled')
+FIVERR_AFFILIATE = os. environ.get('FIVERR_AFFILIATE', 'griddled')
 
 # === INSTANCIAS ===
 connection_pool = None
@@ -46,7 +46,7 @@ http_session = None
 
 # === DATOS PAÍSES ===
 COUNTRY_DATA = {
-    'US': {'name': '🇺🇸 USA', 'max_daily': 180, 'methods': ['paypal', 'stripe'], 'min_withdraw': 5.0},
+    'US': {'name': '🇺🇸 USA', 'max_daily': 180, 'methods': ['paypal', 'stripe'], 'min_withdraw': 5. 0},
     'MX': {'name': '🇲🇽 Mexico', 'max_daily': 60, 'methods': ['paypal', 'oxxo'], 'min_withdraw': 2.0},
     'BR': {'name': '🇧🇷 Brasil', 'max_daily': 70, 'methods': ['pix', 'paypal'], 'min_withdraw': 2.0},
     'AR': {'name': '🇦🇷 Argentina', 'max_daily': 50, 'methods': ['mercadopago', 'binance'], 'min_withdraw': 1.0},
@@ -119,7 +119,7 @@ def get_db_conn():
     """Obtiene conexión."""
     if connection_pool:
         try:
-            return connection_pool.getconn()
+            return connection_pool. getconn()
         except Exception as e:
             logger.error(f"Error obteniendo conexión: {e}")
     return None
@@ -129,8 +129,8 @@ def put_db_conn(conn):
     if connection_pool and conn:
         try:
             connection_pool.putconn(conn)
-        except:
-            pass
+        except Exception as e:
+            logger.error(f"Error devolviendo conexión: {e}")
 
 def init_db():
     """Inicializa BD."""
@@ -179,7 +179,7 @@ def init_db():
         logger.info("✅ BD inicializada")
         return True
     except Exception as e:
-        logger.error(f"❌ Error BD: {e}")
+        logger. error(f"❌ Error BD: {e}")
         conn.rollback()
         return False
     finally:
@@ -200,9 +200,9 @@ def get_or_create_user(user_id, first_name, username, country='Global', ref_code
             
             if not user:
                 wallet = "0x" + os.urandom(20).hex()
-                my_ref_code = hashlib.md5(str(user_id).encode()).hexdigest()[:8].upper()
+                my_ref_code = hashlib. md5(str(user_id). encode()).hexdigest()[:8]. upper()
                 
-                cur.execute("""
+                cur. execute("""
                     INSERT INTO users (id, first_name, username, wallet_address, referral_code, country)
                     VALUES (%s, %s, %s, %s, %s, %s)
                     RETURNING id, first_name, username, country, subscription, tokens, referral_code, 
@@ -276,18 +276,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = user.username or "user"
     
     # Detectar referido
-    ref_code = context.args[0] if context.args else None
+    ref_code = context.args[0] if context. args else None
     
     user_data = get_or_create_user(user_id, first_name, username, 'Global', ref_code)
     
     if not user_data:
-        await update.message.reply_text("❌ Error al inicializar. Usa /start de nuevo")
+        await update.message.reply_text("❌ Error al inicializar.  Usa /start de nuevo")
         return
     
     welcome_msg = f"""
 🚀 *¡Bienvenido a GRIDDLED V3!*
 
-Hola {first_name}, la plataforma revolucionaria de ingresos.
+Hola {first_name}, la plataforma revolucionaria de ingresos. 
 
 💰 *Potencial diario:* hasta $80
 🎁 *Tokens:* {user_data[5] or 100}
@@ -319,13 +319,13 @@ async def show_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Muestra tareas."""
     tasks = [
         {'id': 1, 'title': '📝 Encuesta 2min', 'reward': 0.25, 'platform': 'pollfish'},
-        {'id': 2, 'title': '📱 Instalar App', 'reward': 0.80, 'platform': 'cpalead'},
+        {'id': 2, 'title': '📱 Instalar App', 'reward': 0. 80, 'platform': 'cpalead'},
         {'id': 3, 'title': '🎬 Ver Video 30s', 'reward': 0.10, 'platform': 'admob'},
         {'id': 4, 'title': '✅ Review', 'reward': 0.35, 'platform': 'generic'},
-        {'id': 5, 'title': '🔍 Validar Dato', 'reward': 0.15, 'platform': 'generic'},
+        {'id': 5, 'title': '🔍 Validar Dato', 'reward': 0. 15, 'platform': 'generic'},
         {'id': 6, 'title': '📸 Etiquetar', 'reward': 0.08, 'platform': 'generic'},
         {'id': 7, 'title': '💬 Red Social', 'reward': 0.40, 'platform': 'generic'},
-        {'id': 8, 'title': '📊 Research', 'reward': 0.60, 'platform': 'generic'},
+        {'id': 8, 'title': '📊 Research', 'reward': 0. 60, 'platform': 'generic'},
     ]
     
     tasks_msg = "📋 *Tareas Disponibles*\n\n"
@@ -337,7 +337,7 @@ async def show_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     context.user_data['tasks'] = tasks
     
-    await update.message.reply_text(tasks_msg, parse_mode=ParseMode.MARKDOWN)
+    await update.message. reply_text(tasks_msg, parse_mode=ParseMode.MARKDOWN)
 
 async def handle_task_num(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Maneja número de tarea."""
@@ -347,7 +347,7 @@ async def handle_task_num(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     task_num = int(text)
-    tasks = context.user_data.get('tasks', [])
+    tasks = context.user_data. get('tasks', [])
     
     if task_num < 1 or task_num > len(tasks):
         return
@@ -408,7 +408,7 @@ async def task_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.MARKDOWN
         )
     else:
-        await query.edit_message_text("❌ Error. Intenta de nuevo")
+        await query.edit_message_text("❌ Error.  Intenta de nuevo")
 
 async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Dashboard usuario."""
@@ -515,7 +515,7 @@ async def refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         put_db_conn(conn)
     
-    bot_username = context.bot.username
+    bot_username = context.bot. username
     link = f"https://t.me/{bot_username}?start={ref_code}"
     
     msg = f"""
@@ -534,7 +534,7 @@ Link: {link}
 """
     
     keyboard = [
-        [InlineKeyboardButton("📱 WhatsApp", url=f"https://wa.me/?text={link}")],
+        [InlineKeyboardButton("📱 WhatsApp", url=f"https://wa.me/? text={link}")],
         [InlineKeyboardButton("✈️ Telegram", url=f"https://t.me/share/url?url={link}")]
     ]
     
@@ -577,14 +577,14 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📊 *STATS GRIDDLED*
 
 🌍 Usuarios: 50,000+
-💰 Pagado: $1.2M
-✅ Tareas: 2.5M
+💰 Pagado: $1. 2M
+✅ Tareas: 2. 5M
 
 🏆 Top: Brasil
 🔥 Racha: 89 días
 """
     
-    await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(msg, parse_mode=ParseMode. MARKDOWN)
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Maneja callbacks."""
@@ -593,7 +593,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if data == "tasks":
         await query.answer()
-        update.message = query.message
+        # Crear un update simulado para reutilizar show_tasks
+        update._message = query.message
         await show_tasks(update, context)
     
     elif data == "withdraw":
@@ -603,11 +604,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.MARKDOWN
         )
     
-    elif data.startswith("pay_"):
+    elif data. startswith("pay_"):
         method = data.split('_')[1]
         await query.answer()
-        await query.edit_message_text(
-            f"✅ Configurando {method.upper()}\n\nEnvía tu email/ID:",
+        await query. edit_message_text(
+            f"✅ Configurando {method. upper()}\n\nEnvía tu email/ID:",
             parse_mode=ParseMode.MARKDOWN
         )
     
@@ -622,7 +623,7 @@ async def webhook():
     """Webhook."""
     try:
         data = await request.get_json()
-        update = Update.de_json(data, application.bot)
+        update = Update.de_json(data, application. bot)
         await application.process_update(update)
     except Exception as e:
         logger.error(f"Error webhook: {e}")
@@ -630,30 +631,37 @@ async def webhook():
 
 @app.route('/health', methods=['GET'])
 async def health():
-    """Health."""
-    return {"status": "ok"}, HTTPStatus.OK
+    """Health check."""
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}, HTTPStatus.OK
+
+@app.route('/', methods=['GET'])
+async def index():
+    """Root endpoint."""
+    return {"status": "GRIDDLED V3 Bot", "version": "3.0"}, HTTPStatus.OK
 
 async def startup():
     """Startup."""
     global application, http_session
+    
+    logger.info("🚀 Iniciando bot...")
     
     if not init_db():
         logger.error("❌ BD failed")
         return
     
     http_session = aiohttp.ClientSession()
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
+    application = Application. builder().token(TELEGRAM_TOKEN). build()
     
     # HANDLERS
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("dashboard", dashboard))
+    application. add_handler(CommandHandler("dashboard", dashboard))
     
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^💼 Ver Tareas$'), show_tasks))
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^💰 Dashboard$'), dashboard))
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^🛒 Marketplace$'), marketplace))
+    application.add_handler(MessageHandler(filters.TEXT & filters. Regex(r'^💼 Ver Tareas$'), show_tasks))
+    application.add_handler(MessageHandler(filters. TEXT & filters.Regex(r'^💰 Dashboard$'), dashboard))
+    application. add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^🛒 Marketplace$'), marketplace))
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^🎁 Referir$'), refer))
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^⚙️ Config Pagos$'), config_payments))
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^📊 Stats$'), stats))
+    application.add_handler(MessageHandler(filters.TEXT & filters. Regex(r'^📊 Stats$'), stats))
     
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^\d+$'), handle_task_num))
     
@@ -672,7 +680,9 @@ async def startup():
 
 async def shutdown():
     """Shutdown."""
-    global application, http_session
+    global application, http_session, connection_pool
+    
+    logger.info("🛑 Cerrando bot...")
     
     if http_session:
         await http_session.close()
@@ -681,10 +691,33 @@ async def shutdown():
         await application.stop()
         await application.shutdown()
     
-    logger.info("🛑 Bot OFF")
+    if connection_pool:
+        connection_pool.closeall()
+    
+    logger. info("✅ Bot cerrado correctamente")
 
-app.before_serving(startup)
-app.after_serving(shutdown)
+# === MAIN ===
 
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=PORT)
+if __name__ == '__main__':
+    import hypercorn.asyncio
+    from hypercorn.config import Config
+    
+    # Configurar Hypercorn
+    config = Config()
+    config.bind = [f"0.0.0. 0:{PORT}"]
+    config.use_reloader = False
+    config.accesslog = "-"
+    config.errorlog = "-"
+    
+    async def main():
+        """Main function."""
+        await startup()
+        try:
+            await hypercorn. asyncio.serve(app, config)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            await shutdown()
+    
+    # Ejecutar
+    asyncio.run(main())
