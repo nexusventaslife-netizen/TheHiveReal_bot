@@ -1,6 +1,5 @@
 import os
 import logging
-import asyncio
 import hashlib
 from http import HTTPStatus
 from datetime import datetime
@@ -14,87 +13,77 @@ import psycopg2
 from psycopg2 import pool
 import aiohttp
 
-# === LOGGING ===
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# === CONFIGURACIÓN ===
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 ADMIN_USER_ID = os.environ.get("ADMIN_USER_ID", "")
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL", "")
-PORT = int(os.environ. get("PORT", 10000))
+PORT = int(os.environ.get("PORT", 10000))
 
-# APIs Plataformas de Tareas
 CPALEAD_ID = os.environ.get("CPALEAD_ID", "")
 OFFERTORO_ID = os.environ.get("OFFERTORO_ID", "")
 POLLFISH_KEY = os.environ.get("POLLFISH_KEY", "")
 
-# APIs Marketplace
 UDEMY_AFFILIATE = os.environ.get("UDEMY_AFFILIATE", "griddled")
 FIVERR_AFFILIATE = os. environ.get("FIVERR_AFFILIATE", "griddled")
 
-# === INSTANCIAS ===
 connection_pool = None
 application = None
 app = Quart(__name__)
 http_session = None
 
-# === DATOS PAÍSES ===
 COUNTRY_DATA = {
-    "US": {"name": "🇺🇸 USA", "max_daily": 180, "methods": ["paypal", "stripe"], "min_withdraw": 5. 0},
-    "MX": {"name": "🇲🇽 Mexico", "max_daily": 60, "methods": ["paypal", "oxxo"], "min_withdraw": 2.0},
-    "BR": {"name": "🇧🇷 Brasil", "max_daily": 70, "methods": ["pix", "paypal"], "min_withdraw": 2.0},
-    "AR": {"name": "🇦🇷 Argentina", "max_daily": 50, "methods": ["mercadopago", "binance"], "min_withdraw": 1.0},
-    "CO": {"name": "🇨🇴 Colombia", "max_daily": 50, "methods": ["nequi", "daviplata"], "min_withdraw": 2.0},
-    "ES": {"name": "🇪🇸 España", "max_daily": 130, "methods": ["paypal", "bizum"], "min_withdraw": 3.0},
-    "Global": {"name": "🌍 Global", "max_daily": 80, "methods": ["paypal", "binance"], "min_withdraw": 2.0}
+    "US": {"name": "us USA", "max_daily": 180, "methods": ["paypal", "stripe"], "min_withdraw": 5. 0},
+    "MX": {"name": "mx Mexico", "max_daily": 60, "methods": ["paypal", "oxxo"], "min_withdraw": 2.0},
+    "BR": {"name": "br Brasil", "max_daily": 70, "methods": ["pix", "paypal"], "min_withdraw": 2.0},
+    "AR": {"name": "ar Argentina", "max_daily": 50, "methods": ["mercadopago", "binance"], "min_withdraw": 1.0},
+    "CO": {"name": "co Colombia", "max_daily": 50, "methods": ["nequi", "daviplata"], "min_withdraw": 2.0},
+    "ES": {"name": "es Espana", "max_daily": 130, "methods": ["paypal", "bizum"], "min_withdraw": 3.0},
+    "Global": {"name": "Global", "max_daily": 80, "methods": ["paypal", "binance"], "min_withdraw": 2.0}
 }
 
-# === MARKETPLACE ===
 MARKETPLACE_PLATFORMS = {
     "udemy": {
-        "name": "📘 Udemy",
+        "name": "Udemy",
         "url": "https://udemy.com",
         "commission": 15,
-        "description": "Cursos de Freelancing, Marketing, Programación"
+        "description": "Cursos de Freelancing, Marketing, Programacion"
     },
     "coursera": {
-        "name": "🎓 Coursera",
-        "url": "https://coursera.org",
+        "name": "Coursera",
+        "url": "https://coursera. org",
         "commission": 20,
         "description": "Certificaciones profesionales"
     },
     "skillshare": {
-        "name": "🎨 Skillshare",
+        "name": "Skillshare",
         "url": "https://skillshare.com",
         "commission": 25,
-        "description": "Diseño, Video, Creatividad"
+        "description": "Diseno, Video, Creatividad"
     },
     "fiverr": {
-        "name": "💼 Fiverr",
+        "name": "Fiverr",
         "url": "https://fiverr.com",
         "commission": 30,
         "description": "Vende tus servicios freelance"
     },
     "upwork": {
-        "name": "👔 Upwork",
+        "name": "Upwork",
         "url": "https://upwork. com",
         "commission": 10,
         "description": "Consigue clientes a largo plazo"
     }
 }
 
-# === BASE DE DATOS ===
-
 def setup_db_pool():
-    """Configura pool de BD."""
     global connection_pool
     if not DATABASE_URL:
-        logger.error("❌ DATABASE_URL no configurada")
+        logger.error("DATABASE_URL no configurada")
         return False
     
     try:
@@ -102,36 +91,29 @@ def setup_db_pool():
         if db_url.startswith("postgres://"):
             db_url = db_url.replace("postgres://", "postgresql://", 1)
         
-        connection_pool = pool.SimpleConnectionPool(
-            minconn=1,
-            maxconn=20,
-            dsn=db_url
-        )
-        logger.info("✅ Pool BD configurado")
+        connection_pool = pool.SimpleConnectionPool(minconn=1, maxconn=20, dsn=db_url)
+        logger.info("Pool BD configurado")
         return True
     except Exception as e:
-        logger.error(f"❌ Error pool BD: {e}")
+        logger.error(f"Error pool BD: {e}")
         return False
 
 def get_db_conn():
-    """Obtiene conexión."""
     if connection_pool:
         try:
             return connection_pool. getconn()
         except Exception as e:
-            logger.error(f"Error obteniendo conexión: {e}")
+            logger.error(f"Error obteniendo conexion: {e}")
     return None
 
 def put_db_conn(conn):
-    """Devuelve conexión."""
     if connection_pool and conn:
         try:
             connection_pool.putconn(conn)
         except Exception as e:
-            logger.error(f"Error devolviendo conexión: {e}")
+            logger.error(f"Error devolviendo conexion: {e}")
 
 def init_db():
-    """Inicializa BD."""
     if not setup_db_pool():
         return False
     
@@ -174,31 +156,28 @@ def init_db():
                 );
             """)
         conn.commit()
-        logger.info("✅ BD inicializada")
+        logger.info("BD inicializada")
         return True
     except Exception as e:
-        logger. error(f"❌ Error BD: {e}")
+        logger.error(f"Error BD: {e}")
         conn.rollback()
         return False
     finally:
         put_db_conn(conn)
 
-# === FUNCIONES USUARIO ===
-
 def get_or_create_user(user_id, first_name, username, country="Global", ref_code=None):
-    """Obtiene o crea usuario."""
     conn = get_db_conn()
     if not conn:
         return None
     
     try:
-        with conn. cursor() as cur:
-            cur.execute("SELECT * FROM users WHERE id = %s;", (user_id,))
+        with conn.cursor() as cur:
+            cur. execute("SELECT * FROM users WHERE id = %s;", (user_id,))
             user = cur.fetchone()
             
             if not user:
                 wallet = "0x" + os.urandom(20).hex()
-                my_ref_code = hashlib.md5(str(user_id).encode()).hexdigest()[:8]. upper()
+                my_ref_code = hashlib.md5(str(user_id). encode()).hexdigest()[:8]. upper()
                 
                 cur. execute("""
                     INSERT INTO users (id, first_name, username, wallet_address, referral_code, country)
@@ -217,12 +196,10 @@ def get_or_create_user(user_id, first_name, username, country="Global", ref_code
                             INSERT INTO referrals (referrer_id, referred_id) 
                             VALUES (%s, %s) ON CONFLICT DO NOTHING;
                         """, (referrer_id, user_id))
-                        cur.execute("""
-                            UPDATE users SET tokens = tokens + 100 WHERE id = %s;
-                        """, (referrer_id,))
+                        cur.execute("UPDATE users SET tokens = tokens + 100 WHERE id = %s;", (referrer_id,))
                 
                 conn.commit()
-                logger.info(f"✅ Usuario creado: {user_id}")
+                logger.info(f"Usuario creado: {user_id}")
             
             return user
     except Exception as e:
@@ -233,13 +210,12 @@ def get_or_create_user(user_id, first_name, username, country="Global", ref_code
         put_db_conn(conn)
 
 def add_task_earning(user_id, platform, reward):
-    """Registra tarea completada."""
     conn = get_db_conn()
     if not conn:
         return False
     
     try:
-        with conn.cursor() as cur:
+        with conn. cursor() as cur:
             cur.execute("""
                 INSERT INTO tasks_completed (user_id, platform, reward)
                 VALUES (%s, %s, %s);
@@ -262,10 +238,7 @@ def add_task_earning(user_id, platform, reward):
     finally:
         put_db_conn(conn)
 
-# === HANDLERS TELEGRAM ===
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Comando /start."""
     user = update.effective_user
     user_id = user.id
     first_name = user.first_name
@@ -276,66 +249,59 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data = get_or_create_user(user_id, first_name, username, "Global", ref_code)
     
     if not user_data:
-        await update.message.reply_text("❌ Error al inicializar.  Usa /start de nuevo")
+        await update.message.reply_text("Error al inicializar.  Usa /start de nuevo")
         return
     
-    welcome_msg = f"""
-🚀 *¡Bienvenido a GRIDDLED V3!*
+    welcome_msg = f"""Bienvenido a GRIDDLED V3
 
-Hola {first_name}, la plataforma revolucionaria de ingresos. 
+Hola {first_name}, la plataforma revolucionaria de ingresos
 
-💰 *Potencial diario:* hasta $80
-🎁 *Tokens:* {user_data[5] or 100}
-💎 *Plan:* {user_data[4]}
+Potencial diario: hasta $80
+Tokens: {user_data[5] or 100}
+Plan: {user_data[4]}
 
-✅ Pagos automáticos 24h
-✅ 10+ plataformas integradas
-✅ Marketplace con comisiones
-✅ Sistema de referidos viral
+Pagos automaticos 24h
+10+ plataformas integradas
+Marketplace con comisiones
+Sistema de referidos viral
 
-👇 Empezá ahora:
+Empeza ahora:
 """
     
     keyboard = [
-        ["💼 Ver Tareas", "💰 Dashboard"],
-        ["🛒 Marketplace", "🎁 Referir"],
-        ["⚙️ Config Pagos", "📊 Stats"]
+        ["Ver Tareas", "Dashboard"],
+        ["Marketplace", "Referir"],
+        ["Config Pagos", "Stats"]
     ]
     
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
-    await update.message.reply_text(
-        welcome_msg,
-        parse_mode=ParseMode.MARKDOWN,
-        reply_markup=reply_markup
-    )
+    await update.message.reply_text(welcome_msg, reply_markup=reply_markup)
 
 async def show_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Muestra tareas."""
     tasks = [
-        {"id": 1, "title": "📝 Encuesta 2min", "reward": 0.25, "platform": "pollfish"},
-        {"id": 2, "title": "📱 Instalar App", "reward": 0.80, "platform": "cpalead"},
-        {"id": 3, "title": "🎬 Ver Video 30s", "reward": 0. 10, "platform": "admob"},
-        {"id": 4, "title": "✅ Review", "reward": 0.35, "platform": "generic"},
-        {"id": 5, "title": "🔍 Validar Dato", "reward": 0.15, "platform": "generic"},
-        {"id": 6, "title": "📸 Etiquetar", "reward": 0.08, "platform": "generic"},
-        {"id": 7, "title": "💬 Red Social", "reward": 0. 40, "platform": "generic"},
-        {"id": 8, "title": "📊 Research", "reward": 0.60, "platform": "generic"},
+        {"id": 1, "title": "Encuesta 2min", "reward": 0.25, "platform": "pollfish"},
+        {"id": 2, "title": "Instalar App", "reward": 0.80, "platform": "cpalead"},
+        {"id": 3, "title": "Ver Video 30s", "reward": 0.10, "platform": "admob"},
+        {"id": 4, "title": "Review", "reward": 0.35, "platform": "generic"},
+        {"id": 5, "title": "Validar Dato", "reward": 0.15, "platform": "generic"},
+        {"id": 6, "title": "Etiquetar", "reward": 0.08, "platform": "generic"},
+        {"id": 7, "title": "Red Social", "reward": 0. 40, "platform": "generic"},
+        {"id": 8, "title": "Research", "reward": 0.60, "platform": "generic"},
     ]
     
-    tasks_msg = "📋 *Tareas Disponibles*\n\n"
+    tasks_msg = "Tareas Disponibles\n\n"
     
     for task in tasks:
-        tasks_msg += f"{task['id']}. *{task['title']}*\n   💵 ${task['reward']:.2f}\n\n"
+        tasks_msg += f"{task['id']}. {task['title']}\n   ${task['reward']:. 2f}\n\n"
     
-    tasks_msg += "📱 Escribí el número (1-8)"
+    tasks_msg += "Escribe el numero (1-8)"
     
     context.user_data["tasks"] = tasks
     
-    await update.message. reply_text(tasks_msg, parse_mode=ParseMode.MARKDOWN)
+    await update. message.reply_text(tasks_msg)
 
 async def handle_task_num(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Maneja número de tarea."""
     text = update.message.text
     
     if not text.isdigit():
@@ -349,32 +315,26 @@ async def handle_task_num(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     task = tasks[task_num - 1]
     
-    msg = f"""
-✅ *Tarea: {task['title']}*
+    msg = f"""Tarea: {task['title']}
 
-💰 Ganarás: *${task['reward']:.2f}*
-🎁 +10 tokens
+Ganaras: ${task['reward']:. 2f}
++10 tokens
 
-🎯 *Pasos:*
+Pasos:
 1. Abre el link
 2. Completa
-3. Presiona ✅
+3. Presiona OK
 """
     
     keyboard = [
-        [InlineKeyboardButton("🚀 Abrir", url="https://example.com")],
-        [InlineKeyboardButton("✅ Completé", callback_data=f"done_{task_num}")],
-        [InlineKeyboardButton("❌ Salir", callback_data="cancel")]
+        [InlineKeyboardButton("Abrir", url="https://example.com")],
+        [InlineKeyboardButton("Complete", callback_data=f"done_{task_num}")],
+        [InlineKeyboardButton("Salir", callback_data="cancel")]
     ]
     
-    await update.message.reply_text(
-        msg,
-        parse_mode=ParseMode.MARKDOWN,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def task_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Callback tarea completada."""
     query = update.callback_query
     await query.answer()
     
@@ -386,7 +346,7 @@ async def task_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tasks = context.user_data.get("tasks", [])
     
     if task_num < 1 or task_num > len(tasks):
-        await query.edit_message_text("❌ Tarea no válida")
+        await query.edit_message_text("Tarea no valida")
         return
     
     task = tasks[task_num - 1]
@@ -395,23 +355,16 @@ async def task_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     success = add_task_earning(user_id, task["platform"], task["reward"])
     
     if success:
-        await query.edit_message_text(
-            f"🎉 *¡Completada!*\n\n"
-            f"💰 +${task['reward']:.2f}\n"
-            f"🎁 +10 tokens\n\n"
-            f"Usa /dashboard para ver tu progreso",
-            parse_mode=ParseMode.MARKDOWN
-        )
+        await query.edit_message_text(f"Completada\n\n+${task['reward']:.2f}\n+10 tokens\n\nUsa /dashboard")
     else:
-        await query.edit_message_text("❌ Error.  Intenta de nuevo")
+        await query.edit_message_text("Error.  Intenta de nuevo")
 
 async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Dashboard usuario."""
     user_id = update.effective_user.id
     
     conn = get_db_conn()
     if not conn:
-        await update.message.reply_text("❌ Error conexión")
+        await update.message.reply_text("Error conexion")
         return
     
     try:
@@ -424,80 +377,65 @@ async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             data = cur.fetchone()
             
             if not data:
-                await update.message.reply_text("❌ Usuario no encontrado")
+                await update.message.reply_text("Usuario no encontrado")
                 return
             
             country, plan, tokens, total, pending, wallet, ref_code = data
             
-            cur.execute("""
-                SELECT COUNT(*) FROM tasks_completed WHERE user_id = %s;
-            """, (user_id,))
+            cur.execute("SELECT COUNT(*) FROM tasks_completed WHERE user_id = %s;", (user_id,))
             tasks_count = cur.fetchone()[0]
             
-            cur.execute("""
-                SELECT COUNT(*) FROM referrals WHERE referrer_id = %s;
-            """, (user_id,))
+            cur.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id = %s;", (user_id,))
             refs_count = cur.fetchone()[0]
     finally:
         put_db_conn(conn)
     
     country_info = COUNTRY_DATA.get(country, COUNTRY_DATA["Global"])
     
-    msg = f"""
-📊 *TU DASHBOARD*
+    msg = f"""TU DASHBOARD
 
-🌍 {country_info['name']}
-💎 Plan: {plan}
-🎁 Tokens: {tokens}
+{country_info['name']}
+Plan: {plan}
+Tokens: {tokens}
 
-💰 *Finanzas:*
-💵 Total: ${total:.2f}
-⏳ Pendiente: ${pending:.2f}
-💳 Mínimo: ${country_info['min_withdraw']}
+Finanzas:
+Total: ${total:.2f}
+Pendiente: ${pending:.2f}
+Minimo: ${country_info['min_withdraw']}
 
-📋 Tareas: {tasks_count}
-👥 Referidos: {refs_count}
+Tareas: {tasks_count}
+Referidos: {refs_count}
 
-💳 Wallet: `{wallet}`
-🔗 Código: `{ref_code}`
+Wallet: {wallet}
+Codigo: {ref_code}
 """
     
     keyboard = [
-        [InlineKeyboardButton("💼 Tareas", callback_data="tasks")],
-        [InlineKeyboardButton("💸 Retirar", callback_data="withdraw")]
+        [InlineKeyboardButton("Tareas", callback_data="tasks")],
+        [InlineKeyboardButton("Retirar", callback_data="withdraw")]
     ]
     
-    await update.message.reply_text(
-        msg,
-        parse_mode=ParseMode.MARKDOWN,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def marketplace(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Marketplace."""
-    msg = "🛒 *MARKETPLACE*\n\nCursos y servicios con comisión:\n\n"
+    msg = "MARKETPLACE\n\nCursos y servicios con comision:\n\n"
     
     keyboard = []
     for key, platform in MARKETPLACE_PLATFORMS.items():
-        msg += f"{platform['name']}\n💰 Comisión: {platform['commission']}%\n"
-        msg += f"📝 {platform['description']}\n\n"
+        msg += f"{platform['name']}\nComision: {platform['commission']}%\n"
+        msg += f"{platform['description']}\n\n"
         
         url = f"{platform['url']}?ref={UDEMY_AFFILIATE if key == 'udemy' else FIVERR_AFFILIATE}"
         keyboard.append([InlineKeyboardButton(platform["name"], url=url)])
     
-    await update.message.reply_text(
-        msg,
-        parse_mode=ParseMode. MARKDOWN,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Referidos."""
     user_id = update.effective_user.id
     
     conn = get_db_conn()
     if not conn:
-        await update.message.reply_text("❌ Error")
+        await update.message.reply_text("Error")
         return
     
     try:
@@ -510,79 +448,65 @@ async def refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         put_db_conn(conn)
     
-    bot_username = context.bot. username
-    link = f"https://t.me/{bot_username}?start={ref_code}"
+    bot_username = context.bot.username
+    link = f"https://t.me/{bot_username}? start={ref_code}"
     
-    msg = f"""
-🎁 *REFERIDOS*
+    msg = f"""REFERIDOS
 
-Tu código: `{ref_code}`
+Tu codigo: {ref_code}
 Link: {link}
 
-👥 Referidos: {count}
+Referidos: {count}
 
-💎 Ganancias:
-• $1 por registro
-• 15% de por vida
+Ganancias:
+$1 por registro
+15% de por vida
 
-🚀 5 amigos = $7.50/día
+5 amigos = $7.50/dia
 """
     
     keyboard = [
-        [InlineKeyboardButton("📱 WhatsApp", url=f"https://wa.me/? text={link}")],
-        [InlineKeyboardButton("✈️ Telegram", url=f"https://t.me/share/url?url={link}")]
+        [InlineKeyboardButton("WhatsApp", url=f"https://wa.me/? text={link}")],
+        [InlineKeyboardButton("Telegram", url=f"https://t.me/share/url?url={link}")]
     ]
     
-    await update.message.reply_text(
-        msg,
-        parse_mode=ParseMode.MARKDOWN,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def config_payments(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Config pagos."""
-    msg = """
-⚙️ *CONFIGURAR PAGOS*
+    msg = """CONFIGURAR PAGOS
 
-Métodos:
-💳 PayPal
-🔶 Binance Pay
-💰 AirTM
-🇧🇷 PIX (Brasil)
-🇲🇽 OXXO (México)
+Metodos:
+PayPal
+Binance Pay
+AirTM
+PIX (Brasil)
+OXXO (Mexico)
 
 Selecciona:
 """
     
     keyboard = [
-        [InlineKeyboardButton("💳 PayPal", callback_data="pay_paypal")],
-        [InlineKeyboardButton("🔶 Binance", callback_data="pay_binance")],
-        [InlineKeyboardButton("💰 AirTM", callback_data="pay_airtm")]
+        [InlineKeyboardButton("PayPal", callback_data="pay_paypal")],
+        [InlineKeyboardButton("Binance", callback_data="pay_binance")],
+        [InlineKeyboardButton("AirTM", callback_data="pay_airtm")]
     ]
     
-    await update.message.reply_text(
-        msg,
-        parse_mode=ParseMode.MARKDOWN,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Stats globales."""
-    msg = """
-📊 *STATS GRIDDLED*
+    msg = """STATS GRIDDLED
 
-🌍 Usuarios: 50,000+
-💰 Pagado: $1. 2M
-✅ Tareas: 2. 5M
+Usuarios: 50,000+
+Pagado: $1. 2M
+Tareas: 2. 5M
 
-🏆 Top: Brasil
-🔥 Racha: 89 días
+Top: Brasil
+Racha: 89 dias
 """
     
-    await update.message.reply_text(msg, parse_mode=ParseMode. MARKDOWN)
+    await update.message.reply_text(msg)
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Maneja callbacks."""
     query = update.callback_query
     data = query.data
     
@@ -593,31 +517,22 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif data == "withdraw":
         await query.answer()
-        await query.edit_message_text(
-            "💸 Configura primero tu método de pago\n\n⚙️ Config Pagos",
-            parse_mode=ParseMode.MARKDOWN
-        )
+        await query.edit_message_text("Configura primero tu metodo de pago")
     
-    elif data. startswith("pay_"):
+    elif data.startswith("pay_"):
         method = data.split("_")[1]
         await query.answer()
-        await query.edit_message_text(
-            f"✅ Configurando {method. upper()}\n\nEnvía tu email/ID:",
-            parse_mode=ParseMode.MARKDOWN
-        )
+        await query.edit_message_text(f"Configurando {method. upper()}\n\nEnvia tu email/ID:")
     
     elif data == "cancel":
         await query.answer()
-        await query.edit_message_text("❌ Cancelado")
-
-# === QUART ===
+        await query.edit_message_text("Cancelado")
 
 @app.route(f"/{TELEGRAM_TOKEN}", methods=["POST"])
 async def webhook():
-    """Webhook."""
     try:
         data = await request.get_json()
-        update = Update. de_json(data, application. bot)
+        update = Update.de_json(data, application. bot)
         await application.process_update(update)
     except Exception as e:
         logger.error(f"Error webhook: {e}")
@@ -625,37 +540,34 @@ async def webhook():
 
 @app.route("/health", methods=["GET"])
 async def health():
-    """Health check."""
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}, HTTPStatus.OK
 
 @app.route("/", methods=["GET"])
 async def index():
-    """Root endpoint."""
     return {"status": "GRIDDLED V3 Bot", "version": "3.0"}, HTTPStatus.OK
 
 @app.before_serving
 async def startup():
-    """Startup event."""
     global application, http_session
     
-    logger.info("🚀 Iniciando bot...")
+    logger.info("Iniciando bot...")
     
     if not init_db():
-        logger.error("❌ BD failed")
+        logger.error("BD failed")
         raise RuntimeError("Database initialization failed")
     
     http_session = aiohttp.ClientSession()
-    application = Application. builder().token(TELEGRAM_TOKEN).build()
+    application = Application. builder().token(TELEGRAM_TOKEN). build()
     
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("dashboard", dashboard))
     
-    application.add_handler(MessageHandler(filters.TEXT & filters. Regex(r"^💼 Ver Tareas$"), show_tasks))
-    application.add_handler(MessageHandler(filters. TEXT & filters.Regex(r"^💰 Dashboard$"), dashboard))
-    application. add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^🛒 Marketplace$"), marketplace))
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^🎁 Referir$"), refer))
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^⚙️ Config Pagos$"), config_payments))
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^📊 Stats$"), stats))
+    application.add_handler(MessageHandler(filters.TEXT & filters. Regex(r"^Ver Tareas$"), show_tasks))
+    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^Dashboard$"), dashboard))
+    application. add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^Marketplace$"), marketplace))
+    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^Referir$"), refer))
+    application.add_handler(MessageHandler(filters.TEXT & filters. Regex(r"^Config Pagos$"), config_payments))
+    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^Stats$"), stats))
     
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^\d+$"), handle_task_num))
     
@@ -667,17 +579,16 @@ async def startup():
     
     webhook_url = f"{RENDER_EXTERNAL_URL}/{TELEGRAM_TOKEN}"
     await application.bot.set_webhook(url=webhook_url)
-    logger.info(f"✅ Webhook: {webhook_url}")
+    logger.info(f"Webhook: {webhook_url}")
     
     await application.start()
-    logger.info("✅ Bot ON")
+    logger.info("Bot ON")
 
 @app.after_serving
 async def shutdown():
-    """Shutdown event."""
     global application, http_session, connection_pool
     
-    logger.info("🛑 Cerrando bot...")
+    logger. info("Cerrando bot...")
     
     if http_session:
         await http_session.close()
@@ -689,9 +600,7 @@ async def shutdown():
     if connection_pool:
         connection_pool.closeall()
     
-    logger. info("✅ Bot cerrado correctamente")
-
-# === MAIN ===
+    logger. info("Bot cerrado correctamente")
 
 if __name__ == "__main__":
     app. run(host="0.0. 0.0", port=PORT)
