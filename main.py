@@ -21,9 +21,9 @@ from telegram.ext import (
 )
 from telegram.error import TelegramError
 
-import psycopg
-from psycopg_pool import ConnectionPool
-from psycopg.rows import dict_row
+import psycopg2
+from psycopg2 import pool, OperationalError
+from psycopg2.extras import RealDictCursor
 import aiohttp
 
 # ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ BINANCE_API_KEY = os.environ.get("BINANCE_API_KEY", "")
 # GLOBAL STATE
 # ---------------------------------------------------------------------------
 
-db_pool: ConnectionPool | None = None
+connection_pool: pool.ThreadedConnectionPool | None = None
 application: Application | None = None
 app = Quart(__name__)
 http_session: aiohttp.ClientSession | None = None
@@ -258,15 +258,12 @@ def error_handler(func):
 
 
 # ---------------------------------------------------------------------------
-# DB POOL CON PSYCOPG v3
+# DB POOL (psycopg2)
 # ---------------------------------------------------------------------------
 
 
 def setup_db_pool() -> bool:
-    """
-    Crea un ConnectionPool de psycopg (v3) compatible con Python 3.13.
-    """
-    global db_pool
+    global connection_pool
     if not DATABASE_URL:
         logger.error("DATABASE_URL no configurada")
         return False
@@ -275,43 +272,39 @@ def setup_db_pool() -> bool:
         if db_url.startswith("postgres://"):
             db_url = db_url.replace("postgres://", "postgresql://", 1)
 
-        db_pool = ConnectionPool(
-            conninfo=db_url,
-            min_size=2,
-            max_size=20,
-            num_workers=3,
-            kwargs={"autocommit": False},
+        connection_pool = pool.ThreadedConnectionPool(
+            minconn=2,
+            maxconn=20,
+            dsn=db_url,
+            connect_timeout=10,
         )
-        logger.info("Pool BD (psycopg3) configurado correctamente")
+        logger.info("Pool BD configurado correctamente")
         return True
+    except OperationalError as e:
+        logger.error(f"Error operacional BD: {e}")
+        return False
     except Exception as e:
-        logger.error(f"Error configurando pool psycopg3: {e}", exc_info=True)
+        logger.error(f"Error inesperado configurando pool: {e}")
         return False
 
 
 def get_db_conn():
-    """
-    Obtiene una conexión del pool.
-    """
-    if not db_pool:
-        return None
-    try:
-        return db_pool.getconn()
-    except Exception as e:
-        logger.error(f"Error obteniendo conexion del pool: {e}", exc_info=True)
-        return None
+    if connection_pool:
+        try:
+            conn = connection_pool.getconn()
+            if conn:
+                return conn
+        except Exception as e:
+            logger.error(f"Error obteniendo conexion: {e}")
+    return None
 
 
 def put_db_conn(conn):
-    """
-    Devuelve la conexión al pool.
-    """
-    if not db_pool or not conn:
-        return
-    try:
-        db_pool.putconn(conn)
-    except Exception as e:
-        logger.error(f"Error devolviendo conexion al pool: {e}", exc_info=True)
+    if connection_pool and conn:
+        try:
+            connection_pool.putconn(conn)
+        except Exception as e:
+            logger.error(f"Error devolviendo conexion: {e}")
 
 
 def init_db() -> bool:
@@ -336,9 +329,9 @@ def init_db() -> bool:
                     wallet_address VARCHAR(255),
                     payment_method VARCHAR(50),
                     payment_email VARCHAR(255),
-                    total_earned NUMERIC(12,2) DEFAULT 0,
-                    pending_payout NUMERIC(12,2) DEFAULT 0,
-                    total_withdrawn NUMERIC(12,2) DEFAULT 0,
+                    total_earned DECIMAL(12,2) DEFAULT 0,
+                    pending_payout DECIMAL(12,2) DEFAULT 0,
+                    total_withdrawn DECIMAL(12,2) DEFAULT 0,
                     tasks_completed INT DEFAULT 0,
                     is_active BOOLEAN DEFAULT TRUE,
                     last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -350,7 +343,7 @@ def init_db() -> bool:
                     user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
                     task_id VARCHAR(100),
                     platform VARCHAR(50),
-                    reward NUMERIC(10,2),
+                    reward DECIMAL(10,2),
                     status VARCHAR(20) DEFAULT 'pending',
                     completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
@@ -359,7 +352,7 @@ def init_db() -> bool:
                     id SERIAL PRIMARY KEY,
                     referrer_id BIGINT REFERENCES users(id),
                     referred_id BIGINT REFERENCES users(id),
-                    commission_earned NUMERIC(10,2) DEFAULT 0,
+                    commission_earned DECIMAL(10,2) DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(referred_id)
                 );
@@ -367,7 +360,7 @@ def init_db() -> bool:
                 CREATE TABLE IF NOT EXISTS withdrawals (
                     id SERIAL PRIMARY KEY,
                     user_id BIGINT REFERENCES users(id),
-                    amount NUMERIC(12,2),
+                    amount DECIMAL(12,2),
                     method VARCHAR(50),
                     destination VARCHAR(255),
                     status VARCHAR(20) DEFAULT 'pending',
@@ -381,10 +374,10 @@ def init_db() -> bool:
                 """
             )
         conn.commit()
-        logger.info("BD inicializada correctamente (psycopg3)")
+        logger.info("BD inicializada correctamente")
         return True
     except Exception as e:
-        logger.error(f"Error inicializando BD: {e}", exc_info=True)
+        logger.error(f"Error inicializando BD: {e}")
         conn.rollback()
         return False
     finally:
@@ -407,7 +400,7 @@ def get_or_create_user(
     if not conn:
         return None
     try:
-        with conn.cursor(row_factory=dict_row) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
             user = cur.fetchone()
 
@@ -766,7 +759,7 @@ async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        with conn.cursor(row_factory=dict_row) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
             user_data = cur.fetchone()
 
@@ -846,7 +839,7 @@ async def refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        with conn.cursor(row_factory=dict_row) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 "SELECT referral_code FROM users WHERE id = %s",
                 (user_id,),
@@ -927,7 +920,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        with conn.cursor(row_factory=dict_row) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 "SELECT COUNT(*) AS count FROM users WHERE is_active = TRUE"
             )
@@ -1030,7 +1023,7 @@ async def index():
 async def startup():
     global application, http_session
 
-    logger.info("Iniciando GRIDDLED V3 (psycopg3)...")
+    logger.info("Iniciando GRIDDLED V3...")
 
     if not TELEGRAM_TOKEN:
         raise RuntimeError("TELEGRAM_TOKEN no configurado")
@@ -1107,7 +1100,7 @@ async def startup():
 
 @app.after_serving
 async def shutdown():
-    global application, http_session, db_pool
+    global application, http_session, connection_pool
 
     logger.info("Cerrando bot...")
 
@@ -1116,8 +1109,8 @@ async def shutdown():
     if application:
         await application.stop()
         await application.shutdown()
-    if db_pool:
-        db_pool.close()
+    if connection_pool:
+        connection_pool.closeall()
 
     logger.info("Bot cerrado correctamente")
 
