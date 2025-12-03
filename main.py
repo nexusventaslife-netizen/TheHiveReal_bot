@@ -3,21 +3,26 @@ import logging
 import hashlib
 from http import HTTPStatus
 from datetime import datetime
+from functools import wraps
 
 from quart import Quart, request, jsonify
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
-from telegram.constants import ParseMode
+from telegram. ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
+from telegram. constants import ParseMode
+from telegram.error import TelegramError
 
 import psycopg2
-from psycopg2 import pool
-from psycopg2. extras import RealDictCursor
+from psycopg2 import pool, OperationalError
+from psycopg2.extras import RealDictCursor
 import aiohttp
 
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
-TELEGRAM_TOKEN = os.environ. get("TELEGRAM_TOKEN")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 ADMIN_USER_ID = os.environ.get("ADMIN_USER_ID", "")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
@@ -47,7 +52,7 @@ COUNTRY_DATA = {
         "flag": "US",
         "max_daily": 180,
         "methods": ["paypal", "stripe", "venmo"],
-        "min_withdraw": 5. 0,
+        "min_withdraw": 5.0,
         "currency": "USD"
     },
     "MX": {
@@ -135,7 +140,7 @@ COUNTRY_DATA = {
         "flag": "AU",
         "max_daily": 180,
         "methods": ["paypal", "stripe", "poli", "bpay", "crypto"],
-        "min_withdraw": 10. 0,
+        "min_withdraw": 10.0,
         "currency": "AUD"
     },
     "IN": {
@@ -204,6 +209,18 @@ TASK_PLATFORMS = {
     "ayetstudios": {"name": "AyetStudios", "api_key": AYETSTUDIOS_KEY}
 }
 
+def error_handler(func):
+    """Decorator para manejo de errores"""
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except TelegramError as e:
+            logger.error(f"Telegram error in {func.__name__}: {e}")
+        except Exception as e:
+            logger.error(f"Error in {func.__name__}: {e}", exc_info=True)
+    return wrapper
+
 def setup_db_pool():
     global connection_pool
     if not DATABASE_URL:
@@ -213,27 +230,37 @@ def setup_db_pool():
         db_url = DATABASE_URL
         if db_url.startswith("postgres://"):
             db_url = db_url.replace("postgres://", "postgresql://", 1)
-        connection_pool = pool.ThreadedConnectionPool(minconn=2, maxconn=20, dsn=db_url)
-        logger.info("Pool BD configurado")
+        connection_pool = pool.ThreadedConnectionPool(
+            minconn=2,
+            maxconn=20,
+            dsn=db_url,
+            connect_timeout=10
+        )
+        logger.info("Pool BD configurado correctamente")
         return True
+    except OperationalError as e:
+        logger.error(f"Error operacional BD: {e}")
+        return False
     except Exception as e:
-        logger.error(f"Error pool: {e}")
+        logger.error(f"Error inesperado pool: {e}")
         return False
 
 def get_db_conn():
     if connection_pool:
         try:
-            return connection_pool.getconn()
+            conn = connection_pool.getconn()
+            if conn:
+                return conn
         except Exception as e:
-            logger.error(f"Error conexion: {e}")
+            logger.error(f"Error obteniendo conexion: {e}")
     return None
 
 def put_db_conn(conn):
     if connection_pool and conn:
         try:
             connection_pool.putconn(conn)
-        except:
-            pass
+        except Exception as e:
+            logger.error(f"Error devolviendo conexion: {e}")
 
 def init_db():
     if not setup_db_pool():
@@ -243,7 +270,7 @@ def init_db():
         return False
     try:
         with conn.cursor() as cur:
-            cur. execute("""
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id BIGINT PRIMARY KEY,
                     first_name VARCHAR(255),
@@ -300,10 +327,10 @@ def init_db():
                 CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
             """)
         conn.commit()
-        logger. info("BD inicializada")
+        logger.info("BD inicializada correctamente")
         return True
     except Exception as e:
-        logger.error(f"Error BD: {e}")
+        logger.error(f"Error inicializando BD: {e}")
         conn.rollback()
         return False
     finally:
@@ -314,7 +341,7 @@ def get_or_create_user(user_id, first_name, username, ref_code=None, country_cod
     if not conn:
         return None
     try:
-        with conn. cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
             user = cur.fetchone()
             
@@ -329,7 +356,7 @@ def get_or_create_user(user_id, first_name, username, ref_code=None, country_cod
                     if referrer:
                         referred_by_id = referrer["id"]
                 
-                cur.execute("""
+                cur. execute("""
                     INSERT INTO users (id, first_name, username, referral_code, referred_by, wallet_address, country)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                     RETURNING *
@@ -340,14 +367,15 @@ def get_or_create_user(user_id, first_name, username, ref_code=None, country_cod
                     cur.execute("""
                         INSERT INTO referrals (referrer_id, referred_id, commission_earned)
                         VALUES (%s, %s, 1. 00)
+                        ON CONFLICT (referred_id) DO NOTHING
                     """, (referred_by_id, user_id))
                     cur.execute("UPDATE users SET tokens = tokens + 100, total_earned = total_earned + 1.00 WHERE id = %s", (referred_by_id,))
                 
                 conn.commit()
-                logger.info(f"Usuario creado: {user_id}")
+                logger.info(f"Usuario creado: {user_id} - {first_name}")
             else:
                 cur.execute("UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE id = %s", (user_id,))
-                conn.commit()
+                conn. commit()
             
             return dict(user) if user else None
     except Exception as e:
@@ -358,11 +386,15 @@ def get_or_create_user(user_id, first_name, username, ref_code=None, country_cod
         put_db_conn(conn)
 
 def add_task_earning(user_id, task_id, platform, reward):
+    if reward <= 0 or reward > 100:
+        logger.warning(f"Reward invalido: {reward}")
+        return False
+    
     conn = get_db_conn()
     if not conn:
         return False
     try:
-        with conn.cursor() as cur:
+        with conn. cursor() as cur:
             cur.execute("""
                 INSERT INTO tasks_completed (user_id, task_id, platform, reward, status)
                 VALUES (%s, %s, %s, %s, 'completed')
@@ -377,7 +409,7 @@ def add_task_earning(user_id, task_id, platform, reward):
                 WHERE id = %s
             """, (reward, reward, user_id))
         conn.commit()
-        logger. info(f"Tarea completada: user={user_id}, reward=${reward}")
+        logger.info(f"Tarea completada: user={user_id}, reward=${reward:. 2f}")
         return True
     except Exception as e:
         logger.error(f"Error add_task: {e}")
@@ -399,12 +431,15 @@ async def fetch_live_tasks(platform_name):
             timeout=aiohttp.ClientTimeout(total=10)
         ) as response:
             if response.status == 200:
-                data = await response.json()
+                data = await response. json()
                 return data.get("offers", [])[:5]
+    except aiohttp.ClientError as e:
+        logger.error(f"Error HTTP fetching {platform_name}: {e}")
     except Exception as e:
-        logger.error(f"Error fetching {platform_name}: {e}")
+        logger.error(f"Error inesperado fetching {platform_name}: {e}")
     return []
 
+@error_handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     ref_code = context.args[0] if context. args else None
@@ -440,6 +475,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(welcome_msg, reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
 
+@error_handler
 async def show_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Cargando tareas disponibles...")
     
@@ -476,11 +512,12 @@ async def show_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tasks_msg += f"Escribe el numero (1-{len(tasks)})"
     
     context.user_data["tasks"] = tasks
-    await update.message. reply_text(tasks_msg)
+    await update.message.reply_text(tasks_msg)
 
+@error_handler
 async def handle_task_num(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
-    if not text.isdigit():
+    if not text. isdigit():
         return
     
     task_num = int(text)
@@ -509,6 +546,7 @@ async def handle_task_num(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
+@error_handler
 async def task_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -516,7 +554,7 @@ async def task_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not query.data.startswith("done_"):
         return
     
-    task_num = int(query.data. split("_")[1])
+    task_num = int(query.data.split("_")[1])
     tasks = context.user_data.get("tasks", [])
     
     if task_num < 1 or task_num > len(tasks):
@@ -539,6 +577,7 @@ async def task_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await query.edit_message_text("Error procesando.  Intenta de nuevo")
 
+@error_handler
 async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     conn = get_db_conn()
@@ -570,7 +609,7 @@ async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Total ganado: ${user_data['total_earned']:.2f}\n"
                 f"Pendiente: ${user_data['pending_payout']:.2f}\n"
                 f"Retirado: ${user_data['total_withdrawn']:.2f}\n"
-                f"Minimo retiro: ${country_config['min_withdraw']}\n\n"
+                f"Minimo retiro: ${country_config['min_withdraw']:.2f}\n\n"
                 f"Tareas: {user_data['tasks_completed']}\n"
                 f"Referidos: {refs_count}\n\n"
                 f"Wallet: {user_data['wallet_address']}\n"
@@ -587,6 +626,7 @@ async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         put_db_conn(conn)
 
+@error_handler
 async def marketplace(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = "MARKETPLACE\n\nCursos y servicios con comision:\n\n"
     
@@ -598,6 +638,7 @@ async def marketplace(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
+@error_handler
 async def refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     conn = get_db_conn()
@@ -640,6 +681,7 @@ async def refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
+@error_handler
 async def config_payments(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data = get_or_create_user(update.effective_user.id, "User", "user")
     country_config = COUNTRY_DATA. get(user_data["country"], COUNTRY_DATA["GLOBAL"])
@@ -652,6 +694,7 @@ async def config_payments(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update. message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
+@error_handler
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = get_db_conn()
     if not conn:
@@ -659,7 +702,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn. cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT COUNT(*) as count FROM users WHERE is_active = TRUE")
             active_users = cur.fetchone()["count"]
             
@@ -682,6 +725,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(msg)
 
+@error_handler
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -697,7 +741,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await refer(update, context)
     elif query.data.startswith("pay_"):
         method = query.data.split("_")[1]
-        await query.edit_message_text(f"Configurando {method.upper()}\n\nEnvia tu email/ID:")
+        await query. edit_message_text(f"Configurando {method.upper()}\n\nEnvia tu email/ID:")
     elif query.data == "cancel":
         await query.edit_message_text("Cancelado")
 
@@ -733,10 +777,10 @@ async def startup():
         raise RuntimeError("Error BD")
     
     http_session = aiohttp.ClientSession()
-    application = Application. builder().token(TELEGRAM_TOKEN). build()
+    application = Application. builder().token(TELEGRAM_TOKEN).build()
     
     application.add_handler(CommandHandler("start", start))
-    application. add_handler(CommandHandler("dashboard", dashboard))
+    application.add_handler(CommandHandler("dashboard", dashboard))
     application.add_handler(CommandHandler("tareas", show_tasks))
     application.add_handler(CommandHandler("marketplace", marketplace))
     application.add_handler(CommandHandler("referir", refer))
@@ -747,10 +791,10 @@ async def startup():
     application.add_handler(MessageHandler(filters. TEXT & filters.Regex(r"^Dashboard$"), dashboard))
     application. add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^Marketplace$"), marketplace))
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^Referir$"), refer))
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^Config Pagos$"), config_payments))
-    application.add_handler(MessageHandler(filters.TEXT & filters. Regex(r"^Stats$"), stats))
+    application.add_handler(MessageHandler(filters.TEXT & filters. Regex(r"^Config Pagos$"), config_payments))
+    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^Stats$"), stats))
     
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^\d+$"), handle_task_num))
+    application.add_handler(MessageHandler(filters.TEXT & filters. Regex(r"^\d+$"), handle_task_num))
     
     application.add_handler(CallbackQueryHandler(task_done, pattern=r"^done_"))
     application.add_handler(CallbackQueryHandler(handle_callback))
@@ -760,11 +804,13 @@ async def startup():
     await application.bot.set_webhook(url=f"{RENDER_EXTERNAL_URL}/{TELEGRAM_TOKEN}")
     await application.start()
     
-    logger.info("Bot iniciado")
+    logger.info("Bot iniciado correctamente")
 
 @app.after_serving
 async def shutdown():
     global application, http_session, connection_pool
+    
+    logger.info("Cerrando bot...")
     
     if http_session:
         await http_session.close()
@@ -774,7 +820,7 @@ async def shutdown():
     if connection_pool:
         connection_pool.closeall()
     
-    logger. info("Bot cerrado")
+    logger. info("Bot cerrado correctamente")
 
 if __name__ == "__main__":
-    app. run(host="0.0.0. 0", port=PORT)
+    app. run(host="0.0. 0.0", port=PORT)
