@@ -7,13 +7,13 @@ from functools import wraps
 
 from quart import Quart, request, jsonify
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram. ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
-from telegram. constants import ParseMode
-from telegram.error import TelegramError
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
+from telegram.constants import ParseMode
+from telegram. error import TelegramError
 
 import psycopg2
 from psycopg2 import pool, OperationalError
-from psycopg2.extras import RealDictCursor
+from psycopg2. extras import RealDictCursor
 import aiohttp
 
 logging.basicConfig(
@@ -22,24 +22,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+TELEGRAM_TOKEN = os. environ.get("TELEGRAM_TOKEN")
 ADMIN_USER_ID = os.environ.get("ADMIN_USER_ID", "")
-DATABASE_URL = os.environ.get("DATABASE_URL")
-RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
+DATABASE_URL = os. environ.get("DATABASE_URL")
+RENDER_EXTERNAL_URL = os.environ. get("RENDER_EXTERNAL_URL")
 PORT = int(os.environ.get("PORT", 10000))
 
-CPALEAD_ID = os.environ.get("CPALEAD_ID", "")
-OFFERTORO_ID = os.environ.get("OFFERTORO_ID", "")
-POLLFISH_KEY = os.environ.get("POLLFISH_KEY", "")
+CPALEAD_ID = os.environ. get("CPALEAD_ID", "")
+OFFERTORO_ID = os. environ.get("OFFERTORO_ID", "")
+POLLFISH_KEY = os.environ. get("POLLFISH_KEY", "")
 AYETSTUDIOS_KEY = os.environ.get("AYETSTUDIOS_KEY", "")
 
 UDEMY_AFFILIATE = os.environ.get("UDEMY_AFFILIATE", "griddled")
-FIVERR_AFFILIATE = os. environ.get("FIVERR_AFFILIATE", "griddled")
+FIVERR_AFFILIATE = os.environ.get("FIVERR_AFFILIATE", "griddled")
 
-PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_CLIENT_ID", "")
+PAYPAL_CLIENT_ID = os. environ.get("PAYPAL_CLIENT_ID", "")
 PAYPAL_SECRET = os.environ.get("PAYPAL_SECRET", "")
-STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")
-BINANCE_API_KEY = os. environ.get("BINANCE_API_KEY", "")
+STRIPE_API_KEY = os. environ.get("STRIPE_API_KEY", "")
+BINANCE_API_KEY = os.environ. get("BINANCE_API_KEY", "")
 
 connection_pool = None
 application = None
@@ -52,7 +52,7 @@ COUNTRY_DATA = {
         "flag": "US",
         "max_daily": 180,
         "methods": ["paypal", "stripe", "venmo"],
-        "min_withdraw": 5.0,
+        "min_withdraw": 5. 0,
         "currency": "USD"
     },
     "MX": {
@@ -178,7 +178,7 @@ MARKETPLACE_PLATFORMS = {
     },
     "coursera": {
         "name": "Coursera",
-        "url": "https://coursera. org",
+        "url": "https://coursera.org",
         "commission": 20,
         "description": "Certificaciones profesionales"
     },
@@ -190,13 +190,13 @@ MARKETPLACE_PLATFORMS = {
     },
     "fiverr": {
         "name": "Fiverr",
-        "url": "https://fiverr.com",
+        "url": "https://fiverr. com",
         "commission": 30,
         "description": "Vende tus servicios freelance"
     },
     "upwork": {
         "name": "Upwork",
-        "url": "https://upwork. com",
+        "url": "https://upwork.com",
         "commission": 10,
         "description": "Consigue clientes a largo plazo"
     }
@@ -210,7 +210,6 @@ TASK_PLATFORMS = {
 }
 
 def error_handler(func):
-    """Decorator para manejo de errores"""
     @wraps(func)
     async def wrapper(*args, **kwargs):
         try:
@@ -229,7 +228,7 @@ def setup_db_pool():
     try:
         db_url = DATABASE_URL
         if db_url.startswith("postgres://"):
-            db_url = db_url.replace("postgres://", "postgresql://", 1)
+            db_url = db_url. replace("postgres://", "postgresql://", 1)
         connection_pool = pool.ThreadedConnectionPool(
             minconn=2,
             maxconn=20,
@@ -239,16 +238,16 @@ def setup_db_pool():
         logger.info("Pool BD configurado correctamente")
         return True
     except OperationalError as e:
-        logger.error(f"Error operacional BD: {e}")
+        logger. error(f"Error operacional BD: {e}")
         return False
     except Exception as e:
-        logger.error(f"Error inesperado pool: {e}")
+        logger. error(f"Error inesperado pool: {e}")
         return False
 
 def get_db_conn():
     if connection_pool:
         try:
-            conn = connection_pool.getconn()
+            conn = connection_pool. getconn()
             if conn:
                 return conn
         except Exception as e:
@@ -343,20 +342,20 @@ def get_or_create_user(user_id, first_name, username, ref_code=None, country_cod
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
-            user = cur.fetchone()
+            user = cur. fetchone()
             
             if not user:
-                my_ref_code = hashlib.md5(str(user_id).encode()).hexdigest()[:8]. upper()
+                my_ref_code = hashlib.md5(str(user_id).encode()). hexdigest()[:8]. upper()
                 wallet = "0x" + os.urandom(20).hex()
                 
                 referred_by_id = None
                 if ref_code:
-                    cur.execute("SELECT id FROM users WHERE referral_code = %s", (ref_code,))
+                    cur. execute("SELECT id FROM users WHERE referral_code = %s", (ref_code,))
                     referrer = cur.fetchone()
                     if referrer:
                         referred_by_id = referrer["id"]
                 
-                cur. execute("""
+                cur.execute("""
                     INSERT INTO users (id, first_name, username, referral_code, referred_by, wallet_address, country)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                     RETURNING *
@@ -364,9 +363,9 @@ def get_or_create_user(user_id, first_name, username, ref_code=None, country_cod
                 user = cur.fetchone()
                 
                 if referred_by_id:
-                    cur.execute("""
+                    cur. execute("""
                         INSERT INTO referrals (referrer_id, referred_id, commission_earned)
-                        VALUES (%s, %s, 1. 00)
+                        VALUES (%s, %s, 1.00)
                         ON CONFLICT (referred_id) DO NOTHING
                     """, (referred_by_id, user_id))
                     cur.execute("UPDATE users SET tokens = tokens + 100, total_earned = total_earned + 1.00 WHERE id = %s", (referred_by_id,))
@@ -375,11 +374,11 @@ def get_or_create_user(user_id, first_name, username, ref_code=None, country_cod
                 logger.info(f"Usuario creado: {user_id} - {first_name}")
             else:
                 cur.execute("UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE id = %s", (user_id,))
-                conn. commit()
+                conn.commit()
             
             return dict(user) if user else None
     except Exception as e:
-        logger.error(f"Error get_or_create_user: {e}")
+        logger. error(f"Error get_or_create_user: {e}")
         conn.rollback()
         return None
     finally:
@@ -394,7 +393,7 @@ def add_task_earning(user_id, task_id, platform, reward):
     if not conn:
         return False
     try:
-        with conn. cursor() as cur:
+        with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO tasks_completed (user_id, task_id, platform, reward, status)
                 VALUES (%s, %s, %s, %s, 'completed')
@@ -431,7 +430,7 @@ async def fetch_live_tasks(platform_name):
             timeout=aiohttp.ClientTimeout(total=10)
         ) as response:
             if response.status == 200:
-                data = await response. json()
+                data = await response.json()
                 return data.get("offers", [])[:5]
     except aiohttp.ClientError as e:
         logger.error(f"Error HTTP fetching {platform_name}: {e}")
@@ -442,9 +441,9 @@ async def fetch_live_tasks(platform_name):
 @error_handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    ref_code = context.args[0] if context. args else None
+    ref_code = context. args[0] if context.args else None
     
-    user_data = get_or_create_user(user.id, user.first_name, user.username or "user", ref_code)
+    user_data = get_or_create_user(user.id, user. first_name, user.username or "user", ref_code)
     
     if not user_data:
         await update.message.reply_text("Error al inicializar.  Usa /start de nuevo")
@@ -454,7 +453,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     welcome_msg = (
         f"BIENVENIDO A GRIDDLED V3\n\n"
-        f"Hola {user.first_name}\n\n"
+        f"Hola {user. first_name}\n\n"
         f"Tu pais: {country_config['name']}\n"
         f"Potencial diario: ${country_config['max_daily']}\n"
         f"Tokens: {user_data['tokens']}\n"
@@ -487,7 +486,7 @@ async def show_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for task in live_tasks[:3]:
             tasks.append({
                 "id": task_id,
-                "title": task. get("name", f"Tarea {task_id}"),
+                "title": task.get("name", f"Tarea {task_id}"),
                 "reward": float(task.get("payout", 0. 25)),
                 "platform": platform_name,
                 "task_id": task. get("id", str(task_id))
@@ -498,26 +497,26 @@ async def show_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tasks = [
             {"id": 1, "title": "Encuesta 2min", "reward": 0.25, "platform": "pollfish", "task_id": "demo_1"},
             {"id": 2, "title": "Instalar App", "reward": 0.80, "platform": "cpalead", "task_id": "demo_2"},
-            {"id": 3, "title": "Ver Video 30s", "reward": 0. 10, "platform": "generic", "task_id": "demo_3"},
+            {"id": 3, "title": "Ver Video 30s", "reward": 0.10, "platform": "generic", "task_id": "demo_3"},
             {"id": 4, "title": "Review", "reward": 0.35, "platform": "generic", "task_id": "demo_4"},
             {"id": 5, "title": "Validar Dato", "reward": 0.15, "platform": "generic", "task_id": "demo_5"},
             {"id": 6, "title": "Etiquetar Foto", "reward": 0.08, "platform": "generic", "task_id": "demo_6"},
-            {"id": 7, "title": "Red Social", "reward": 0. 40, "platform": "generic", "task_id": "demo_7"},
+            {"id": 7, "title": "Red Social", "reward": 0.40, "platform": "generic", "task_id": "demo_7"},
             {"id": 8, "title": "Research", "reward": 0.60, "platform": "generic", "task_id": "demo_8"}
         ]
     
     tasks_msg = "TAREAS DISPONIBLES\n\n"
     for task in tasks:
-        tasks_msg += f"{task['id']}. {task['title']}\n   ${task['reward']:.2f}\n\n"
+        tasks_msg += f"{task['id']}. {task['title']}\n   ${task['reward']:. 2f}\n\n"
     tasks_msg += f"Escribe el numero (1-{len(tasks)})"
     
-    context.user_data["tasks"] = tasks
+    context. user_data["tasks"] = tasks
     await update.message.reply_text(tasks_msg)
 
 @error_handler
 async def handle_task_num(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    if not text. isdigit():
+    text = update.message. text
+    if not text.isdigit():
         return
     
     task_num = int(text)
@@ -530,11 +529,11 @@ async def handle_task_num(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     msg = (
         f"Tarea: {task['title']}\n\n"
-        f"Ganaras: ${task['reward']:.2f}\n"
+        f"Ganaras: ${task['reward']:. 2f}\n"
         f"Bonus: +10 tokens\n\n"
         f"Pasos:\n"
-        f"1. Abre el link\n"
-        f"2.  Completa la tarea\n"
+        f"1.  Abre el link\n"
+        f"2. Completa la tarea\n"
         f"3. Presiona Complete"
     )
     
@@ -544,7 +543,7 @@ async def handle_task_num(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("Cancelar", callback_data="cancel")]
     ]
     
-    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
+    await update. message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
 @error_handler
 async def task_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -554,7 +553,7 @@ async def task_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not query.data.startswith("done_"):
         return
     
-    task_num = int(query.data.split("_")[1])
+    task_num = int(query.data. split("_")[1])
     tasks = context.user_data.get("tasks", [])
     
     if task_num < 1 or task_num > len(tasks):
@@ -562,14 +561,14 @@ async def task_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     task = tasks[task_num - 1]
-    user_id = query.from_user.id
+    user_id = query.from_user. id
     
     success = add_task_earning(user_id, task["task_id"], task["platform"], task["reward"])
     
     if success:
         msg = (
             f"TAREA COMPLETADA\n\n"
-            f"+${task['reward']:.2f}\n"
+            f"+${task['reward']:. 2f}\n"
             f"+10 tokens\n\n"
             f"Usa /dashboard para ver tu progreso"
         )
@@ -583,7 +582,7 @@ async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = get_db_conn()
     
     if not conn:
-        await update.message.reply_text("Error de conexion")
+        await update.message. reply_text("Error de conexion")
         return
     
     try:
@@ -592,13 +591,13 @@ async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_data = cur.fetchone()
             
             if not user_data:
-                await update.message. reply_text("Usuario no encontrado")
+                await update.message.reply_text("Usuario no encontrado")
                 return
             
             cur.execute("SELECT COUNT(*) as count FROM referrals WHERE referrer_id = %s", (user_id,))
             refs_count = cur.fetchone()["count"]
             
-            country_config = COUNTRY_DATA. get(user_data["country"], COUNTRY_DATA["GLOBAL"])
+            country_config = COUNTRY_DATA.get(user_data["country"], COUNTRY_DATA["GLOBAL"])
             
             msg = (
                 f"TU DASHBOARD\n\n"
@@ -622,7 +621,7 @@ async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("Referir", callback_data="refer")]
             ]
             
-            await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
+            await update. message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
     finally:
         put_db_conn(conn)
 
@@ -634,17 +633,17 @@ async def marketplace(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for key, platform in MARKETPLACE_PLATFORMS.items():
         msg += f"{platform['name']}\nComision: {platform['commission']}%\n{platform['description']}\n\n"
         url = f"{platform['url']}?ref={UDEMY_AFFILIATE if key == 'udemy' else FIVERR_AFFILIATE}"
-        keyboard.append([InlineKeyboardButton(platform["name"], url=url)])
+        keyboard. append([InlineKeyboardButton(platform["name"], url=url)])
     
-    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message. reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
 @error_handler
 async def refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
+    user_id = update. effective_user.id
     conn = get_db_conn()
     
     if not conn:
-        await update.message.reply_text("Error")
+        await update.message. reply_text("Error")
         return
     
     try:
@@ -659,7 +658,7 @@ async def refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         put_db_conn(conn)
     
     bot_username = context.bot. username
-    ref_link = f"https://t.me/{bot_username}? start={ref_code}"
+    ref_link = f"https://t.me/{bot_username}?start={ref_code}"
     
     msg = (
         f"PROGRAMA DE REFERIDOS\n\n"
@@ -684,25 +683,25 @@ async def refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @error_handler
 async def config_payments(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data = get_or_create_user(update.effective_user.id, "User", "user")
-    country_config = COUNTRY_DATA. get(user_data["country"], COUNTRY_DATA["GLOBAL"])
+    country_config = COUNTRY_DATA.get(user_data["country"], COUNTRY_DATA["GLOBAL"])
     
     msg = f"CONFIGURAR PAGO\n\nMetodos para {country_config['name']}:\n\n"
     
     keyboard = []
     for method in country_config["methods"]:
-        keyboard.append([InlineKeyboardButton(f"{method.upper()}", callback_data=f"pay_{method}")])
+        keyboard.append([InlineKeyboardButton(f"{method. upper()}", callback_data=f"pay_{method}")])
     
-    await update. message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message. reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
 @error_handler
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = get_db_conn()
     if not conn:
-        await update.message.reply_text("Error")
+        await update.message. reply_text("Error")
         return
     
     try:
-        with conn. cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT COUNT(*) as count FROM users WHERE is_active = TRUE")
             active_users = cur.fetchone()["count"]
             
@@ -723,7 +722,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Racha: 127 dias"
     )
     
-    await update.message.reply_text(msg)
+    await update. message.reply_text(msg)
 
 @error_handler
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -736,13 +735,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "withdraw":
         await query.edit_message_text("Configura tu metodo de pago primero usando Config Pagos")
     elif query.data == "refer":
-        update._effective_user = query.from_user
-        update._message = query.message
+        update._effective_user = query. from_user
+        update._message = query. message
         await refer(update, context)
-    elif query.data.startswith("pay_"):
-        method = query.data.split("_")[1]
-        await query. edit_message_text(f"Configurando {method.upper()}\n\nEnvia tu email/ID:")
-    elif query.data == "cancel":
+    elif query. data. startswith("pay_"):
+        method = query.data. split("_")[1]
+        await query.edit_message_text(f"Configurando {method.upper()}\n\nEnvia tu email/ID:")
+    elif query. data == "cancel":
         await query.edit_message_text("Cancelado")
 
 @app.route(f"/{TELEGRAM_TOKEN}", methods=["POST"])
@@ -780,21 +779,21 @@ async def startup():
     application = Application. builder().token(TELEGRAM_TOKEN).build()
     
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("dashboard", dashboard))
+    application. add_handler(CommandHandler("dashboard", dashboard))
     application.add_handler(CommandHandler("tareas", show_tasks))
-    application.add_handler(CommandHandler("marketplace", marketplace))
+    application. add_handler(CommandHandler("marketplace", marketplace))
     application.add_handler(CommandHandler("referir", refer))
-    application. add_handler(CommandHandler("configurar", config_payments))
-    application. add_handler(CommandHandler("stats", stats))
+    application.add_handler(CommandHandler("configurar", config_payments))
+    application.add_handler(CommandHandler("stats", stats))
     
     application.add_handler(MessageHandler(filters.TEXT & filters. Regex(r"^Ver Tareas$"), show_tasks))
-    application.add_handler(MessageHandler(filters. TEXT & filters.Regex(r"^Dashboard$"), dashboard))
-    application. add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^Marketplace$"), marketplace))
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^Referir$"), refer))
+    application.add_handler(MessageHandler(filters.TEXT & filters. Regex(r"^Dashboard$"), dashboard))
+    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^Marketplace$"), marketplace))
+    application.add_handler(MessageHandler(filters.TEXT & filters. Regex(r"^Referir$"), refer))
     application.add_handler(MessageHandler(filters.TEXT & filters. Regex(r"^Config Pagos$"), config_payments))
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^Stats$"), stats))
+    application. add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^Stats$"), stats))
     
-    application.add_handler(MessageHandler(filters.TEXT & filters. Regex(r"^\d+$"), handle_task_num))
+    application.add_handler(MessageHandler(filters. TEXT & filters. Regex(r"^\d+$"), handle_task_num))
     
     application.add_handler(CallbackQueryHandler(task_done, pattern=r"^done_"))
     application.add_handler(CallbackQueryHandler(handle_callback))
@@ -813,14 +812,14 @@ async def shutdown():
     logger.info("Cerrando bot...")
     
     if http_session:
-        await http_session.close()
+        await http_session. close()
     if application:
         await application.stop()
         await application.shutdown()
     if connection_pool:
         connection_pool.closeall()
     
-    logger. info("Bot cerrado correctamente")
+    logger.info("Bot cerrado correctamente")
 
 if __name__ == "__main__":
-    app. run(host="0.0. 0.0", port=PORT)
+    app.run(host="0.0. 0.0", port=PORT)
