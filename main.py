@@ -1,15 +1,14 @@
 import os
 import logging
 import asyncio
-import json
 import hashlib
 from http import HTTPStatus
 from datetime import datetime
 
 from quart import Quart, request
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram. ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
-from telegram. constants import ParseMode
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
+from telegram.constants import ParseMode
 
 import psycopg2
 from psycopg2 import pool
@@ -24,19 +23,19 @@ logger = logging.getLogger(__name__)
 
 # === CONFIGURACIÓN ===
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
-ADMIN_USER_ID = os. environ.get("ADMIN_USER_ID", "")
+ADMIN_USER_ID = os.environ.get("ADMIN_USER_ID", "")
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL", "")
-PORT = int(os.environ. get("PORT", 10000))
+PORT = int(os.environ.get("PORT", 10000))
 
 # APIs Plataformas de Tareas
-CPALEAD_ID = os.environ. get("CPALEAD_ID", "")
+CPALEAD_ID = os.environ.get("CPALEAD_ID", "")
 OFFERTORO_ID = os.environ.get("OFFERTORO_ID", "")
 POLLFISH_KEY = os.environ.get("POLLFISH_KEY", "")
 
 # APIs Marketplace
-UDEMY_AFFILIATE = os.environ. get("UDEMY_AFFILIATE", "griddled")
-FIVERR_AFFILIATE = os.environ.get("FIVERR_AFFILIATE", "griddled")
+UDEMY_AFFILIATE = os.environ.get("UDEMY_AFFILIATE", "griddled")
+FIVERR_AFFILIATE = os. environ.get("FIVERR_AFFILIATE", "griddled")
 
 # === INSTANCIAS ===
 connection_pool = None
@@ -48,7 +47,7 @@ http_session = None
 COUNTRY_DATA = {
     "US": {"name": "🇺🇸 USA", "max_daily": 180, "methods": ["paypal", "stripe"], "min_withdraw": 5. 0},
     "MX": {"name": "🇲🇽 Mexico", "max_daily": 60, "methods": ["paypal", "oxxo"], "min_withdraw": 2.0},
-    "BR": {"name": "🇧🇷 Brasil", "max_daily": 70, "methods": ["pix", "paypal"], "min_withdraw": 2. 0},
+    "BR": {"name": "🇧🇷 Brasil", "max_daily": 70, "methods": ["pix", "paypal"], "min_withdraw": 2.0},
     "AR": {"name": "🇦🇷 Argentina", "max_daily": 50, "methods": ["mercadopago", "binance"], "min_withdraw": 1.0},
     "CO": {"name": "🇨🇴 Colombia", "max_daily": 50, "methods": ["nequi", "daviplata"], "min_withdraw": 2.0},
     "ES": {"name": "🇪🇸 España", "max_daily": 130, "methods": ["paypal", "bizum"], "min_withdraw": 3.0},
@@ -99,7 +98,6 @@ def setup_db_pool():
         return False
     
     try:
-        # Corregir URL si es necesario
         db_url = DATABASE_URL
         if db_url.startswith("postgres://"):
             db_url = db_url.replace("postgres://", "postgresql://", 1)
@@ -180,7 +178,7 @@ def init_db():
         return True
     except Exception as e:
         logger. error(f"❌ Error BD: {e}")
-        conn. rollback()
+        conn.rollback()
         return False
     finally:
         put_db_conn(conn)
@@ -210,9 +208,8 @@ def get_or_create_user(user_id, first_name, username, country="Global", ref_code
                 """, (user_id, first_name, username, wallet, my_ref_code, country))
                 user = cur.fetchone()
                 
-                # Si vino por referido
                 if ref_code:
-                    cur.execute("SELECT id FROM users WHERE referral_code = %s;", (ref_code,))
+                    cur. execute("SELECT id FROM users WHERE referral_code = %s;", (ref_code,))
                     referrer = cur.fetchone()
                     if referrer:
                         referrer_id = referrer[0]
@@ -220,7 +217,6 @@ def get_or_create_user(user_id, first_name, username, country="Global", ref_code
                             INSERT INTO referrals (referrer_id, referred_id) 
                             VALUES (%s, %s) ON CONFLICT DO NOTHING;
                         """, (referrer_id, user_id))
-                        # Bonus para referidor
                         cur.execute("""
                             UPDATE users SET tokens = tokens + 100 WHERE id = %s;
                         """, (referrer_id,))
@@ -275,7 +271,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     first_name = user.first_name
     username = user.username or "user"
     
-    # Detectar referido
     ref_code = context.args[0] if context. args else None
     
     user_data = get_or_create_user(user_id, first_name, username, "Global", ref_code)
@@ -331,13 +326,13 @@ async def show_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tasks_msg = "📋 *Tareas Disponibles*\n\n"
     
     for task in tasks:
-        tasks_msg += f"{task['id']}. *{task['title']}*\n   💵 ${task['reward']:. 2f}\n\n"
+        tasks_msg += f"{task['id']}. *{task['title']}*\n   💵 ${task['reward']:.2f}\n\n"
     
     tasks_msg += "📱 Escribí el número (1-8)"
     
     context.user_data["tasks"] = tasks
     
-    await update.message. reply_text(tasks_msg, parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(tasks_msg, parse_mode=ParseMode.MARKDOWN)
 
 async def handle_task_num(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Maneja número de tarea."""
@@ -361,7 +356,7 @@ async def handle_task_num(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🎁 +10 tokens
 
 🎯 *Pasos:*
-1. Abre el link
+1.  Abre el link
 2. Completa
 3. Presiona ✅
 """
@@ -535,7 +530,7 @@ Link: {link}
     
     keyboard = [
         [InlineKeyboardButton("📱 WhatsApp", url=f"https://wa.me/? text={link}")],
-        [InlineKeyboardButton("✈️ Telegram", url=f"https://t.me/share/url? url={link}")]
+        [InlineKeyboardButton("✈️ Telegram", url=f"https://t.me/share/url?url={link}")]
     ]
     
     await update.message.reply_text(
@@ -593,7 +588,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if data == "tasks":
         await query.answer()
-        # Crear un update simulado para reutilizar show_tasks
         update._message = query.message
         await show_tasks(update, context)
     
@@ -605,7 +599,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     
     elif data. startswith("pay_"):
-        method = data. split("_")[1]
+        method = data.split("_")[1]
         await query.answer()
         await query.edit_message_text(
             f"✅ Configurando {method. upper()}\n\nEnvía tu email/ID:",
@@ -652,11 +646,10 @@ async def startup():
     http_session = aiohttp.ClientSession()
     application = Application. builder().token(TELEGRAM_TOKEN). build()
     
-    # HANDLERS
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("dashboard", dashboard))
+    application. add_handler(CommandHandler("dashboard", dashboard))
     
-    application.add_handler(MessageHandler(filters.TEXT & filters. Regex(r"^💼 Ver Tareas$"), show_tasks))
+    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^💼 Ver Tareas$"), show_tasks))
     application.add_handler(MessageHandler(filters. TEXT & filters.Regex(r"^💰 Dashboard$"), dashboard))
     application. add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^🛒 Marketplace$"), marketplace))
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^🎁 Referir$"), refer))
@@ -702,9 +695,8 @@ if __name__ == "__main__":
     import hypercorn.asyncio
     from hypercorn.config import Config
     
-    # Configurar Hypercorn
     config = Config()
-    config.bind = [f"0.0.0. 0:{PORT}"]
+    config.bind = [f"0.0.0.0:{PORT}"]
     config.use_reloader = False
     config.accesslog = "-"
     config.errorlog = "-"
@@ -719,5 +711,4 @@ if __name__ == "__main__":
         finally:
             await shutdown()
     
-    # Ejecutar
-    asyncio.run(main())
+    asyncio. run(main())
