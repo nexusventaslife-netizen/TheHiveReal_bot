@@ -21,9 +21,6 @@ from telegram.ext import (
 )
 from telegram.error import TelegramError
 
-import psycopg2
-from psycopg2 import pool, OperationalError
-from psycopg2.extras import RealDictCursor
 import aiohttp
 
 # ---------------------------------------------------------------------------
