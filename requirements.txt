@@ -1,5 +1,15 @@
+# Telegram Bot
 python-telegram-bot==20.7
+
+# Web Framework
 quart==0.19.4
 hypercorn==0.16.0
-psycopg2-binary==2.9.9
+
+# Database
+psycopg2-binary==2.9. 9
+
+# HTTP Client
 aiohttp==3.9.1
+
+# Utilities (opcional, recomendado)
+python-dotenv==1.0. 0
