@@ -3,4 +3,5 @@ quart==0.19.4
 psycopg2-binary==2.9.9
 aiohttp==3.9.5
 hypercorn==0.16.0
-python-dotenv==1.0.1
+geoip2==4.7.0
+requests==2.31.0
