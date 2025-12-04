@@ -1,9 +1,9 @@
 """
-THEONEHIVE 12.1 - CRYPTO ECOSYSTEM (FIXED)
+THEONEHIVE 12.2 - CLEAN VERSION
 Correcciones:
-1. Arreglado error de variable 'conv_withdraw'.
-2. Sistema de Tokens y NFTs funcional.
-3. Conexión OfferToro y Auto-Healing activos.
+1. Eliminación de caracteres ocultos (U+E000).
+2. Variable 'conv_withdraw' corregida.
+3. Sistema Crypto + OfferToro + Auto-Healing.
 """
 
 import logging
@@ -11,7 +11,7 @@ import os
 import sys
 import asyncio
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional
 
 # Librerías
 import asyncpg 
@@ -29,7 +29,7 @@ from telegram.ext import (
 )
 
 # ---------------------------------------------------------------------
-# ⚙️ CONFIGURACIÓN
+# CONFIGURACION
 # ---------------------------------------------------------------------
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
 logger = logging.getLogger("TheOneHive")
@@ -39,7 +39,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 POSTBACK_SECRET = os.environ.get("POSTBACK_SECRET", "secret_default") 
 ADMIN_ID = os.environ.get("ADMIN_ID") 
 
-# OFFERTORO CREDENTIALS
+# OFFERTORO
 OFFERTORO_PUB_ID = os.environ.get("OFFERTORO_PUB_ID", "0")
 OFFERTORO_SECRET = os.environ.get("OFFERTORO_SECRET", "0")
 
@@ -58,7 +58,7 @@ telegram_app: Optional[Application] = None
 db_pool: Optional[asyncpg.Pool] = None
 
 # ---------------------------------------------------------------------
-# 🛡️ AUTO-HEALING
+# AUTO-HEALING
 # ---------------------------------------------------------------------
 async def check_system_health():
     try:
@@ -72,7 +72,7 @@ async def check_system_health():
         return False
 
 # ---------------------------------------------------------------------
-# 🗄️ BASE DE DATOS
+# BASE DE DATOS
 # ---------------------------------------------------------------------
 async def init_db():
     global db_pool
@@ -132,7 +132,7 @@ def get_tier_info(country_code):
     return "TIER_D", GEO_ECONOMY["TIER_D"]
 
 # ---------------------------------------------------------------------
-# 💎 MOTOR CRYPTO (INVISIBLES)
+# MOTOR CRYPTO
 # ---------------------------------------------------------------------
 async def mint_invisible_assets(user_id: int, dollar_amount: float):
     tokens_mined = dollar_amount * 10 
@@ -147,7 +147,7 @@ async def mint_invisible_assets(user_id: int, dollar_amount: float):
     return tokens_mined, False
 
 # ---------------------------------------------------------------------
-# 💰 POSTBACK
+# POSTBACK
 # ---------------------------------------------------------------------
 @app.get("/postback")
 async def postback_handler(user_id: int, amount: float, secret: str, trans_id: str):
@@ -169,7 +169,7 @@ async def postback_handler(user_id: int, amount: float, secret: str, trans_id: s
     return {"status": "success"}
 
 # ---------------------------------------------------------------------
-# 🤖 BOT LOGIC
+# BOT
 # ---------------------------------------------------------------------
 async def start_command(update, context):
     context.user_data.clear()
@@ -215,6 +215,7 @@ async def dashboard_pro(update, context):
 
 async def show_inventory(update, context):
     user_id = update.effective_user.id
+    rows = []
     if db_pool:
         async with db_pool.acquire() as conn:
             rows = await conn.fetch("SELECT * FROM nfts WHERE user_id = $1", user_id)
@@ -272,7 +273,47 @@ async def error_handler(update, context):
     except: pass
 
 # ---------------------------------------------------------------------
-# 🚀 STARTUP
+# STARTUP
 # ---------------------------------------------------------------------
-async*
-
+async def init_bot_app():
+    global telegram_app
+    if telegram_app: return telegram_app
+    telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
+    
+    conv_start = ConversationHandler(
+        entry_points=[CommandHandler("start", start_command)],
+        states={ASK_EMAIL:[MessageHandler(filters.TEXT, receive_email)], ASK_COUNTRY:[MessageHandler(filters.TEXT, receive_country)]},
+        fallbacks=[CommandHandler("cancel", cancel), CommandHandler("start", start_command)]
+    )
+    
+    conv_withdraw = ConversationHandler(
+        entry_points=[MessageHandler(filters.Regex("Retirar"), start_withdraw)],
+        states={ASK_WALLET: [MessageHandler(filters.TEXT, process_withdraw)]},
+        fallbacks=[CommandHandler("cancel", cancel), CommandHandler("start", start_command)]
+    )
+    
+    telegram_app.add_handler(conv_start)
+    telegram_app.add_handler(conv_withdraw)
+    telegram_app.add_handler(MessageHandler(filters.TEXT, handle_text))
+    telegram_app.add_error_handler(error_handler)
+    await telegram_app.initialize()
+    return telegram_app
+
+@app.api_route("/health", methods=["GET", "HEAD"])
+async def health():
+    if await check_system_health(): return {"status": "ok"}
+    else: raise HTTPException(500)
+
+@app.get("/")
+async def root(): return {"status": "TheOneHive Crypto Online"}
+
+@app.on_event("startup")
+async def startup(): await init_db(); bot=await init_bot_app(); await bot.start() 
+@app.on_event("shutdown")
+async def shutdown(): 
+    if telegram_app: await telegram_app.stop(); await telegram_app.shutdown()
+    if db_pool: await db_pool.close()
+@app.post("/telegram/{token}")
+async def webhook(token: str, request: Request):
+    if token != TELEGRAM_TOKEN: return JSONResponse(status_code=403, content={})
+    data = await request.json(); bot=await init_bot_app(); await bot.process_update(Update.de_json(data, bot.bot)); return {"ok":True}
