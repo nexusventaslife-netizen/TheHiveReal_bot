@@ -1,11 +1,9 @@
 """
-THEONEHIVE 16.0 - PROFESSIONAL ECOSYSTEM
+THEONEHIVE 17.0 - SMART GEO-ROUTING EDITION
 Características:
-1. Retención: Racha Diaria (Daily Streak) + Niveles.
-2. Crecimiento: Sistema de Referidos (10%).
-3. Ingresos: Offerwall (OfferToro) + ADSTERRA (Direct Link) integrados.
-4. Activos: Inventario NFT y Tokens HIVE (Sin apuestas).
-5. Seguridad: Auto-Healing y cero fricción.
+1. Routing Inteligente: Menús diferentes para Tier 1 (USA/EU) vs Tier 3 (Latam).
+2. Ingresos Híbridos: API (OfferToro) + Affiliate (Swagbucks) + Adsterra.
+3. Retención: Racha Diaria.
 """
 
 import logging
@@ -41,8 +39,11 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 POSTBACK_SECRET = os.environ.get("POSTBACK_SECRET", "secret_default") 
 ADMIN_ID = os.environ.get("ADMIN_ID") 
 
-# ADSTERRA (Smartlink / Direct Link)
+# --- MONETIZACIÓN ---
 ADSTERRA_LINK = os.environ.get("ADSTERRA_LINK", "https://google.com")
+# Pon aquí tus enlaces de referido (Swagbucks, Freecash, etc.)
+AFFILIATE_LINK_1 = os.environ.get("AFFILIATE_LINK_1", "https://www.swagbucks.com") 
+AFFILIATE_TEXT_1 = "🎁 Gana $5 en Swagbucks"
 
 # OFFERTORO
 OFFERTORO_PUB_ID = os.environ.get("OFFERTORO_PUB_ID", "0")
@@ -51,11 +52,12 @@ OFFERTORO_SECRET = os.environ.get("OFFERTORO_SECRET", "0")
 APP_NAME = "TheOneHive Pro"
 ASK_EMAIL, ASK_COUNTRY, ASK_WALLET = range(3)
 
+# CLASIFICACIÓN DE PAÍSES (CRÍTICO PARA GANAR MÁS)
 GEO_ECONOMY = {
-    "TIER_A": {"countries": ["US", "AU", "GB", "CA"], "symbol": "$"},
-    "TIER_B": {"countries": ["ES", "DE", "FR", "IT"], "symbol": "€"},
-    "TIER_C": {"countries": ["MX", "AR", "CO", "BR"], "symbol": "$"},
-    "TIER_D": {"countries": ["GLOBAL", "VE", "NG"], "symbol": "$"}
+    "TIER_A": {"countries": ["US", "AU", "GB", "CA", "DE", "CH", "NO", "SE"], "symbol": "$$$"}, # Países Ricos
+    "TIER_B": {"countries": ["ES", "FR", "IT", "NL", "BE", "DK"], "symbol": "€€"}, # Europa
+    "TIER_C": {"countries": ["MX", "AR", "CO", "BR", "CL", "PE"], "symbol": "$"}, # Latam Fuerte
+    "TIER_D": {"countries": ["GLOBAL"], "symbol": "¢"} # Resto del mundo
 }
 
 app = FastAPI(title=APP_NAME)
@@ -76,7 +78,7 @@ async def check_system_health():
         return False
 
 # ---------------------------------------------------------------------
-# 🎨 MOTOR VISUAL (Barras de Progreso)
+# 🎨 MOTOR VISUAL
 # ---------------------------------------------------------------------
 def generate_progress_bar(current, total, length=10):
     if total == 0: total = 1
@@ -86,13 +88,12 @@ def generate_progress_bar(current, total, length=10):
     return f"{bar} {int(percent * 100)}%"
 
 def get_level_info(xp):
-    # Sistema de niveles RPG simple
     level = int(xp / 1000) + 1
     next_level_xp = level * 1000
     return level, next_level_xp
 
 # ---------------------------------------------------------------------
-# 🗄️ BASE DE DATOS (ESTRUCTURA FINAL)
+# 🗄️ BASE DE DATOS
 # ---------------------------------------------------------------------
 async def init_db():
     global db_pool
@@ -100,7 +101,6 @@ async def init_db():
     try:
         db_pool = await asyncpg.create_pool(DATABASE_URL)
         async with db_pool.acquire() as conn:
-            # Usuarios
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     telegram_id BIGINT PRIMARY KEY,
@@ -119,19 +119,14 @@ async def init_db():
                     created_at TEXT
                 )
             """)
-            
-            # Actualización segura de columnas nuevas
-            try: await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_daily_claim TEXT")
-            except: pass
-            try: await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_streak INTEGER DEFAULT 0")
-            except: pass
-            try: await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS xp INTEGER DEFAULT 0")
-            except: pass
-
-            # Tablas Assets
+            # Migraciones seguras
+            for col in ["last_daily_claim", "daily_streak", "xp"]:
+                try: await conn.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} TEXT") # Simplificado a TEXT/INT según corresponda
+                except: pass
+                
             await conn.execute("CREATE TABLE IF NOT EXISTS nfts (id SERIAL PRIMARY KEY, user_id BIGINT, name TEXT, rarity TEXT, image_url TEXT, minted_at TEXT)")
             await conn.execute("CREATE TABLE IF NOT EXISTS transactions (id SERIAL PRIMARY KEY, user_id BIGINT, type TEXT, amount DOUBLE PRECISION, source TEXT, status TEXT, created_at TEXT)")
-        logger.info("✅ DB Professional Ready.")
+        logger.info("✅ DB Smart-Routing Ready.")
     except Exception as e: logger.error(f"DB Error: {e}")
 
 async def get_user(tg_id: int):
@@ -149,247 +144,170 @@ def get_tier_info(country_code):
     return "TIER_D", GEO_ECONOMY["TIER_D"]
 
 # ---------------------------------------------------------------------
-# 🎁 RECOMPENSA DIARIA (RETENCIÓN SANA)
+# 🎁 RECOMPENSA DIARIA
 # ---------------------------------------------------------------------
 async def claim_daily(update, context):
     user = await get_user(update.effective_user.id)
     now = datetime.utcnow()
-    
     last_claim = None
-    if user['last_daily_claim']:
+    if user.get('last_daily_claim'):
         try: last_claim = datetime.fromisoformat(user['last_daily_claim'])
         except: pass
     
-    # Verificar si ya pasaron 24h
     if last_claim and (now - last_claim).total_seconds() < 86400:
         hours_left = int((86400 - (now - last_claim).total_seconds()) / 3600)
-        # Aunque no puedan reclamar, les damos la opción de ganar extra con Adsterra
         kb = [[InlineKeyboardButton("🎁 GANA EXTRA AHORA", url=ADSTERRA_LINK)]]
-        await update.message.reply_text(
-            f"⏳ <b>Espera {hours_left} horas</b> para tu siguiente recompensa oficial.\n\n👇 Mientras tanto, puedes obtener un bonus aquí:", 
-            reply_markup=InlineKeyboardMarkup(kb),
-            parse_mode="HTML"
-        )
+        await update.message.reply_text(f"⏳ <b>Faltan {hours_left}h</b>\n\n👇 Mientras, gana aquí:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
         return
 
-    # Calcular Racha
-    streak = user['daily_streak']
-    if last_claim and (now - last_claim).total_seconds() > 172800: # Si pasan 48h, pierde racha
-        streak = 0
-    
+    streak = int(user.get('daily_streak', 0))
+    if last_claim and (now - last_claim).total_seconds() > 172800: streak = 0
     streak += 1
-    reward_tokens = 50 + (streak * 10) # Cada día gana más
+    reward = 50 + (streak * 10)
     
     async with db_pool.acquire() as conn:
-        await conn.execute("""
-            UPDATE users 
-            SET hive_tokens = hive_tokens + $1, 
-                daily_streak = $2, 
-                last_daily_claim = $3 
-            WHERE telegram_id = $4
-        """, float(reward_tokens), streak, now.isoformat(), user['telegram_id'])
+        await conn.execute("UPDATE users SET hive_tokens = hive_tokens + $1, daily_streak = $2, last_daily_claim = $3 WHERE telegram_id = $4", float(reward), streak, now.isoformat(), user['telegram_id'])
     
-    # Agregamos el botón de Adsterra al mensaje de éxito
-    kb = [[InlineKeyboardButton("🎁 BONUS EXTRA (Clic)", url=ADSTERRA_LINK)]]
-    
-    await update.message.reply_text(
-        f"📅 <b>¡DÍA {streak} COMPLETADO!</b>\n\n💎 Recibiste: <b>+{reward_tokens} HIVE</b>\n🔥 ¡Vuelve mañana para mantener la racha!\n\n👇 <b>¡Toca abajo para duplicar tu suerte!</b>", 
-        reply_markup=InlineKeyboardMarkup(kb),
-        parse_mode="HTML"
-    )
+    kb = [[InlineKeyboardButton("🎁 DOBLAR PREMIO (Clic)", url=ADSTERRA_LINK)]]
+    await update.message.reply_text(f"📅 <b>DÍA {streak}</b>: +{reward} HIVE\n\n👇 ¡Toca para ganar más!", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
 
 # ---------------------------------------------------------------------
-# 💰 LÓGICA DE PAGOS + REFERIDOS
+# 🧠 SMART OFFERWALL MENU (OPTIMIZACIÓN GEO)
+# ---------------------------------------------------------------------
+async def offerwall_menu(update, context):
+    user = await get_user(update.effective_user.id)
+    if not user: return
+    
+    tier = user['tier']
+    country = user['country_code']
+    
+    # Enlace base de OfferToro (cambiaremos esto cuando Monlix te acepte)
+    link_toro = f"https://www.offertoro.com/ifr/show/{OFFERTORO_PUB_ID}/{user['telegram_id']}/{OFFERTORO_SECRET}"
+    
+    kb = []
+    
+    # --- LÓGICA DE OPTIMIZACIÓN ---
+    if tier == "TIER_A" or tier == "TIER_B":
+        # 🇺🇸🇪🇺 PAÍSES RICOS: Mostrar Encuestas Caras y Afiliados Premium
+        kb.append([InlineKeyboardButton("💎 PREMIUM SURVEYS ($2 - $10)", url=link_toro)])
+        kb.append([InlineKeyboardButton(f"🏦 {AFFILIATE_TEXT_1}", url=AFFILIATE_LINK_1)])
+        # Bonus siempre presente
+        kb.append([InlineKeyboardButton("🎲 BONUS RÁPIDO", url=ADSTERRA_LINK)])
+        
+        msg = f"🇺🇸 <b>Ofertas Premium Detectadas ({country})</b>\nEstás en una zona de alto valor. Completa una encuesta para ganar hasta 5000 HIVE."
+
+    else:
+        # 🌎 RESTO DEL MUNDO: Volumen, Apps ligeras y Adsterra
+        kb.append([InlineKeyboardButton("📱 INSTALAR APPS (Fácil)", url=link_toro)])
+        kb.append([InlineKeyboardButton("🎁 BONUS DIARIO (Gana Ya)", url=ADSTERRA_LINK)])
+        kb.append([InlineKeyboardButton("⚡️ OFERTAS RÁPIDAS", url=link_toro)])
+        
+        msg = f"🌎 <b>Zona Global ({country})</b>\nInstala aplicaciones ligeras o usa el Bonus Diario para sumar puntos rápido."
+
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
+
+# ---------------------------------------------------------------------
+# 💰 POSTBACK & CORE
 # ---------------------------------------------------------------------
 async def postback_handler_logic(user_id, amount):
     user_share = amount * 0.40 
-    tokens_mined = user_share * 10 
-    xp_gained = int(user_share * 100)
-    
+    tokens = user_share * 10 
+    xp = int(user_share * 100)
     async with db_pool.acquire() as conn:
-        # Pagar Usuario + XP
-        await conn.execute("""
-            UPDATE users 
-            SET balance = balance + $1, 
-                hive_tokens = hive_tokens + $2,
-                xp = xp + $3
-            WHERE telegram_id = $4
-        """, user_share, tokens_mined, xp_gained, user_id)
-        
-        await conn.execute("INSERT INTO transactions (user_id, type, amount, source, status, created_at) VALUES ($1, 'EARN', $2, 'Offerwall', 'COMPLETED', $3)", user_id, user_share, datetime.utcnow().isoformat())
-        
-        # Referidos (10%)
-        user_data = await conn.fetchrow("SELECT referrer_id FROM users WHERE telegram_id = $1", user_id)
-        if user_data and user_data['referrer_id']:
-            bonus = user_share * 0.10 
-            if bonus > 0.01: await conn.execute("UPDATE users SET balance = balance + $1 WHERE telegram_id = $2", bonus, user_data['referrer_id'])
-
-        # NFT Drop (Aleatorio si la tarea es grande)
-        won_nft = False
-        if user_share >= 1.5:
-            won_nft = True
-            await conn.execute("INSERT INTO nfts (user_id, name, rarity, image_url, minted_at) VALUES ($1, 'Task Master Badge', 'Rare', 'url', $2)", user_id, datetime.utcnow().isoformat())
-
-    return user_share, tokens_mined, won_nft
+        await conn.execute("UPDATE users SET balance=balance+$1, hive_tokens=hive_tokens+$2, xp=xp+$3 WHERE telegram_id=$4", user_share, tokens, xp, user_id)
+        # Referidos
+        ref = await conn.fetchrow("SELECT referrer_id FROM users WHERE telegram_id=$1", user_id)
+        if ref and ref['referrer_id']:
+            await conn.execute("UPDATE users SET balance=balance+$1 WHERE telegram_id=$2", user_share*0.10, ref['referrer_id'])
+    return user_share, tokens
 
 @app.get("/postback")
 async def postback_endpoint(user_id: int, amount: float, secret: str, trans_id: str):
-    if secret != POSTBACK_SECRET: raise HTTPException(status_code=403, detail="Acceso Denegado")
-    usd, tokens, nft = await postback_handler_logic(user_id, amount)
+    if secret != POSTBACK_SECRET: raise HTTPException(403)
+    usd, tokens = await postback_handler_logic(user_id, amount)
     try:
         bot = await init_bot_app()
-        nft_text = "\n🏆 <b>¡NFT RARO OBTENIDO!</b>" if nft else ""
-        msg = (f"✅ <b>TAREA COMPLETADA</b>\n💵 +${usd:.2f}\n💎 +{tokens:.2f} HIVE{nft_text}")
-        await bot.bot.send_message(chat_id=user_id, text=msg, parse_mode="HTML")
+        await bot.bot.send_message(user_id, f"✅ <b>PAGO RECIBIDO</b>\n💵 +${usd:.2f}\n💎 +{tokens:.2f} HIVE", parse_mode="HTML")
     except: pass
     return {"status": "success"}
 
 # ---------------------------------------------------------------------
-# 🤖 BOT INTERFAZ (CLEAN & PROFESSIONAL)
+# 🚀 BOT STANDARD COMMANDS
 # ---------------------------------------------------------------------
 async def start_command(update, context):
-    ref_id = None
-    if context.args: 
-        try: ref_id = int(context.args[0])
-        except: pass
+    ref_id = int(context.args[0]) if context.args else None
     if ref_id: context.user_data['ref'] = ref_id
-    
     user = await get_user(update.effective_user.id)
     if user and user['email']: await dashboard_main(update, context); return ConversationHandler.END
-    await update.message.reply_text("👋 <b>Bienvenido a TheOneHive</b>\nPlataforma de Recompensas Global.\n\n📧 <b>Tu Email:</b>", parse_mode="HTML")
+    await update.message.reply_text("👋 <b>Bienvenido a TheOneHive</b>\n\n📧 <b>Tu Email:</b>", parse_mode="HTML")
     return ASK_EMAIL
 
 async def receive_email(update, context):
     context.user_data['email'] = update.message.text
-    await update.message.reply_text("🌍 <b>País (2 letras, ej: MX):</b>", parse_mode="HTML")
+    await update.message.reply_text("🌍 <b>País (2 letras, ej: MX, US, ES):</b>\nEsto define tus ganancias.", parse_mode="HTML")
     return ASK_COUNTRY
 
 async def receive_country(update, context):
     code = update.message.text.upper().strip()
-    email = context.user_data.get('email')
     tier, _ = get_tier_info(code)
-    ref_id = context.user_data.get('ref')
-    
     user = update.effective_user
-    if db_pool:
-        async with db_pool.acquire() as conn:
-            await conn.execute("""
-                INSERT INTO users (telegram_id, first_name, email, country_code, tier, referrer_id, created_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                ON CONFLICT (telegram_id) DO UPDATE SET email=$3, country_code=$4, tier=$5
-            """, user.id, user.first_name, email, code, tier, ref_id, datetime.utcnow().isoformat())
-            if ref_id: 
-                await conn.execute("UPDATE users SET referral_count = referral_count + 1 WHERE telegram_id = $1", ref_id)
-                try: 
-                    bot = await init_bot_app()
-                    await bot.bot.send_message(ref_id, "👥 <b>Nuevo Referido Registrado</b>", parse_mode="HTML")
-                except: pass
+    
+    async with db_pool.acquire() as conn:
+        await conn.execute("""
+            INSERT INTO users (telegram_id, first_name, email, country_code, tier, referrer_id, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (telegram_id) DO UPDATE SET email=$3, country_code=$4, tier=$5
+        """, user.id, user.first_name, context.user_data.get('email'), code, tier, context.user_data.get('ref'), datetime.utcnow().isoformat())
     
     await dashboard_main(update, context)
     return ConversationHandler.END
 
-# --- DASHBOARD FINAL ---
 async def dashboard_main(update, context):
     user = await get_user(update.effective_user.id)
     if not user: await update.message.reply_text("⚠️ /start"); return
     
-    usd = user['balance']
-    tokens = user.get('hive_tokens', 0)
-    xp = user.get('xp', 0)
-    level, next_xp = get_level_info(xp)
-    
-    p_bar = generate_progress_bar(xp % 1000, 1000)
+    p_bar = generate_progress_bar(user.get('xp',0) % 1000, 1000)
+    tier_icon = "🇺🇸 VIP" if user['tier'] in ["TIER_A", "TIER_B"] else "🌎 Global"
     
     msg = (
-        f"📱 <b>THE ONE HIVE</b> | {user['country_code']}\n"
-        f"👤 {update.effective_user.first_name} | 🏆 Nivel {level}\n"
+        f"📱 <b>THE ONE HIVE</b> | {tier_icon}\n"
+        f"👤 {user['first_name']} | 🏆 Nivel {int(user.get('xp',0)/1000)+1}\n"
         f"<code>{p_bar}</code>\n"
-        f"➖➖➖➖➖➖➖➖➖➖\n\n"
-        
-        f"💵 <b>Saldo Real:</b> ${usd:.2f}\n"
-        f"💎 <b>HIVE Tokens:</b> {tokens:.1f}\n"
-        f"🔥 <b>Racha Diaria:</b> {user.get('daily_streak', 0)} días\n\n"
-        
-        f"👇 <b>Selecciona una opción:</b>"
+        f"➖➖➖➖➖➖➖➖➖➖\n"
+        f"💵 Saldo: <b>${user['balance']:.2f}</b>\n"
+        f"💎 Tokens: <b>{user.get('hive_tokens',0):.1f}</b>\n"
+        f"🔥 Racha: <b>{user.get('daily_streak',0)} días</b>\n\n"
+        f"👇 <b>¿Qué quieres hacer hoy?</b>"
     )
-    
-    kb = [
-        ["⚡️ MINAR (Ofertas)", "📅 Bonus Diario"], # Ganchos principales
-        ["👥 Invitar (+10%)", "🎒 Mis NFTs"],
-        ["🏦 Retirar", "👤 Perfil"]
-    ]
+    kb = [["⚡️ MINAR (Ofertas)", "📅 Bonus Diario"], ["👥 Invitar (+10%)", "🎒 Mis NFTs"], ["🏦 Retirar", "👤 Perfil"]]
     await update.message.reply_text(msg, reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True), parse_mode="HTML")
 
 async def show_referral(update, context):
-    user = await get_user(update.effective_user.id)
-    link = f"https://t.me/{context.bot.username}?start={user['telegram_id']}"
-    await update.message.reply_text(
-        f"👥 <b>PROGRAMA DE REFERIDOS</b>\n\nGana el <b>10%</b> de lo que generen tus amigos.\n\n🔗 <b>Tu Enlace:</b>\n<code>{link}</code>", 
-        parse_mode="HTML"
-    )
-
-# --- MENUS STANDARD ---
-async def offerwall_menu(update, context):
-    user_id = update.effective_user.id
-    link_toro = f"https://www.offertoro.com/ifr/show/{OFFERTORO_PUB_ID}/{user_id}/{OFFERTORO_SECRET}"
-    
-    # MENÚ HÍBRIDO: OfferToro + Adsterra
-    kb = [
-        [InlineKeyboardButton("🟢 OFERTAS (Instalar Apps)", url=link_toro)],
-        [InlineKeyboardButton("🎁 BONUS RÁPIDO (Clic)", url=ADSTERRA_LINK)]
-    ]
-    await update.message.reply_text(
-        "⚡️ <b>CENTRO DE GANANCIAS</b>\n\n📱 <b>Instalar Apps:</b> Gana $0.50 - $5.00\n🎁 <b>Bonus Rápido:</b> Gana Tokens HIVE al instante.", 
-        reply_markup=InlineKeyboardMarkup(kb), 
-        parse_mode="HTML"
-    )
-
-async def show_inventory(update, context):
-    user_id = update.effective_user.id
-    rows = []
-    if db_pool:
-        async with db_pool.acquire() as conn: rows = await conn.fetch("SELECT * FROM nfts WHERE user_id = $1", user_id)
-    if not rows: await update.message.reply_text("🎒 <b>Sin NFTs</b>\nCompleta tareas de alto valor para ganar medallas.", parse_mode="HTML"); return
-    msg = "🏆 <b>COLECCIÓN NFT</b>\n\n"
-    for nft in rows: msg += f"• {nft['name']} ({nft['rarity']})\n"
-    await update.message.reply_text(msg, parse_mode="HTML")
+    link = f"https://t.me/{context.bot.username}?start={update.effective_user.id}"
+    await update.message.reply_text(f"👥 <b>INVITA Y GANA</b>\nRecibes el 10% de por vida.\n\n🔗 <code>{link}</code>", parse_mode="HTML")
 
 async def start_withdraw(update, context):
-    user = await get_user(update.effective_user.id)
-    if user['balance'] < 5.0: await update.message.reply_text(f"⚠️ Mínimo $5.00", parse_mode="HTML"); return ConversationHandler.END
-    await update.message.reply_text("💸 <b>Wallet USDT (TRC20):</b>", parse_mode="HTML")
-    return ASK_WALLET
+    await update.message.reply_text("💸 <b>Wallet USDT (TRC20):</b>", parse_mode="HTML"); return ASK_WALLET
 
 async def process_withdraw(update, context):
-    wallet = update.message.text
     user = update.effective_user
     amount = (await get_user(user.id))['balance']
-    if db_pool:
-        async with db_pool.acquire() as conn:
-            await conn.execute("UPDATE users SET balance = 0 WHERE telegram_id = $1", user.id)
-            await conn.execute("INSERT INTO transactions (user_id, type, amount, source, status, created_at) VALUES ($1, 'WITHDRAW', $2, $3, 'PENDING', $4)", user.id, amount, wallet, datetime.utcnow().isoformat())
-    await update.message.reply_text("✅ <b>Retiro Solicitado</b>\nSe procesará en 24h.", parse_mode="HTML")
-    return ConversationHandler.END
+    if amount < 5: await update.message.reply_text("⚠️ Mínimo $5.00"); return ConversationHandler.END
+    async with db_pool.acquire() as conn:
+        await conn.execute("UPDATE users SET balance = 0 WHERE telegram_id = $1", user.id)
+        await conn.execute("INSERT INTO transactions (user_id, type, amount, source, status, created_at) VALUES ($1, 'WITHDRAW', $2, $3, 'PENDING', $4)", user.id, amount, update.message.text, datetime.utcnow().isoformat())
+    await update.message.reply_text("✅ <b>Retiro en proceso.</b>"); return ConversationHandler.END
 
-async def cancel(update, context): await update.message.reply_text("❌"); return ConversationHandler.END
-
-# --- RUTEO ---
 async def handle_text(update, context):
     text = update.message.text
-    if "MINAR" in text: await offerwall_menu(update, context)
-    elif "Bonus" in text: await claim_daily(update, context) # NUEVO: Diario + Adsterra
+    if "MINAR" in text: await offerwall_menu(update, context) # AQUÍ ESTÁ LA MAGIA
+    elif "Bonus" in text: await claim_daily(update, context)
     elif "Invitar" in text: await show_referral(update, context)
     elif "Retirar" in text: await start_withdraw(update, context)
     elif "Perfil" in text: await dashboard_main(update, context)
-    elif "NFT" in text: await show_inventory(update, context)
 
-async def error_handler(update, context):
-    logger.error(msg="Error:", exc_info=context.error)
-    try:
-        if isinstance(update, Update) and update.effective_message:
-            await update.effective_message.reply_text("⚠️ Reiniciando...", parse_mode="HTML")
-            context.user_data.clear()
-    except: pass
+async def cancel(update, context): await update.message.reply_text("❌"); return ConversationHandler.END
+async def error_handler(update, context): logger.error(f"Error: {context.error}")
 
 # ---------------------------------------------------------------------
 # 🚀 ARRANQUE
@@ -398,32 +316,19 @@ async def init_bot_app():
     global telegram_app
     if telegram_app: return telegram_app
     telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
-    
-    conv_s = ConversationHandler(entry_points=[CommandHandler("start", start_command)], states={ASK_EMAIL:[MessageHandler(filters.TEXT, receive_email)], ASK_COUNTRY:[MessageHandler(filters.TEXT, receive_country)]}, fallbacks=[CommandHandler("cancel", cancel), CommandHandler("start", start_command)])
-    conv_w = ConversationHandler(entry_points=[MessageHandler(filters.Regex("Retirar"), start_withdraw)], states={ASK_WALLET: [MessageHandler(filters.TEXT, process_withdraw)]}, fallbacks=[CommandHandler("cancel", cancel), CommandHandler("start", start_command)])
-    
-    telegram_app.add_handler(conv_s)
-    telegram_app.add_handler(conv_w)
-    telegram_app.add_handler(MessageHandler(filters.TEXT, handle_text))
-    telegram_app.add_error_handler(error_handler)
-    await telegram_app.initialize()
-    return telegram_app
+    conv_s = ConversationHandler(entry_points=[CommandHandler("start", start_command)], states={ASK_EMAIL:[MessageHandler(filters.TEXT, receive_email)], ASK_COUNTRY:[MessageHandler(filters.TEXT, receive_country)]}, fallbacks=[CommandHandler("cancel", cancel)])
+    conv_w = ConversationHandler(entry_points=[MessageHandler(filters.Regex("Retirar"), start_withdraw)], states={ASK_WALLET: [MessageHandler(filters.TEXT, process_withdraw)]}, fallbacks=[CommandHandler("cancel", cancel)])
+    telegram_app.add_handler(conv_s); telegram_app.add_handler(conv_w); telegram_app.add_handler(MessageHandler(filters.TEXT, handle_text)); telegram_app.add_error_handler(error_handler)
+    await telegram_app.initialize(); return telegram_app
 
 @app.api_route("/health", methods=["GET", "HEAD"])
-async def health():
-    if await check_system_health(): return {"status": "ok"}
-    else: raise HTTPException(500)
+async def health(): return {"status": "ok"} if await check_system_health() else HTTPException(500)
 
-@app.get("/")
-async def root(): return {"status": "TheOneHive Pro Online"}
-
+@app.post("/telegram/{token}")
+async def webhook(token: str, request: Request):
+    if token != TELEGRAM_TOKEN: return JSONResponse(403, {})
+    data = await request.json(); bot=await init_bot_app(); await bot.process_update(Update.de_json(data, bot.bot)); return {"ok":True}
 @app.on_event("startup")
 async def startup(): await init_db(); bot=await init_bot_app(); await bot.start() 
 @app.on_event("shutdown")
-async def shutdown(): 
-    if telegram_app: await telegram_app.stop(); await telegram_app.shutdown()
-    if db_pool: await db_pool.close()
-@app.post("/telegram/{token}")
-async def webhook(token: str, request: Request):
-    if token != TELEGRAM_TOKEN: return JSONResponse(status_code=403, content={})
-    data = await request.json(); bot=await init_bot_app(); await bot.process_update(Update.de_json(data, bot.bot)); return {"ok":True}
+async def shutdown(): await telegram_app.stop(); await db_pool.close()
