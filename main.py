@@ -1,17 +1,18 @@
 """
-THEONEHIVE 14.0 - REFERRAL GROWTH EDITION
-Novedad Principal:
-Sistema de Referidos Multinivel (1 Nivel).
-- Gana 10% de lo que generen tus amigos.
-- Enlaces de invitación únicos.
-- Base de Datos actualizada automáticamente.
+THEONEHIVE 16.0 - PROFESSIONAL ECOSYSTEM
+Características:
+1. Retención: Racha Diaria (Daily Streak) + Niveles.
+2. Crecimiento: Sistema de Referidos (10%).
+3. Ingresos: Offerwall (OfferToro) integrado.
+4. Activos: Inventario NFT y Tokens HIVE (Sin apuestas).
+5. Seguridad: Auto-Healing y cero fricción.
 """
 
 import logging
 import os
 import sys
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 # Librerías
@@ -44,7 +45,7 @@ ADMIN_ID = os.environ.get("ADMIN_ID")
 OFFERTORO_PUB_ID = os.environ.get("OFFERTORO_PUB_ID", "0")
 OFFERTORO_SECRET = os.environ.get("OFFERTORO_SECRET", "0")
 
-APP_NAME = "TheOneHive Nexus"
+APP_NAME = "TheOneHive Pro"
 ASK_EMAIL, ASK_COUNTRY, ASK_WALLET = range(3)
 
 GEO_ECONOMY = {
@@ -68,36 +69,27 @@ async def check_system_health():
         else: raise Exception("DB Down")
         return True
     except:
-        logger.critical("⚠️ FALLO DE SISTEMA: Iniciando protocolo de reinicio...")
         os._exit(1)
         return False
 
 # ---------------------------------------------------------------------
-# 🎨 MOTOR VISUAL
+# 🎨 MOTOR VISUAL (Barras de Progreso)
 # ---------------------------------------------------------------------
-def generate_progress_bar(current, total, length=12):
+def generate_progress_bar(current, total, length=10):
     if total == 0: total = 1
     percent = min(current / total, 1.0)
     filled = int(length * percent)
     bar = "▰" * filled + "▱" * (length - filled)
-    return f"[{bar}] {int(percent * 100)}%"
+    return f"{bar} {int(percent * 100)}%"
 
-def get_rank_info(xp):
-    ranks = [
-        (0, "🧬 Larva", 100),
-        (100, "🐝 Drone", 500),
-        (500, "⚔️ Soldier", 2000),
-        (2000, "👑 Royal Guard", 10000),
-        (10000, "💎 Hive Master", 100000)
-    ]
-    current = ranks[0]
-    for r in ranks:
-        if xp >= r[0]: current = r
-        else: break
-    return current[1], current[2]
+def get_level_info(xp):
+    # Sistema de niveles RPG simple
+    level = int(xp / 1000) + 1
+    next_level_xp = level * 1000
+    return level, next_level_xp
 
 # ---------------------------------------------------------------------
-# 🗄️ BASE DE DATOS (ACTUALIZADA PARA REFERIDOS)
+# 🗄️ BASE DE DATOS (ESTRUCTURA FINAL)
 # ---------------------------------------------------------------------
 async def init_db():
     global db_pool
@@ -105,7 +97,7 @@ async def init_db():
     try:
         db_pool = await asyncpg.create_pool(DATABASE_URL)
         async with db_pool.acquire() as conn:
-            # Tabla Usuarios
+            # Usuarios
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     telegram_id BIGINT PRIMARY KEY,
@@ -116,40 +108,27 @@ async def init_db():
                     balance DOUBLE PRECISION DEFAULT 0.0,
                     hive_tokens DOUBLE PRECISION DEFAULT 0.0,
                     wallet_address TEXT,
-                    referrer_id BIGINT, -- NUEVO: CAMPO PARA EL PADRE
-                    referral_count INTEGER DEFAULT 0, -- NUEVO: CONTADOR
+                    referrer_id BIGINT,
+                    referral_count INTEGER DEFAULT 0,
+                    last_daily_claim TEXT, -- NUEVO: Para racha diaria
+                    daily_streak INTEGER DEFAULT 0, -- NUEVO: Racha
+                    xp INTEGER DEFAULT 0, -- NUEVO: Experiencia Global
                     created_at TEXT
                 )
             """)
             
-            # INTENTAMOS AGREGAR COLUMNAS SI YA EXISTE LA TABLA (MIGRACIÓN AUTOMÁTICA)
-            try:
-                await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referrer_id BIGINT")
-                await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_count INTEGER DEFAULT 0")
-            except: pass # Ya existen
-            
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS nfts (
-                    id SERIAL PRIMARY KEY,
-                    user_id BIGINT,
-                    name TEXT,
-                    rarity TEXT,
-                    image_url TEXT,
-                    minted_at TEXT
-                )
-            """)
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS transactions (
-                    id SERIAL PRIMARY KEY,
-                    user_id BIGINT,
-                    type TEXT,
-                    amount DOUBLE PRECISION,
-                    source TEXT,
-                    status TEXT,
-                    created_at TEXT
-                )
-            """)
-        logger.info("✅ DB Conectada y Actualizada (Referidos).")
+            # Actualización segura de columnas nuevas
+            try: await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_daily_claim TEXT")
+            except: pass
+            try: await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_streak INTEGER DEFAULT 0")
+            except: pass
+            try: await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS xp INTEGER DEFAULT 0")
+            except: pass
+
+            # Tablas Assets
+            await conn.execute("CREATE TABLE IF NOT EXISTS nfts (id SERIAL PRIMARY KEY, user_id BIGINT, name TEXT, rarity TEXT, image_url TEXT, minted_at TEXT)")
+            await conn.execute("CREATE TABLE IF NOT EXISTS transactions (id SERIAL PRIMARY KEY, user_id BIGINT, type TEXT, amount DOUBLE PRECISION, source TEXT, status TEXT, created_at TEXT)")
+        logger.info("✅ DB Professional Ready.")
     except Exception as e: logger.error(f"DB Error: {e}")
 
 async def get_user(tg_id: int):
@@ -167,191 +146,188 @@ def get_tier_info(country_code):
     return "TIER_D", GEO_ECONOMY["TIER_D"]
 
 # ---------------------------------------------------------------------
-# 💰 LÓGICA DE PAGOS + COMISIÓN REFERIDOS
+# 🎁 RECOMPENSA DIARIA (RETENCIÓN SANA)
+# ---------------------------------------------------------------------
+async def claim_daily(update, context):
+    user = await get_user(update.effective_user.id)
+    now = datetime.utcnow()
+    
+    last_claim = None
+    if user['last_daily_claim']:
+        try: last_claim = datetime.fromisoformat(user['last_daily_claim'])
+        except: pass
+    
+    # Verificar si ya pasaron 24h
+    if last_claim and (now - last_claim).total_seconds() < 86400:
+        hours_left = int((86400 - (now - last_claim).total_seconds()) / 3600)
+        await update.message.reply_text(f"⏳ <b>Espera {hours_left} horas</b> para tu siguiente recompensa.", parse_mode="HTML")
+        return
+
+    # Calcular Racha
+    streak = user['daily_streak']
+    if last_claim and (now - last_claim).total_seconds() > 172800: # Si pasan 48h, pierde racha
+        streak = 0
+    
+    streak += 1
+    reward_tokens = 50 + (streak * 10) # Cada día gana más
+    
+    async with db_pool.acquire() as conn:
+        await conn.execute("""
+            UPDATE users 
+            SET hive_tokens = hive_tokens + $1, 
+                daily_streak = $2, 
+                last_daily_claim = $3 
+            WHERE telegram_id = $4
+        """, float(reward_tokens), streak, now.isoformat(), user['telegram_id'])
+    
+    await update.message.reply_text(f"📅 <b>¡DÍA {streak} COMPLETADO!</b>\n\n💎 Recibiste: <b>+{reward_tokens} HIVE</b>\n🔥 ¡Vuelve mañana para mantener la racha!", parse_mode="HTML")
+
+# ---------------------------------------------------------------------
+# 💰 LÓGICA DE PAGOS + REFERIDOS
 # ---------------------------------------------------------------------
 async def postback_handler_logic(user_id, amount):
     user_share = amount * 0.40 
     tokens_mined = user_share * 10 
+    xp_gained = int(user_share * 100)
     
     async with db_pool.acquire() as conn:
-        # 1. Pagar al Usuario
-        await conn.execute("UPDATE users SET balance = balance + $1, hive_tokens = hive_tokens + $2 WHERE telegram_id = $3", user_share, tokens_mined, user_id)
+        # Pagar Usuario + XP
+        await conn.execute("""
+            UPDATE users 
+            SET balance = balance + $1, 
+                hive_tokens = hive_tokens + $2,
+                xp = xp + $3
+            WHERE telegram_id = $4
+        """, user_share, tokens_mined, xp_gained, user_id)
+        
         await conn.execute("INSERT INTO transactions (user_id, type, amount, source, status, created_at) VALUES ($1, 'EARN', $2, 'Offerwall', 'COMPLETED', $3)", user_id, user_share, datetime.utcnow().isoformat())
         
-        # 2. Pagar al Referidor (Si existe)
+        # Referidos (10%)
         user_data = await conn.fetchrow("SELECT referrer_id FROM users WHERE telegram_id = $1", user_id)
-        referrer_bonus = 0
-        
         if user_data and user_data['referrer_id']:
-            ref_id = user_data['referrer_id']
-            # 10% del user_share para el padre
             bonus = user_share * 0.10 
-            if bonus > 0.01:
-                await conn.execute("UPDATE users SET balance = balance + $1 WHERE telegram_id = $2", bonus, ref_id)
-                referrer_bonus = bonus
-                # Notificar al Padre (luego en la función principal)
+            if bonus > 0.01: await conn.execute("UPDATE users SET balance = balance + $1 WHERE telegram_id = $2", bonus, user_data['referrer_id'])
 
-        # 3. Lógica NFT
+        # NFT Drop (Aleatorio si la tarea es grande)
         won_nft = False
-        if user_share >= 2.0:
+        if user_share >= 1.5:
             won_nft = True
-            await conn.execute("INSERT INTO nfts (user_id, name, rarity, image_url, minted_at) VALUES ($1, 'Hive Miner Badge 🥉', 'Common', 'url', $2)", user_id, datetime.utcnow().isoformat())
+            await conn.execute("INSERT INTO nfts (user_id, name, rarity, image_url, minted_at) VALUES ($1, 'Task Master Badge', 'Rare', 'url', $2)", user_id, datetime.utcnow().isoformat())
 
-    return user_share, tokens_mined, won_nft, referrer_bonus, user_data['referrer_id'] if user_data else None
+    return user_share, tokens_mined, won_nft
 
 @app.get("/postback")
 async def postback_endpoint(user_id: int, amount: float, secret: str, trans_id: str):
     if secret != POSTBACK_SECRET: raise HTTPException(status_code=403, detail="Acceso Denegado")
-    
-    usd, tokens, nft, ref_bonus, ref_id = await postback_handler_logic(user_id, amount)
-
+    usd, tokens, nft = await postback_handler_logic(user_id, amount)
     try:
         bot = await init_bot_app()
-        
-        # Avisar Usuario
-        nft_text = "\n🏆 <b>¡NUEVO NFT OBTENIDO!</b>" if nft else ""
-        msg = (f"🤑 <b>¡PAGO RECIBIDO!</b>\n💵 Fiat: +${usd:.2f}\n💎 Crypto: +{tokens:.2f} $HIVE{nft_text}")
+        nft_text = "\n🏆 <b>¡NFT RARO OBTENIDO!</b>" if nft else ""
+        msg = (f"✅ <b>TAREA COMPLETADA</b>\n💵 +${usd:.2f}\n💎 +{tokens:.2f} HIVE{nft_text}")
         await bot.bot.send_message(chat_id=user_id, text=msg, parse_mode="HTML")
-        
-        # Avisar Referidor (Padre)
-        if ref_bonus > 0 and ref_id:
-            msg_ref = (f"🔔 <b>BONUS DE REFERIDO</b>\nTu amigo completó una tarea.\nHas ganado: <b>+${ref_bonus:.2f}</b> (10% Pasivo)")
-            await bot.bot.send_message(chat_id=ref_id, text=msg_ref, parse_mode="HTML")
-            
     except: pass
     return {"status": "success"}
 
 # ---------------------------------------------------------------------
-# 🤖 BOT - INTERFAZ NEXUS
+# 🤖 BOT INTERFAZ (CLEAN & PROFESSIONAL)
 # ---------------------------------------------------------------------
 async def start_command(update, context):
-    # CAPTURA DE REFERIDO (/start 12345)
-    referrer_id = None
-    if context.args and len(context.args) > 0:
-        try:
-            potential_ref = int(context.args[0])
-            if potential_ref != update.effective_user.id: # No auto-referirse
-                referrer_id = potential_ref
+    ref_id = None
+    if context.args: 
+        try: ref_id = int(context.args[0])
         except: pass
-        
-    # Guardamos el referrer en el contexto temporal
-    if referrer_id: context.user_data['pending_referrer'] = referrer_id
+    if ref_id: context.user_data['ref'] = ref_id
     
     user = await get_user(update.effective_user.id)
-    if user and user['email']: await dashboard_nexus(update, context); return ConversationHandler.END
-    
-    await update.message.reply_text("📡 <b>INICIANDO NEXUS...</b>\n\n📧 <b>Ingresa tu Email para sincronizar:</b>", parse_mode="HTML")
+    if user and user['email']: await dashboard_main(update, context); return ConversationHandler.END
+    await update.message.reply_text("👋 <b>Bienvenido a TheOneHive</b>\nPlataforma de Recompensas Global.\n\n📧 <b>Tu Email:</b>", parse_mode="HTML")
     return ASK_EMAIL
 
 async def receive_email(update, context):
     context.user_data['email'] = update.message.text
-    await update.message.reply_text("🌍 <b>País de Operación (Ej: MX, US, ES):</b>", parse_mode="HTML")
+    await update.message.reply_text("🌍 <b>País (2 letras, ej: MX):</b>", parse_mode="HTML")
     return ASK_COUNTRY
 
 async def receive_country(update, context):
     code = update.message.text.upper().strip()
     email = context.user_data.get('email')
-    user = update.effective_user
     tier, _ = get_tier_info(code)
+    ref_id = context.user_data.get('ref')
     
-    # RECUPERAR REFERRER DEL PASO 1
-    referrer_id = context.user_data.get('pending_referrer')
-    
+    user = update.effective_user
     if db_pool:
         async with db_pool.acquire() as conn:
-            # Insertamos usuario con Referrer
             await conn.execute("""
                 INSERT INTO users (telegram_id, first_name, email, country_code, tier, referrer_id, created_at)
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 ON CONFLICT (telegram_id) DO UPDATE SET email=$3, country_code=$4, tier=$5
-            """, user.id, user.first_name, email, code, tier, referrer_id, datetime.utcnow().isoformat())
-            
-            # Si hubo referido, actualizamos contador del padre
-            if referrer_id:
-                await conn.execute("UPDATE users SET referral_count = referral_count + 1 WHERE telegram_id = $1", referrer_id)
-                try:
-                    # Avisar al padre que tiene un nuevo recluta
+            """, user.id, user.first_name, email, code, tier, ref_id, datetime.utcnow().isoformat())
+            if ref_id: 
+                await conn.execute("UPDATE users SET referral_count = referral_count + 1 WHERE telegram_id = $1", ref_id)
+                try: 
                     bot = await init_bot_app()
-                    await bot.bot.send_message(chat_id=referrer_id, text="🎉 <b>¡NUEVO RECLUTA!</b>\nUn usuario se registró con tu enlace.", parse_mode="HTML")
+                    await bot.bot.send_message(ref_id, "👥 <b>Nuevo Referido Registrado</b>", parse_mode="HTML")
                 except: pass
-
-    await dashboard_nexus(update, context)
+    
+    await dashboard_main(update, context)
     return ConversationHandler.END
 
-async def dashboard_nexus(update, context):
+# --- DASHBOARD FINAL ---
+async def dashboard_main(update, context):
     user = await get_user(update.effective_user.id)
-    if not user: await update.message.reply_text("⚠️ Error. Usa /start"); return
+    if not user: await update.message.reply_text("⚠️ /start"); return
     
     usd = user['balance']
     tokens = user.get('hive_tokens', 0)
-    country = user['country_code']
-    _, eco = get_tier_info(country)
+    xp = user.get('xp', 0)
+    level, next_xp = get_level_info(xp)
     
-    # Gamificación
-    xp = (usd * 100) + tokens
-    rank_name, next_goal = get_rank_info(xp)
-    p_bar = generate_progress_bar(xp, next_goal)
+    p_bar = generate_progress_bar(xp % 1000, 1000)
     
     msg = (
-        f"📡 <b>HIVE NEXUS INTERFACE</b> <code>v14.0</code>\n"
-        f"➖➖➖➖➖➖➖➖➖➖➖➖\n"
-        f"👤 <b>PILOTO:</b> {update.effective_user.first_name}\n"
-        f"🌍 <b>NODO:</b> {country} (Tier {user['tier']})\n"
-        f"🏆 <b>RANGO:</b> {rank_name}\n"
+        f"📱 <b>THE ONE HIVE</b> | {user['country_code']}\n"
+        f"👤 {update.effective_user.first_name} | 🏆 Nivel {level}\n"
         f"<code>{p_bar}</code>\n"
-        f"➖➖➖➖➖➖➖➖➖➖➖➖\n\n"
+        f"➖➖➖➖➖➖➖➖➖➖\n\n"
         
-        f"💰 <b>BILLETERA:</b> {eco['symbol']}{usd:.2f}\n"
-        f"💎 <b>HIVE:</b> {tokens:.2f}\n\n"
+        f"💵 <b>Saldo Real:</b> ${usd:.2f}\n"
+        f"💎 <b>HIVE Tokens:</b> {tokens:.1f}\n"
+        f"🔥 <b>Racha Diaria:</b> {user.get('daily_streak', 0)} días\n\n"
         
-        f"🚀 <b>MISIONES:</b>\n"
-        f"   👉 Completa ofertas o Invita Amigos"
+        f"👇 <b>Selecciona una opción:</b>"
     )
     
     kb = [
-        ["⚡️ MINAR", "👥 Invitar Amigos"], # Botón Nuevo
-        ["🏦 Retirar", "🎒 NFTs / Ranking"],
-        ["👤 Perfil", "⚙️ Soporte"]
+        ["⚡️ MINAR (Ofertas)", "📅 Bonus Diario"], # Ganchos principales
+        ["👥 Invitar (+10%)", "🎒 Mis NFTs"],
+        ["🏦 Retirar", "👤 Perfil"]
     ]
     await update.message.reply_text(msg, reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True), parse_mode="HTML")
 
-async def show_referral_system(update, context):
+async def show_referral(update, context):
     user = await get_user(update.effective_user.id)
-    bot_username = context.bot.username
-    invite_link = f"https://t.me/{bot_username}?start={user['telegram_id']}"
-    
-    ref_count = user.get('referral_count', 0)
-    
-    msg = (
-        "👥 <b>SISTEMA DE RECLUTAMIENTO</b>\n\n"
-        "Gana el <b>10% DE POR VIDA</b> de todo lo que generen tus amigos.\n\n"
-        f"📊 <b>Tus Estadísticas:</b>\n"
-        f"• Reclutas: {ref_count}\n"
-        f"• Ganancia Pasiva: Activada ✅\n\n"
-        f"🔗 <b>Tu Enlace Único:</b>\n"
-        f"<code>{invite_link}</code>\n\n"
-        "<i>(Toca el enlace para copiar y mándalo a tus grupos)</i>"
+    link = f"https://t.me/{context.bot.username}?start={user['telegram_id']}"
+    await update.message.reply_text(
+        f"👥 <b>PROGRAMA DE REFERIDOS</b>\n\nGana el <b>10%</b> de lo que generen tus amigos.\n\n🔗 <b>Tu Enlace:</b>\n<code>{link}</code>", 
+        parse_mode="HTML"
     )
-    await update.message.reply_text(msg, parse_mode="HTML")
 
-# --- MENUS Y RETIROS (Igual que antes) ---
+# --- MENUS STANDARD ---
+async def offerwall_menu(update, context):
+    user_id = update.effective_user.id
+    link = f"https://www.offertoro.com/ifr/show/{OFFERTORO_PUB_ID}/{user_id}/{OFFERTORO_SECRET}"
+    kb = [[InlineKeyboardButton("🟢 IR A OFERTAS", url=link)]]
+    await update.message.reply_text("⚡️ <b>PANEL DE TAREAS</b>\nInstala apps verificadas para ganar saldo.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
+
 async def show_inventory(update, context):
     user_id = update.effective_user.id
     rows = []
     if db_pool:
-        async with db_pool.acquire() as conn:
-            rows = await conn.fetch("SELECT * FROM nfts WHERE user_id = $1", user_id)
-    if not rows:
-        await update.message.reply_text("🎒 <b>SIN NFTs</b>\nCompleta ofertas para ganar.", parse_mode="HTML"); return
-    msg = "🏆 <b>TUS ACTIVOS</b>\n\n"
-    for nft in rows: msg += f"• <b>{nft['name']}</b> ({nft['rarity']})\n"
+        async with db_pool.acquire() as conn: rows = await conn.fetch("SELECT * FROM nfts WHERE user_id = $1", user_id)
+    if not rows: await update.message.reply_text("🎒 <b>Sin NFTs</b>\nCompleta tareas de alto valor para ganar medallas.", parse_mode="HTML"); return
+    msg = "🏆 <b>COLECCIÓN NFT</b>\n\n"
+    for nft in rows: msg += f"• {nft['name']} ({nft['rarity']})\n"
     await update.message.reply_text(msg, parse_mode="HTML")
-
-async def offerwall_menu(update, context):
-    user_id = update.effective_user.id
-    link = f"https://www.offertoro.com/ifr/show/{OFFERTORO_PUB_ID}/{user_id}/{OFFERTORO_SECRET}"
-    kb = [[InlineKeyboardButton("🟢 INICIAR MINERÍA", url=link)]]
-    await update.message.reply_text("⚡️ <b>CONSOLA DE MINERÍA</b>\nInstala apps para ganar.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
 
 async def start_withdraw(update, context):
     user = await get_user(update.effective_user.id)
@@ -367,20 +343,19 @@ async def process_withdraw(update, context):
         async with db_pool.acquire() as conn:
             await conn.execute("UPDATE users SET balance = 0 WHERE telegram_id = $1", user.id)
             await conn.execute("INSERT INTO transactions (user_id, type, amount, source, status, created_at) VALUES ($1, 'WITHDRAW', $2, $3, 'PENDING', $4)", user.id, amount, wallet, datetime.utcnow().isoformat())
-    await update.message.reply_text("✅ <b>Solicitud Enviada</b>", parse_mode="HTML")
-    if ADMIN_ID: 
-        try: await context.bot.send_message(ADMIN_ID, f"🔔 RETIRO: ${amount} - {user.first_name}") 
-        except: pass
+    await update.message.reply_text("✅ <b>Retiro Solicitado</b>\nSe procesará en 24h.", parse_mode="HTML")
     return ConversationHandler.END
 
 async def cancel(update, context): await update.message.reply_text("❌"); return ConversationHandler.END
 
+# --- RUTEO ---
 async def handle_text(update, context):
     text = update.message.text
     if "MINAR" in text: await offerwall_menu(update, context)
-    elif "Invitar" in text: await show_referral_system(update, context) # NUEVO
+    elif "Bonus" in text: await claim_daily(update, context) # NUEVO: Diario
+    elif "Invitar" in text: await show_referral(update, context)
     elif "Retirar" in text: await start_withdraw(update, context)
-    elif "Perfil" in text: await dashboard_nexus(update, context)
+    elif "Perfil" in text: await dashboard_main(update, context)
     elif "NFT" in text: await show_inventory(update, context)
 
 async def error_handler(update, context):
@@ -399,11 +374,11 @@ async def init_bot_app():
     if telegram_app: return telegram_app
     telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
     
-    conv_start = ConversationHandler(entry_points=[CommandHandler("start", start_command)], states={ASK_EMAIL:[MessageHandler(filters.TEXT, receive_email)], ASK_COUNTRY:[MessageHandler(filters.TEXT, receive_country)]}, fallbacks=[CommandHandler("cancel", cancel), CommandHandler("start", start_command)])
-    conv_withdraw = ConversationHandler(entry_points=[MessageHandler(filters.Regex("Retirar"), start_withdraw)], states={ASK_WALLET: [MessageHandler(filters.TEXT, process_withdraw)]}, fallbacks=[CommandHandler("cancel", cancel), CommandHandler("start", start_command)])
+    conv_s = ConversationHandler(entry_points=[CommandHandler("start", start_command)], states={ASK_EMAIL:[MessageHandler(filters.TEXT, receive_email)], ASK_COUNTRY:[MessageHandler(filters.TEXT, receive_country)]}, fallbacks=[CommandHandler("cancel", cancel), CommandHandler("start", start_command)])
+    conv_w = ConversationHandler(entry_points=[MessageHandler(filters.Regex("Retirar"), start_withdraw)], states={ASK_WALLET: [MessageHandler(filters.TEXT, process_withdraw)]}, fallbacks=[CommandHandler("cancel", cancel), CommandHandler("start", start_command)])
     
-    telegram_app.add_handler(conv_start)
-    telegram_app.add_handler(conv_withdraw)
+    telegram_app.add_handler(conv_s)
+    telegram_app.add_handler(conv_w)
     telegram_app.add_handler(MessageHandler(filters.TEXT, handle_text))
     telegram_app.add_error_handler(error_handler)
     await telegram_app.initialize()
@@ -415,7 +390,7 @@ async def health():
     else: raise HTTPException(500)
 
 @app.get("/")
-async def root(): return {"status": "TheOneHive Nexus Online"}
+async def root(): return {"status": "TheOneHive Pro Online"}
 
 @app.on_event("startup")
 async def startup(): await init_db(); bot=await init_bot_app(); await bot.start() 
