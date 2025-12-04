@@ -11,9 +11,9 @@ from telegram.ext import (
 )
 
 
-# -----------------------------------------------------------------------------
-# CONFIGURACIÓN BÁSICA
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# CONFIG
+# ---------------------------------------------------------------------
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,14 +27,14 @@ RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
 if not TELEGRAM_TOKEN:
     raise RuntimeError("Falta configurar TELEGRAM_TOKEN en Render")
 
-app = FastAPI(title="TheOneHive Backend (mínimo)")
+app = FastAPI(title="TheOneHive Backend (mínimo y limpio)")
 
 telegram_app: Application | None = None
 
 
-# -----------------------------------------------------------------------------
-# INICIALIZAR BOT
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# BOT HANDLERS
+# ---------------------------------------------------------------------
 
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -43,14 +43,15 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Hola {user.first_name}, la plataforma está ONLINE.\n"
         "Este es el bot oficial donde vas a poder hacer tareas, ganar dinero,\n"
         "invitar amigos y más.\n\n"
-        "Por ahora estamos en modo inicial.\n"
-        "Próximamente verás tus tareas y dashboard aquí."
+        "Esta es la versión base. A partir de aquí vamos a ir agregando\n"
+        "dashboard, tareas, referidos y retiros."
     )
     if update.message:
         await update.message.reply_text(text)
 
 
 async def init_telegram_app() -> Application:
+    """Crea una única instancia de Application (sin Updater)."""
     global telegram_app
 
     if telegram_app:
@@ -66,16 +67,15 @@ async def init_telegram_app() -> Application:
     return telegram_app
 
 
-# -----------------------------------------------------------------------------
-# EVENTOS DE FASTAPI
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# FASTAPI EVENTS
+# ---------------------------------------------------------------------
 
 @app.on_event("startup")
 async def on_startup():
     logger.info("🚀 Iniciando backend de TheOneHive...")
     app_telegram = await init_telegram_app()
 
-    # Configurar webhook de Telegram si tenemos URL externa
     if RENDER_EXTERNAL_URL:
         webhook_url = f"{RENDER_EXTERNAL_URL}/telegram/webhook/{TELEGRAM_TOKEN}"
         await app_telegram.bot.delete_webhook(drop_pending_updates=True)
@@ -100,9 +100,9 @@ async def on_shutdown():
     logger.info("🛑 Backend apagado.")
 
 
-# -----------------------------------------------------------------------------
-# RUTAS HTTP
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# ROUTES
+# ---------------------------------------------------------------------
 
 @app.get("/health")
 async def health():
