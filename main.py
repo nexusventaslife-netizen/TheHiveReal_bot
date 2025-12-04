@@ -3,7 +3,7 @@ THEONEHIVE 16.0 - PROFESSIONAL ECOSYSTEM
 Características:
 1. Retención: Racha Diaria (Daily Streak) + Niveles.
 2. Crecimiento: Sistema de Referidos (10%).
-3. Ingresos: Offerwall (OfferToro) integrado.
+3. Ingresos: Offerwall (OfferToro) + ADSTERRA (Direct Link) integrados.
 4. Activos: Inventario NFT y Tokens HIVE (Sin apuestas).
 5. Seguridad: Auto-Healing y cero fricción.
 """
@@ -40,6 +40,9 @@ TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 POSTBACK_SECRET = os.environ.get("POSTBACK_SECRET", "secret_default") 
 ADMIN_ID = os.environ.get("ADMIN_ID") 
+
+# ADSTERRA (Smartlink / Direct Link)
+ADSTERRA_LINK = os.environ.get("ADSTERRA_LINK", "https://google.com")
 
 # OFFERTORO
 OFFERTORO_PUB_ID = os.environ.get("OFFERTORO_PUB_ID", "0")
@@ -110,9 +113,9 @@ async def init_db():
                     wallet_address TEXT,
                     referrer_id BIGINT,
                     referral_count INTEGER DEFAULT 0,
-                    last_daily_claim TEXT, -- NUEVO: Para racha diaria
-                    daily_streak INTEGER DEFAULT 0, -- NUEVO: Racha
-                    xp INTEGER DEFAULT 0, -- NUEVO: Experiencia Global
+                    last_daily_claim TEXT, 
+                    daily_streak INTEGER DEFAULT 0, 
+                    xp INTEGER DEFAULT 0, 
                     created_at TEXT
                 )
             """)
@@ -160,7 +163,13 @@ async def claim_daily(update, context):
     # Verificar si ya pasaron 24h
     if last_claim and (now - last_claim).total_seconds() < 86400:
         hours_left = int((86400 - (now - last_claim).total_seconds()) / 3600)
-        await update.message.reply_text(f"⏳ <b>Espera {hours_left} horas</b> para tu siguiente recompensa.", parse_mode="HTML")
+        # Aunque no puedan reclamar, les damos la opción de ganar extra con Adsterra
+        kb = [[InlineKeyboardButton("🎁 GANA EXTRA AHORA", url=ADSTERRA_LINK)]]
+        await update.message.reply_text(
+            f"⏳ <b>Espera {hours_left} horas</b> para tu siguiente recompensa oficial.\n\n👇 Mientras tanto, puedes obtener un bonus aquí:", 
+            reply_markup=InlineKeyboardMarkup(kb),
+            parse_mode="HTML"
+        )
         return
 
     # Calcular Racha
@@ -180,7 +189,14 @@ async def claim_daily(update, context):
             WHERE telegram_id = $4
         """, float(reward_tokens), streak, now.isoformat(), user['telegram_id'])
     
-    await update.message.reply_text(f"📅 <b>¡DÍA {streak} COMPLETADO!</b>\n\n💎 Recibiste: <b>+{reward_tokens} HIVE</b>\n🔥 ¡Vuelve mañana para mantener la racha!", parse_mode="HTML")
+    # Agregamos el botón de Adsterra al mensaje de éxito
+    kb = [[InlineKeyboardButton("🎁 BONUS EXTRA (Clic)", url=ADSTERRA_LINK)]]
+    
+    await update.message.reply_text(
+        f"📅 <b>¡DÍA {streak} COMPLETADO!</b>\n\n💎 Recibiste: <b>+{reward_tokens} HIVE</b>\n🔥 ¡Vuelve mañana para mantener la racha!\n\n👇 <b>¡Toca abajo para duplicar tu suerte!</b>", 
+        reply_markup=InlineKeyboardMarkup(kb),
+        parse_mode="HTML"
+    )
 
 # ---------------------------------------------------------------------
 # 💰 LÓGICA DE PAGOS + REFERIDOS
@@ -315,9 +331,18 @@ async def show_referral(update, context):
 # --- MENUS STANDARD ---
 async def offerwall_menu(update, context):
     user_id = update.effective_user.id
-    link = f"https://www.offertoro.com/ifr/show/{OFFERTORO_PUB_ID}/{user_id}/{OFFERTORO_SECRET}"
-    kb = [[InlineKeyboardButton("🟢 IR A OFERTAS", url=link)]]
-    await update.message.reply_text("⚡️ <b>PANEL DE TAREAS</b>\nInstala apps verificadas para ganar saldo.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
+    link_toro = f"https://www.offertoro.com/ifr/show/{OFFERTORO_PUB_ID}/{user_id}/{OFFERTORO_SECRET}"
+    
+    # MENÚ HÍBRIDO: OfferToro + Adsterra
+    kb = [
+        [InlineKeyboardButton("🟢 OFERTAS (Instalar Apps)", url=link_toro)],
+        [InlineKeyboardButton("🎁 BONUS RÁPIDO (Clic)", url=ADSTERRA_LINK)]
+    ]
+    await update.message.reply_text(
+        "⚡️ <b>CENTRO DE GANANCIAS</b>\n\n📱 <b>Instalar Apps:</b> Gana $0.50 - $5.00\n🎁 <b>Bonus Rápido:</b> Gana Tokens HIVE al instante.", 
+        reply_markup=InlineKeyboardMarkup(kb), 
+        parse_mode="HTML"
+    )
 
 async def show_inventory(update, context):
     user_id = update.effective_user.id
@@ -352,7 +377,7 @@ async def cancel(update, context): await update.message.reply_text("❌"); retur
 async def handle_text(update, context):
     text = update.message.text
     if "MINAR" in text: await offerwall_menu(update, context)
-    elif "Bonus" in text: await claim_daily(update, context) # NUEVO: Diario
+    elif "Bonus" in text: await claim_daily(update, context) # NUEVO: Diario + Adsterra
     elif "Invitar" in text: await show_referral(update, context)
     elif "Retirar" in text: await start_withdraw(update, context)
     elif "Perfil" in text: await dashboard_main(update, context)
