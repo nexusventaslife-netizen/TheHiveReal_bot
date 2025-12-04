@@ -256,7 +256,7 @@ async def init_bot_app():
 
 @app.get("/")
 async def root(): return {"status": "TheOneHive System Online 🟢"}
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health(): return {"status": "ok"}
 
 @app.on_event("startup")
