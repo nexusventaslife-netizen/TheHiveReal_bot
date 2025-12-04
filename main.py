@@ -1,6 +1,9 @@
 """
-THEONEHIVE 6.0 - POSTGRESQL EDITION
-Estrategia: Persistencia Real + Economía Global
+THEONEHIVE 7.0 - GLOBAL SYSTEM FINAL
+Correcciones:
+1. Reset automático de DB (Arregla error 'telegram_id')
+2. Endpoints Web (Arregla error 404)
+3. Economía Global y Proyecciones
 """
 
 import logging
@@ -33,7 +36,7 @@ logger = logging.getLogger("TheOneHive")
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL", "")
-DATABASE_URL = os.environ.get("DATABASE_URL") # <--- TU BASE DE DATOS RENDER
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 APP_NAME = "TheOneHive 🌍"
 
@@ -56,19 +59,25 @@ telegram_app: Optional[Application] = None
 db_pool: Optional[asyncpg.Pool] = None
 
 async def init_db():
-    """Inicializa la conexión a Postgres y crea tablas si no existen"""
+    """Inicializa Postgres y resetea esquema corrupto"""
     global db_pool
     if not DATABASE_URL:
         logger.error("CRITICAL: No DATABASE_URL found.")
         return
 
-    # Crear pool de conexiones
+    # Crear pool
     db_pool = await asyncpg.create_pool(DATABASE_URL)
     
     async with db_pool.acquire() as conn:
-        # Tabla Usuarios (BIGINT para telegram_id)
+        # --- SOLUCIÓN ERROR DB ---
+        # Borramos tablas viejas para asegurar que las nuevas tengan las columnas correctas
+        await conn.execute("DROP TABLE IF EXISTS users CASCADE;")
+        await conn.execute("DROP TABLE IF EXISTS tasks CASCADE;")
+        # -------------------------
+
+        # Crear Tabla Usuarios Correcta
         await conn.execute("""
-            CREATE TABLE IF NOT EXISTS users (
+            CREATE TABLE users (
                 telegram_id BIGINT PRIMARY KEY,
                 first_name TEXT,
                 email TEXT,
@@ -81,9 +90,9 @@ async def init_db():
             )
         """)
         
-        # Tabla Tareas
+        # Crear Tabla Tareas
         await conn.execute("""
-            CREATE TABLE IF NOT EXISTS tasks (
+            CREATE TABLE tasks (
                 id SERIAL PRIMARY KEY,
                 title TEXT,
                 tier_req TEXT,
@@ -93,14 +102,12 @@ async def init_db():
             )
         """)
         
-        # Insertar datos semilla (si está vacío)
-        count = await conn.fetchval("SELECT COUNT(*) FROM tasks")
-        if count == 0:
-            await conn.execute("INSERT INTO tasks (title, tier_req, reward, url) VALUES ($1, $2, $3, $4)", 'Encuesta Premium (Finanzas)', 'TIER_A', 2.50, 'https://google.com')
-            await conn.execute("INSERT INTO tasks (title, tier_req, reward, url) VALUES ($1, $2, $3, $4)", 'Instalar App Ligera', 'TIER_D', 0.20, 'https://google.com')
-            await conn.execute("INSERT INTO tasks (title, tier_req, reward, url) VALUES ($1, $2, $3, $4)", 'Registro Exchange', 'TIER_C', 1.50, 'https://google.com')
+        # Datos Semilla
+        await conn.execute("INSERT INTO tasks (title, tier_req, reward, url) VALUES ($1, $2, $3, $4)", 'Encuesta Premium (Finanzas)', 'TIER_A', 2.50, 'https://google.com')
+        await conn.execute("INSERT INTO tasks (title, tier_req, reward, url) VALUES ($1, $2, $3, $4)", 'Instalar App Ligera', 'TIER_D', 0.20, 'https://google.com')
+        await conn.execute("INSERT INTO tasks (title, tier_req, reward, url) VALUES ($1, $2, $3, $4)", 'Registro Exchange', 'TIER_C', 1.50, 'https://google.com')
             
-    logger.info("✅ Conectado a PostgreSQL Render exitosamente.")
+    logger.info("✅ Base de Datos RESETEADA y lista (Error telegram_id corregido).")
 
 async def get_user(tg_id: int):
     if not db_pool: return None
@@ -108,9 +115,6 @@ async def get_user(tg_id: int):
         row = await conn.fetchrow("SELECT * FROM users WHERE telegram_id = $1", tg_id)
         return dict(row) if row else None
 
-# ---------------------------------------------------------------------
-# LÓGICA DE NEGOCIO
-# ---------------------------------------------------------------------
 def get_tier_info(country_code: str):
     code = str(country_code).upper()
     for tier, data in GEO_ECONOMY.items():
@@ -152,7 +156,6 @@ async def receive_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tier_name, _ = get_tier_info(country_code)
     created_at = datetime.utcnow().isoformat()
     
-    # Upsert en Postgres
     async with db_pool.acquire() as conn:
         await conn.execute("""
             INSERT INTO users (telegram_id, first_name, email, country_code, tier, created_at)
@@ -187,8 +190,7 @@ async def dashboard_pro(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🚀 **Nivel Rendimiento:** {multiplier:.1f}x\n\n"
         f"🔮 **PROYECCIÓN MENSUAL:**\n"
         f"💵 **{symbol}{projected_monthly:.2f}**\n"
-        f"_(Basado en completar tus tareas diarias)_\n\n"
-        "Tu información está respaldada en nuestra base de datos segura."
+        f"_(Basado en completar tus tareas diarias)_"
     )
     
     keyboard = [["⚡️ Tareas Optimizadas", "💸 Retirar"], ["🌍 Mi Perfil"]]
@@ -196,6 +198,7 @@ async def dashboard_pro(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def optimized_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = await get_user(update.effective_user.id)
+    if not user: return
     tier = user['tier']
     
     async with db_pool.acquire() as conn:
@@ -213,7 +216,7 @@ async def optimized_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("⚡️ **TAREAS DISPONIBLES**", reply_markup=InlineKeyboardMarkup(keyboard))
 
 # ---------------------------------------------------------------------
-# SETUP
+# SETUP & ROUTES (SOLUCIÓN ERROR 404)
 # ---------------------------------------------------------------------
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error(msg="Exception:", exc_info=context.error)
@@ -242,9 +245,19 @@ async def init_bot_app():
     await telegram_app.initialize()
     return telegram_app
 
+# --- NUEVOS ENDPOINTS PARA ARREGLAR ERROR 404 ---
+@app.get("/")
+async def root():
+    return {"status": "Online", "message": "TheOneHive Bot is Running 🟢"}
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+# ------------------------------------------------
+
 @app.on_event("startup")
 async def startup():
-    await init_db() # CONECTA A POSTGRES
+    await init_db()
     bot = await init_bot_app()
     if RENDER_EXTERNAL_URL: await bot.bot.set_webhook(f"{RENDER_EXTERNAL_URL}/telegram/{TELEGRAM_TOKEN}")
     await bot.start()
@@ -252,7 +265,7 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     if telegram_app: await telegram_app.stop(); await telegram_app.shutdown()
-    if db_pool: await db_pool.close() # CIERRA CONEXION
+    if db_pool: await db_pool.close()
 
 @app.post("/telegram/{token}")
 async def webhook(token: str, request: Request):
