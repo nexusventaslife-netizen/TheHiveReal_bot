@@ -68,7 +68,7 @@ db: aiosqlite.Connection | None = None
 DB_PATH = "database.db"
 
 # ---------------------------------------------------------------------------
-# COUNTRY CONFIG
+# COUNTRY CONFIG (CORREGIDO)
 # ---------------------------------------------------------------------------
 
 COUNTRY_DATA = {
