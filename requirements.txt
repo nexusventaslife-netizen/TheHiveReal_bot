@@ -2,3 +2,6 @@ fastapi==0.115.0
 uvicorn[standard]==0.30.6
 python-telegram-bot==20.7
 aiosqlite==0.20.0
+
+# Evitar versiones viejas instaladas por error
+python-telegram-bot<21,>=20.7
