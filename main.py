@@ -1,16 +1,16 @@
 """
-THEONEHIVE 3.0 - FINAL FIX & FEATURES
-Optimizado para Render (Python 3.11) + Full Handlers
+THEONEHIVE 5.0 - DIGNIDAD GLOBAL & PROYECCIONES
+Estrategia: Tiers Geoeconómicos + Multiplicador de Rendimiento
 """
 
 import logging
 import os
 import asyncio
 from datetime import datetime
-from typing import Optional, Any
 import hashlib
+from typing import Optional, Any
 
-# Librerías externas
+# Librerías
 import aiosqlite
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -22,44 +22,60 @@ from telegram.ext import (
     CallbackQueryHandler,
     ContextTypes,
     filters,
+    ConversationHandler
 )
 
 # ---------------------------------------------------------------------
 # CONFIGURACIÓN
 # ---------------------------------------------------------------------
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
 logger = logging.getLogger("TheOneHive")
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL", "")
 DB_PATH = "theonehive.db"
+APP_NAME = "TheOneHive 🌍"
 
-if not TELEGRAM_TOKEN:
-    logger.error("CRITICAL: Faltan variables de entorno.")
+# ESTADOS CONVERSACIÓN
+ASK_EMAIL, ASK_COUNTRY = range(2)
 
-APP_NAME = "TheOneHive 🐝"
-
-# Configuración de País
-COUNTRY_CONFIG = {
-    "GLOBAL": {"currency": "USD", "min_withdraw": 5.0},
-    "MX": {"currency": "MXN", "min_withdraw": 2.0}, 
-    "AR": {"currency": "ARS", "min_withdraw": 1.0},
-    "US": {"currency": "USD", "min_withdraw": 10.0},
+# ---------------------------------------------------------------------
+# MOTOR ECONÓMICO GLOBAL (TIERS)
+# Aquí definimos la "Dignidad" por región
+# ---------------------------------------------------------------------
+GEO_ECONOMY = {
+    "TIER_A": { # USA, Australia, UK, Canadá
+        "countries": ["US", "AU", "GB", "CA"],
+        "daily_target": 25.0, 
+        "currency": "USD",
+        "symbol": "$"
+    },
+    "TIER_B": { # Europa Occidental, Corea, Japón
+        "countries": ["ES", "DE", "FR", "IT", "KR", "JP"],
+        "daily_target": 20.0,
+        "currency": "EUR",
+        "symbol": "€"
+    },
+    "TIER_C": { # Latam, China, Rusia, Brasil
+        "countries": ["MX", "AR", "CO", "BR", "CL", "CN", "RU"],
+        "daily_target": 15.0,
+        "currency": "USD",
+        "symbol": "$"
+    },
+    "TIER_D": { # África, India, Venezuela, Resto
+        "countries": ["GLOBAL", "VE", "NG", "IN", "PK", "PH"],
+        "daily_target": 6.0,
+        "currency": "USD",
+        "symbol": "$"
+    }
 }
-
-# ---------------------------------------------------------------------
-# FASTAPI APP
-# ---------------------------------------------------------------------
-app = FastAPI(title=APP_NAME)
-telegram_app: Optional[Application] = None
 
 # ---------------------------------------------------------------------
 # BASE DE DATOS
 # ---------------------------------------------------------------------
+app = FastAPI(title=APP_NAME)
+telegram_app: Optional[Application] = None
 
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
@@ -67,34 +83,34 @@ async def init_db():
             CREATE TABLE IF NOT EXISTS users (
                 telegram_id INTEGER PRIMARY KEY,
                 first_name TEXT,
-                username TEXT,
-                referral_code TEXT UNIQUE,
-                referred_by INTEGER,
+                email TEXT,
+                country_code TEXT,
+                tier TEXT, -- TIER_A, TIER_B, etc.
+                
+                -- ECONOMÍA PERSONAL
                 balance REAL DEFAULT 0.0,
-                tokens_invisibles INTEGER DEFAULT 0,
                 xp INTEGER DEFAULT 0,
-                level TEXT DEFAULT 'Novato',
-                country_code TEXT DEFAULT 'GLOBAL',
-                created_at TEXT,
-                last_active TEXT
+                performance_multiplier REAL DEFAULT 1.0, -- Empieza en 1.0 (100%), puede subir a 1.5 (150%)
+                
+                created_at TEXT
             )
         """)
+        # Tareas con filtro de Tier (Para asegurar el realismo)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS tasks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT,
-                reward_usd REAL,
-                xp_reward INTEGER,
-                type TEXT,
+                tier_req TEXT, -- Para qué tier es esta tarea
+                reward REAL,
                 url TEXT,
                 is_active INTEGER DEFAULT 1
             )
         """)
-        # Tareas de ejemplo
-        await db.execute("INSERT OR IGNORE INTO tasks (id, title, reward_usd, xp_reward, type, url) VALUES (1, 'Encuesta Inicial', 0.50, 100, 'ENCUESTA', 'https://google.com')")
-        await db.execute("INSERT OR IGNORE INTO tasks (id, title, reward_usd, xp_reward, type, url) VALUES (2, 'Reto TikTok', 2.00, 500, 'VIRAL', 'https://tiktok.com')")
+        # Datos semilla (Ejemplos reales)
+        await db.execute("INSERT OR IGNORE INTO tasks (id, title, tier_req, reward, url) VALUES (1, 'Encuesta Premium (Finanzas)', 'TIER_A', 2.50, 'https://google.com')")
+        await db.execute("INSERT OR IGNORE INTO tasks (id, title, tier_req, reward, url) VALUES (2, 'Instalar App Ligera', 'TIER_D', 0.20, 'https://google.com')")
+        await db.execute("INSERT OR IGNORE INTO tasks (id, title, tier_req, reward, url) VALUES (3, 'Registro Exchange', 'TIER_C', 1.50, 'https://google.com')")
         await db.commit()
-    logger.info("✅ DB Inicializada.")
 
 async def get_user(tg_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
@@ -103,186 +119,184 @@ async def get_user(tg_id: int):
             row = await cursor.fetchone()
             return dict(row) if row else None
 
-async def register_user(user: Any, ref_code_input: str = None):
-    now = datetime.utcnow().isoformat()
-    my_ref_code = hashlib.md5(str(user.id).encode()).hexdigest()[:8].upper()
-    
-    referrer_id = None
-    if ref_code_input:
-        async with aiosqlite.connect(DB_PATH) as db:
-            async with db.execute("SELECT telegram_id FROM users WHERE referral_code = ?", (ref_code_input,)) as cursor:
-                row = await cursor.fetchone()
-                if row: referrer_id = row[0]
+# ---------------------------------------------------------------------
+# LÓGICA DE DETERMINACIÓN DE TIER
+# ---------------------------------------------------------------------
+def get_tier_info(country_code: str):
+    code = country_code.upper()
+    for tier, data in GEO_ECONOMY.items():
+        if code in data["countries"]:
+            return tier, data
+    return "TIER_D", GEO_ECONOMY["TIER_D"]
 
+# ---------------------------------------------------------------------
+# FLUJO DE INICIO (PERFILADO)
+# ---------------------------------------------------------------------
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await get_user(update.effective_user.id)
+    if user and user['email']:
+        await dashboard_pro(update, context)
+        return ConversationHandler.END
+        
+    await update.message.reply_text(
+        "👋 **Bienvenido al Sistema Global TheOneHive.**\n\n"
+        "Nuestra misión es garantizarte un ingreso digno según tu ubicación.\n"
+        "Para calcular tu potencial de ganancias, necesitamos configurar tu perfil.\n\n"
+        "📧 **1. Escribe tu Email (para notificarte pagos):**"
+    )
+    return ASK_EMAIL
+
+async def receive_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['email'] = update.message.text
+    await update.message.reply_text(
+        "🌍 **2. ¿Desde qué país te conectas?**\n\n"
+        "Escribe el código de 2 letras (Ej: MX para México, ES para España, VE para Venezuela, US para USA)."
+    )
+    return ASK_COUNTRY
+
+async def receive_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    country_code = update.message.text.upper().strip()
+    email = context.user_data['email']
+    user = update.effective_user
+    
+    # Determinar Tier y Economía
+    tier_name, tier_data = get_tier_info(country_code)
+    
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
-            INSERT OR IGNORE INTO users 
-            (telegram_id, first_name, username, referral_code, referred_by, created_at, last_active)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (user.id, user.first_name, user.username, my_ref_code, referrer_id, now, now))
+            INSERT INTO users (telegram_id, first_name, email, country_code, tier, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(telegram_id) DO UPDATE SET email=excluded.email, country_code=excluded.country_code, tier=excluded.tier
+        """, (user.id, user.first_name, email, country_code, tier_name, datetime.utcnow().isoformat()))
         await db.commit()
-    return await get_user(user.id)
+        
+    await update.message.reply_text(f"✅ Perfil Configurado: **{country_code} (Nivel {tier_name})**\n\nHemos ajustado las tareas y pagos a tu economía local.")
+    await dashboard_pro(update, context)
+    return ConversationHandler.END
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("❌ Registro cancelado.")
+    return ConversationHandler.END
 
 # ---------------------------------------------------------------------
-# BOT: COMANDOS Y MENÚS
+# DASHBOARD PRO (EL ANZUELO VISUAL)
 # ---------------------------------------------------------------------
-
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    args = context.args
-    ref_input = args[0] if args else None
-    user_data = await register_user(update.effective_user, ref_input)
+async def dashboard_pro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await get_user(update.effective_user.id)
+    if not user: return # Safety check
+    
+    _, eco_data = get_tier_info(user['country_code'])
+    symbol = eco_data['symbol']
+    
+    # CÁLCULOS DE PROYECCIÓN (EL REALISMO)
+    base_daily = eco_data['daily_target']
+    multiplier = user['performance_multiplier'] # Si trabaja mejor, gana más
+    
+    potential_daily = base_daily * multiplier
+    projected_weekly = potential_daily * 7
+    projected_monthly = potential_daily * 30
+    
+    # Barra de optimización (Gamificación)
+    opt_percent = int((multiplier - 1.0) * 200) # Ejemplo visual
+    progress_bar = "▓" * (opt_percent // 10) + "░" * (10 - (opt_percent // 10))
+    
+    msg = (
+        f"📊 **TU CENTRO DE MANDO FINANCIERO** | {user['country_code']}\n\n"
+        f"💰 **Saldo Real:** {symbol}{user['balance']:.2f}\n"
+        f"🚀 **Rendimiento:** {multiplier:.1f}x (Normal)\n"
+        f"[{progress_bar}] Optimización: {opt_percent}%\n\n"
+        
+        f"🔮 **TUS PROYECCIONES REALES:**\n"
+        f"📅 Día: {symbol}{potential_daily:.2f} (Objetivo: {symbol}{base_daily})\n"
+        f"🗓 Semanal: {symbol}{projected_weekly:.2f}\n"
+        f"📆 **Mensual: {symbol}{projected_monthly:.2f}**\n\n"
+        
+        f"💡 *Consejo: Para alcanzar los {symbol}{projected_monthly:.2f}, debes completar 3 tareas diarias y mantener calidad alta.*"
+    )
     
     keyboard = [
-        ["🚀 Ganar Dinero", "📱 Retos Virales"],
-        ["💰 Billetera", "🏆 Nivel"],
-        ["💎 Premium", "👥 Referidos"]
+        ["⚡️ Optimizar Ingresos (Tareas)", "📈 Ver Estadísticas"],
+        ["💸 Retirar Fondos", "🌍 Mi Perfil Global"]
     ]
     
-    msg = (
-        f"👋 **¡Hola, {user_data['first_name']}!**\n\n"
-        f"Bienvenido a **TheOneHive**. Tu centro de ingresos digitales.\n\n"
-        f"🏅 Nivel: {user_data['level']}\n"
-        f"💵 Saldo: ${user_data['balance']:.2f}\n\n"
-        "👇 Selecciona una opción:"
-    )
-    
-    await update.message.reply_text(
-        msg, 
-        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True), 
-        parse_mode="Markdown"
-    )
+    await update.message.reply_text(msg, reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True), parse_mode="Markdown")
 
-async def tasks_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ---------------------------------------------------------------------
+# LISTA DE TAREAS FILTRADA POR PAÍS/TIER
+# ---------------------------------------------------------------------
+async def optimized_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await get_user(update.effective_user.id)
+    user_tier = user['tier']
+    _, eco_data = get_tier_info(user['country_code'])
+    
+    # Filtramos: Mostramos tareas de su Tier O tareas globales (Tier D)
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT * FROM tasks WHERE is_active=1") as cursor:
+        sql = f"SELECT * FROM tasks WHERE (tier_req = '{user_tier}' OR tier_req = 'TIER_D') AND is_active=1"
+        async with db.execute(sql) as cursor:
             tasks = await cursor.fetchall()
             
+    if not tasks:
+        await update.message.reply_text("🔍 Buscando tareas de alto valor para tu región... Intenta en 10 min.")
+        return
+
+    msg = f"⚡️ **TAREAS DE ALTO RENDIMIENTO ({user['country_code']})**\n"
+    msg += "Estas tareas han sido seleccionadas para cumplir tu proyección mensual.\n\n"
+    
     keyboard = []
-    msg = "📋 **TAREAS DISPONIBLES**\n\n"
-    
     for t in tasks:
-        msg += f"🔹 **{t['title']}**\n💵 ${t['reward_usd']} | ✨ {t['xp_reward']} XP\n\n"
-        # Botón que lleva a la URL de la tarea
-        keyboard.append([InlineKeyboardButton(f"Ir a: {t['title']}", url=t['url'])])
+        btn_text = f"{t['title']} | Gana {eco_data['symbol']}{t['reward']}"
+        keyboard.append([InlineKeyboardButton(btn_text, url=t['url'])])
         
-    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
-
-async def wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = await get_user(update.effective_user.id)
-    country = COUNTRY_CONFIG.get(user['country_code'], COUNTRY_CONFIG['GLOBAL'])
-    
-    msg = (
-        f"💰 **BILLETERA**\n\n"
-        f"💵 Disponible: ${user['balance']:.2f}\n"
-        f"🏦 Moneda local: {country['currency']}\n"
-        f"📉 Mínimo retiro: ${country['min_withdraw']}\n"
-    )
-    
-    # ESTE BOTÓN CAUSÓ EL ERROR ANTES. AHORA YA TIENE HANDLER.
-    kb = [[InlineKeyboardButton("💸 SOLICITAR RETIRO", callback_data="withdraw_click")]]
-    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
-
-async def viral_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = (
-        "🎬 **ZONA VIRAL**\n\n"
-        "Sube videos a TikTok/Reels con #TheOneHive.\n"
-        "Gana $2.00 por cada 1k vistas.\n\n"
-        "Envía el link de tu video aquí:"
-    )
-    await update.message.reply_text(msg, parse_mode="Markdown")
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
 # ---------------------------------------------------------------------
-# BOT: MANEJADOR DE BOTONES (LO QUE FALTABA)
+# HANDLERS
 # ---------------------------------------------------------------------
-
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Maneja los clics en botones Inline"""
-    query = update.callback_query
-    await query.answer() # IMPORTANTE: Avisa a Telegram que se recibió el clic
-    
-    data = query.data
-    
-    if data == "withdraw_click":
-        await query.edit_message_text(
-            text="⏳ **Solicitud de Retiro**\n\nPara procesar tu retiro, necesitas alcanzar el mínimo de retiro.\n\nActualmente estamos integrando PayPal y Crypto. ¡Pronto disponible!",
-            parse_mode="Markdown"
-        )
-
-# ---------------------------------------------------------------------
-# BOT: MANEJADOR DE TEXTO
-# ---------------------------------------------------------------------
-
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
-    if "Ganar Dinero" in text: await tasks_menu(update, context)
-    elif "Retos Virales" in text: await viral_menu(update, context)
-    elif "Billetera" in text: await wallet_menu(update, context)
-    elif "Nivel" in text: await update.message.reply_text("🏆 Tu nivel es: Novato (0 XP)")
-    elif "Referidos" in text: 
-         user = await get_user(update.effective_user.id)
-         link = f"https://t.me/{context.bot.username}?start={user['referral_code']}"
-         await update.message.reply_text(f"🔗 Tu enlace:\n`{link}`", parse_mode="Markdown")
-    elif "Premium" in text: await update.message.reply_text("💎 Premium próximamente.")
+    if "Optimizar" in text: await optimized_tasks(update, context)
+    elif "Estadísticas" in text: await update.message.reply_text("📈 Gráficos de rendimiento próximamente.")
+    elif "Retirar" in text: await update.message.reply_text("💸 Retiros procesados vía USDT (TRC20) o Binance Pay para evitar comisiones.")
+    elif "Perfil" in text: await dashboard_pro(update, context)
 
 # ---------------------------------------------------------------------
-# MANEJO DE ERRORES (PARA QUE NO SALGA ROJO EN RENDER)
+# SETUP TÉCNICO
 # ---------------------------------------------------------------------
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.error(msg="Exception while handling an update:", exc_info=context.error)
-    # Opcional: Avisar al usuario
-    # if isinstance(update, Update) and update.effective_message:
-    #     await update.effective_message.reply_text("⚠️ Ocurrió un error interno. Intenta de nuevo.")
-
-# ---------------------------------------------------------------------
-# INICIALIZACIÓN
-# ---------------------------------------------------------------------
+    logger.error(msg="Error:", exc_info=context.error)
 
 async def init_bot_app():
     global telegram_app
     if telegram_app: return telegram_app
-    
     telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
     
-    # REGISTRO DE TODOS LOS HANDLERS
-    telegram_app.add_handler(CommandHandler("start", start_command))
-    telegram_app.add_handler(CallbackQueryHandler(button_handler)) # <--- ESTO FALTABA
-    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    telegram_app.add_error_handler(error_handler) # <--- ESTO EVITA CRASHES
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("start", start_command)],
+        states={
+            ASK_EMAIL: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_email)],
+            ASK_COUNTRY: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_country)]
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
     
+    telegram_app.add_handler(conv_handler)
+    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    telegram_app.add_error_handler(error_handler)
     await telegram_app.initialize()
     return telegram_app
-
-# ---------------------------------------------------------------------
-# WEBHOOK
-# ---------------------------------------------------------------------
 
 @app.on_event("startup")
 async def startup():
     await init_db()
     bot = await init_bot_app()
-    if RENDER_EXTERNAL_URL and TELEGRAM_TOKEN:
-        webhook_url = f"{RENDER_EXTERNAL_URL}/telegram/{TELEGRAM_TOKEN}"
-        await bot.bot.set_webhook(webhook_url)
-        logger.info(f"✅ Webhook OK: {webhook_url}")
+    if RENDER_EXTERNAL_URL: await bot.bot.set_webhook(f"{RENDER_EXTERNAL_URL}/telegram/{TELEGRAM_TOKEN}")
     await bot.start()
-
-@app.on_event("shutdown")
-async def shutdown():
-    if telegram_app:
-        await telegram_app.stop()
-        await telegram_app.shutdown()
 
 @app.post("/telegram/{token}")
 async def telegram_webhook(token: str, request: Request):
-    if token != TELEGRAM_TOKEN:
-        return JSONResponse(content={"error": "Forbidden"}, status_code=403)
+    if token != TELEGRAM_TOKEN: return JSONResponse(status_code=403, content={})
     data = await request.json()
     bot = await init_bot_app()
-    update = Update.de_json(data, bot.bot)
-    await bot.process_update(update)
-    return {"status": "ok"}
-
-@app.get("/")
-async def root():
-    return {"status": "TheOneHive 3.0 Active"}
+    await bot.process_update(Update.de_json(data, bot.bot))
+    return {"ok": True}
