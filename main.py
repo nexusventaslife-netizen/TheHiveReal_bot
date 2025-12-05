@@ -9,6 +9,7 @@ import logging
 import os
 import asyncio
 import random
+import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 import asyncpg
@@ -24,9 +25,9 @@ from telegram.ext import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(message)s")
 logger = logging.getLogger("ProtocolHiveTitanX")
 
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "YOUR_BOT_TOKEN_HERE")
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://user:pass@localhost/hive")
-ADMIN_ID = int(os.environ.get("ADMIN_ID", "0")) if os.environ.get("ADMIN_ID") else None
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+DATABASE_URL = os.environ.get("DATABASE_URL")
+ADMIN_ID = int(os.environ.get("ADMIN_ID")) if os.environ.get("ADMIN_ID") else None
 POSTBACK_SECRET = os.environ.get("POSTBACK_SECRET", "secret_key_12345")
 OFFERTORO_LINK = os.environ.get("OFFERTORO_LINK", "https://www.offertoro.com/ifr/show/123456")
 ADSTERRA_LINK = os.environ.get("ADSTERRA_LINK", "https://www.adsterra.com/your_link")
@@ -294,8 +295,8 @@ async def mining_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_income = 0.0
     for miner in miners:
         miner_config = MINER_TYPES.get(miner['miner_type'])
-        if miner_config:
-            hours_since_claim = (datetime.utcnow() - miner['last_claim']).total_seconds() / 3600
+        if miner_config and miner['last_claim']:
+            hours_since_claim = (datetime.utcnow() - miner['last_claim'].replace(tzinfo=None)).total_seconds() / 3600
             income = hours_since_claim * miner_config['income_per_hour']
             total_income += income
     
@@ -341,27 +342,35 @@ async def buy_miner(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     db_user = await get_user(user_id)
     
-    if db_user['balance'] < miner_config['cost']:
-        await query.answer(
-            f"❌ Insufficient balance! Need ${miner_config['cost']:.2f}",
-            show_alert=True
-        )
-        return
-    
-    # Deduct balance and add miner
+    # Use transaction to prevent race conditions
     async with db_pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE users SET balance = balance - $1 WHERE telegram_id = $2",
-            miner_config['cost'], user_id
-        )
-        await conn.execute(
-            "INSERT INTO miners (user_id, miner_type) VALUES ($1, $2)",
-            user_id, miner_type
-        )
-        await conn.execute(
-            "INSERT INTO transactions (user_id, type, amount, status) VALUES ($1, $2, $3, $4)",
-            user_id, "miner_purchase", miner_config['cost'], "completed"
-        )
+        async with conn.transaction():
+            # Re-check balance within transaction
+            current_balance = await conn.fetchval(
+                "SELECT balance FROM users WHERE telegram_id = $1 FOR UPDATE",
+                user_id
+            )
+            
+            if current_balance < miner_config['cost']:
+                await query.answer(
+                    f"❌ Insufficient balance! Need ${miner_config['cost']:.2f}",
+                    show_alert=True
+                )
+                return
+            
+            # Deduct balance and add miner atomically
+            await conn.execute(
+                "UPDATE users SET balance = balance - $1 WHERE telegram_id = $2",
+                miner_config['cost'], user_id
+            )
+            await conn.execute(
+                "INSERT INTO miners (user_id, miner_type) VALUES ($1, $2)",
+                user_id, miner_type
+            )
+            await conn.execute(
+                "INSERT INTO transactions (user_id, type, amount, status) VALUES ($1, $2, $3, $4)",
+                user_id, "miner_purchase", miner_config['cost'], "completed"
+            )
     
     await query.answer(f"✅ {miner_config['name']} purchased!", show_alert=True)
     await mining_menu(update, context)
@@ -378,8 +387,8 @@ async def claim_mining(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_income = 0.0
     for miner in miners:
         miner_config = MINER_TYPES.get(miner['miner_type'])
-        if miner_config:
-            hours_since_claim = (datetime.utcnow() - miner['last_claim']).total_seconds() / 3600
+        if miner_config and miner['last_claim']:
+            hours_since_claim = (datetime.utcnow() - miner['last_claim'].replace(tzinfo=None)).total_seconds() / 3600
             income = hours_since_claim * miner_config['income_per_hour']
             total_income += income
     
@@ -664,8 +673,8 @@ async def fakeproof_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Invalid amount. Use numbers only.")
         return
     
-    # Generate realistic fake proof
-    fake_tx_id = ''.join(random.choices('0123456789ABCDEF', k=64))
+    # Generate realistic fake proof with secure random
+    fake_tx_id = secrets.token_hex(32)  # 64 characters
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
     
     msg = (
@@ -804,6 +813,15 @@ async def init_telegram_app():
 async def startup_event():
     """Application startup"""
     logger.info(f"Starting {APP_NAME}...")
+    
+    # Validate required environment variables
+    if not TELEGRAM_TOKEN:
+        raise ValueError("TELEGRAM_TOKEN environment variable is required")
+    if not DATABASE_URL:
+        raise ValueError("DATABASE_URL environment variable is required")
+    if not ADMIN_ID:
+        logger.warning("ADMIN_ID not set - admin features will be disabled")
+    
     await init_db()
     await init_telegram_app()
     logger.info(f"{APP_NAME} started successfully!")
