@@ -1,8 +1,8 @@
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-python-telegram-bot==20.7
-asyncpg==0.29.0
-email-validator==2.1.0.post1
-pillow==10.2.0
-imagehash==4.3.1
-python-dotenv==1.0.1
+fastapi
+uvicorn
+python-telegram-bot==20.6
+asyncpg
+email-validator
+pillow
+imagehash
+python-multipart
