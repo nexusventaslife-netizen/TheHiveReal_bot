@@ -420,3 +420,240 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         ["🏦 RETIROS", "👤 PERFIL"]
     ]
     await update.message.reply_text(msg, reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True), parse_mode="Markdown")
+# ==============================================================================
+# 6. MÓDULOS DE NEGOCIO Y VENTAS (PARTE B)
+# ==============================================================================
+
+async def nexus_market_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = (
+        "🎓 **NEXUS MARKETPLACE**\n\n"
+        "Herramientas para potenciar tus ingresos.\n"
+        "🔥 **CASHBACK:** 1000 HIVE por compra verificada.\n"
+    )
+    kb = [
+        [InlineKeyboardButton("📈 CURSO TRADING PRO", url=LINKS["TRADING"])],
+        [InlineKeyboardButton("👨‍💻 CONTRATAR FREELANCER", url=LINKS["FREELANCE"])],
+        [InlineKeyboardButton("🌐 HOSTING WEB", url=LINKS["HOSTING"])],
+        [InlineKeyboardButton("📤 RECLAMAR CASHBACK", callback_data="upload_affiliate")]
+    ]
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(kb))
+
+async def viral_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = (
+        "📱 **VIRAL STUDIO**\n"
+        f"Pago por video: {REWARD_VIRAL_VIDEO} HIVE.\n"
+        "👇 **Envía tu link de TikTok/Shorts:**"
+    )
+    kb = [[InlineKeyboardButton("🔗 ENVIAR LINK", callback_data="submit_link")]]
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(kb))
+
+async def process_viral_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    link = update.message.text
+    if "http" in link:
+        if db_pool:
+            async with db_pool.acquire() as conn:
+                await conn.execute("INSERT INTO viral_content (user_id, platform, url) VALUES ($1, 'WEB', $2)", update.effective_user.id, link)
+        await update.message.reply_text("✅ **LINK GUARDADO.** Auditoría en curso.")
+        return ConversationHandler.END
+    else:
+        await update.message.reply_text("❌ Link inválido.")
+        return WAIT_VIRAL_LINK
+
+async def cpa_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    link = f"https://www.offertoro.com/ifr/show/{OFFERTORO_PUB_ID}/{uid}/{OFFERTORO_SECRET}"
+    kb = [[InlineKeyboardButton("🚀 IR A OFERTAS", url=link)], [InlineKeyboardButton("📤 SOPORTE / FOTO", callback_data="upload_cpa")]]
+    await update.message.reply_text("🍯 **ZONA CPA**\nCompleta ofertas para ganar USD.", reply_markup=InlineKeyboardMarkup(kb))
+
+async def evolution_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = (
+        f"🧬 **EVOLUCIÓN VIP**\n"
+        f"Beneficios: Minería x5, Retiros Flash.\n"
+        f"Precio: ${PRICE_VIP_USD} (TRC20)\n`{ADMIN_WALLET_TRC20}`"
+    )
+    kb = [
+        [InlineKeyboardButton("🅰️ PAGAR VIP", callback_data="upload_vip")],
+        [InlineKeyboardButton(f"🅱️ QUEMAR {EVOLUTION_COST_HIVE} HIVE", callback_data="burn_hive")]
+    ]
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+
+async def burn_hive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    uid = update.effective_user.id
+    if db_pool:
+        async with db_pool.acquire() as conn:
+            user = await conn.fetchrow("SELECT balance_hive FROM users WHERE telegram_id=$1", uid)
+            if user['balance_hive'] >= EVOLUTION_COST_HIVE:
+                await conn.execute("UPDATE users SET balance_hive=balance_hive-$1, rank='REINA/VIP', mining_power=5.0 WHERE telegram_id=$2", EVOLUTION_COST_HIVE, uid)
+                await q.message.reply_text("🔥 **EVOLUCIONADO A VIP!**")
+                return
+    await q.answer("❌ Saldo insuficiente", show_alert=True)
+
+async def p2p_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = "💹 **P2P MARKET**\nComando: `/vender [CANTIDAD] [PRECIO]`\n\n**OFERTAS:**"
+    if db_pool:
+        async with db_pool.acquire() as conn:
+            rows = await conn.fetch("SELECT * FROM p2p_market WHERE active=TRUE ORDER BY price_usd ASC LIMIT 5")
+            for r in rows: msg += f"\n📦 {r['amount_hive']} HIVE -> ${r['price_usd']}"
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
+async def sell_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        amt, price = float(context.args[0]), float(context.args[1])
+        uid = update.effective_user.id
+        if db_pool:
+            async with db_pool.acquire() as conn:
+                res = await conn.execute("UPDATE users SET balance_hive=balance_hive-$1 WHERE telegram_id=$2 AND balance_hive>=$1", amt, uid)
+                if "0" not in res:
+                    await conn.execute("INSERT INTO p2p_market (seller_id, amount_hive, price_usd) VALUES ($1,$2,$3)", uid, amt, price)
+                    await update.message.reply_text("✅ **ORDEN CREADA.**")
+                else: await update.message.reply_text("❌ Sin fondos.")
+    except: await update.message.reply_text("❌ Error formato.")
+
+async def ads_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    kb = [[InlineKeyboardButton("⛏️ MINAR", callback_data="mine_manual")], [InlineKeyboardButton("📺 VER AD", callback_data="watch_ad")]]
+    await update.message.reply_text("⛏️ **MINERÍA**", reply_markup=InlineKeyboardMarkup(kb))
+
+async def watch_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer("Cargando...", show_alert=True)
+    await asyncio.sleep(2)
+    if db_pool:
+        async with db_pool.acquire() as conn:
+            await conn.execute("UPDATE users SET balance_hive=balance_hive+$1 WHERE telegram_id=$2", REWARD_AD_WATCH, update.effective_user.id)
+    await update.callback_query.message.reply_text(f"✅ +{REWARD_AD_WATCH} HIVE")
+
+async def mine_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    if db_pool:
+        async with db_pool.acquire() as conn:
+            await conn.execute("UPDATE users SET balance_hive=balance_hive+1.0 WHERE telegram_id=$1", update.effective_user.id)
+    await update.callback_query.message.reply_text("⛏️ +1.0 HIVE")
+
+# --- GESTIÓN DE EVIDENCIAS ---
+async def request_proof(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    await q.message.reply_text("📸 **SUBIR EVIDENCIA (FOTO)**")
+    
+    data = q.data
+    if "cpa" in data: return WAIT_PROOF_CPA
+    if "vip" in data: return WAIT_PROOF_VIP
+    if "fee" in data: return WAIT_PROOF_FEE
+    if "affiliate" in data: return WAIT_PROOF_AFFILIATE
+    return ConversationHandler.END
+
+async def viral_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.message.reply_text("🔗 **PEGA TU LINK:**")
+    return WAIT_VIRAL_LINK
+
+async def process_proof_img(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message.photo: return
+    user = update.effective_user
+    photo = await update.message.photo[-1].get_file()
+    img_bytes = await photo.download_as_bytearray()
+    
+    if await SecurityService.validate_proof(img_bytes, user.id):
+        await update.message.reply_text("🚨 **FRAUDE DETECTADO (IMAGEN DUPLICADA).**")
+        return ConversationHandler.END
+    
+    if ADMIN_ID != 0:
+        kb = [[InlineKeyboardButton("✅", callback_data=f"ok_{user.id}"), InlineKeyboardButton("❌", callback_data=f"no_{user.id}")]]
+        await context.bot.send_photo(ADMIN_ID, update.message.photo[-1].file_id, caption=f"Proof User: {user.id}", reply_markup=InlineKeyboardMarkup(kb))
+    
+    await update.message.reply_text("✅ **ENVIADO A REVISIÓN.**")
+    return ConversationHandler.END
+
+async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    q = update.callback_query
+    uid = int(q.data.split("_")[1])
+    if "ok" in q.data:
+        await context.bot.send_message(uid, "✅ **APROBADO.**")
+        await q.edit_message_caption("✅ OK")
+    else:
+        await q.edit_message_caption("❌ NO")
+
+# ==============================================================================
+# 7. SYSTEM BOOTLOADER
+# ==============================================================================
+
+telegram_app = None
+
+async def persistent_poll():
+    while True:
+        try:
+            logger.info("🔌 CONECTANDO...")
+            await telegram_app.updater.start_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+            break
+        except Conflict: await asyncio.sleep(10)
+        except Exception as e: 
+            logger.error(f"Polling Error: {e}")
+            await asyncio.sleep(5)
+
+@app.on_event("startup")
+async def startup():
+    logger.info("🚀 STARTING TITAN ENTERPRISE...")
+    await init_database_architecture()
+    
+    global telegram_app
+    telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
+    
+    # HANDLERS
+    telegram_app.add_handler(CommandHandler("start", start_handler))
+    telegram_app.add_handler(CommandHandler("vender", sell_cmd))
+    
+    telegram_app.add_handler(MessageHandler(filters.Regex("ACADEMY"), nexus_market_handler))
+    telegram_app.add_handler(MessageHandler(filters.Regex("VIRAL"), viral_handler))
+    telegram_app.add_handler(MessageHandler(filters.Regex("ADS"), ads_menu))
+    telegram_app.add_handler(MessageHandler(filters.Regex("RECOLECTAR"), cpa_handler))
+    telegram_app.add_handler(MessageHandler(filters.Regex("EVOLUCIONAR"), evolution_handler))
+    telegram_app.add_handler(MessageHandler(filters.Regex("P2P"), p2p_handler))
+    telegram_app.add_handler(MessageHandler(filters.Regex("PERFIL"), show_dashboard))
+    
+    telegram_app.add_handler(CallbackQueryHandler(watch_ad, pattern="watch_ad"))
+    telegram_app.add_handler(CallbackQueryHandler(mine_manual, pattern="mine_manual"))
+    telegram_app.add_handler(CallbackQueryHandler(burn_hive, pattern="burn_hive"))
+    telegram_app.add_handler(CallbackQueryHandler(admin_action, pattern="^(ok|no)_"))
+    
+    conv_email = ConversationHandler(
+        entry_points=[MessageHandler(filters.Regex("Hola"), start_handler)],
+        states={WAIT_EMAIL: [MessageHandler(filters.TEXT, email_save)]},
+        fallbacks=[CommandHandler("start", start_handler)]
+    )
+    telegram_app.add_handler(conv_email)
+    
+    conv_proof = ConversationHandler(
+        entry_points=[CallbackQueryHandler(request_proof, pattern="upload_|pay_fee")],
+        states={
+            WAIT_PROOF_CPA: [MessageHandler(filters.PHOTO, process_proof_img)],
+            WAIT_PROOF_VIP: [MessageHandler(filters.PHOTO, process_proof_img)],
+            WAIT_PROOF_FEE: [MessageHandler(filters.PHOTO, process_proof_img)],
+            WAIT_PROOF_AFFILIATE: [MessageHandler(filters.PHOTO, process_proof_img)],
+        },
+        fallbacks=[CommandHandler("start", start_handler)]
+    )
+    telegram_app.add_handler(conv_proof)
+    
+    conv_viral = ConversationHandler(
+        entry_points=[CallbackQueryHandler(viral_entry, pattern="submit_link")],
+        states={WAIT_VIRAL_LINK: [MessageHandler(filters.TEXT, process_viral_link)]},
+        fallbacks=[CommandHandler("start", start_handler)]
+    )
+    telegram_app.add_handler(conv_viral)
+
+    await telegram_app.initialize()
+    await telegram_app.start()
+    
+    logger.info("⏳ SAFETY DELAY (15s)...")
+    await asyncio.sleep(15)
+    asyncio.create_task(mining_engine_loop())
+    asyncio.create_task(persistent_poll())
+
+@app.on_event("shutdown")
+async def shutdown():
+    if telegram_app:
+        if telegram_app.updater.running: await telegram_app.updater.stop()
+        if telegram_app.running: await telegram_app.stop()
+        await telegram_app.shutdown()
+    if db_pool: await db_pool.close()
