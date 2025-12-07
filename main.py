@@ -261,3 +261,162 @@ async def init_database_architecture():
     except Exception as e:
         logger.critical(f"❌ DB INIT FAILED: {e}")
         raise e
+# ==============================================================================
+# 4. SERVICIOS INTERNOS (LÓGICA DE NEGOCIO)
+# ==============================================================================
+
+class UserManager:
+    @staticmethod
+    async def get_or_create(user: Any, referrer_id: Optional[int] = None) -> Dict[str, Any]:
+        """Gestión inteligente de usuarios con detección de región."""
+        if not db_pool: return {"telegram_id": user.id, "rank": "LARVA", "balance_usd": 0, "balance_hive": 0, "region_tier": "TIER_3"}
+        
+        # Geo-Detección
+        lang = user.language_code or "en"
+        country_code = lang.split("-")[-1].upper() if "-" in lang else lang.upper()
+        
+        region_tier = "TIER_3"
+        for tier_name, data in REGION_DATA.items():
+            if country_code in data["countries"]:
+                region_tier = tier_name
+                break
+        
+        async with db_pool.acquire() as conn:
+            row = await conn.fetchrow("""
+                INSERT INTO users (telegram_id, first_name, username, referrer_id, country_code, region_tier)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT (telegram_id) DO UPDATE 
+                SET first_name = EXCLUDED.first_name, username = EXCLUDED.username, last_active = NOW()
+                RETURNING *
+            """, user.id, user.first_name, user.username, referrer_id, country_code, region_tier)
+            
+            # Smart Contract de Referidos
+            if referrer_id and referrer_id != user.id and row['created_at'] == datetime.now():
+                await conn.execute("UPDATE users SET balance_hive = balance_hive + $1 WHERE telegram_id = $2", REFERRAL_BONUS_HIVE, referrer_id)
+            
+            return dict(row)
+
+class SecurityService:
+    @staticmethod
+    async def validate_proof(img_bytes: bytes, user_id: int) -> bool:
+        """
+        Análisis Biométrico de Imágenes (Anti-Fraude).
+        Retorna True si detecta duplicidad.
+        """
+        if not db_pool: return False
+        try:
+            img = Image.open(BytesIO(img_bytes))
+            phash = str(imagehash.phash(img))
+            async with db_pool.acquire() as conn:
+                exists = await conn.fetchval("SELECT 1 FROM security_hashes WHERE hash_id=$1", phash)
+                if exists:
+                    logger.warning(f"SECURITY: Duplicate Proof User {user_id}")
+                    return True
+                await conn.execute("INSERT INTO security_hashes (hash_id, user_id) VALUES ($1, $2)", phash, user_id)
+            return False
+        except Exception:
+            return False
+
+class AdNetworkService:
+    @staticmethod
+    async def serve_interstitial(update: Update):
+        """Publicidad Nativa Inteligente (CTR Optimization)."""
+        if random.random() < 0.30:
+            ads = [
+                {"text": "🔥 **CURSO TRADING ELITE**", "url": LINKS["TRADING"]},
+                {"text": "🚀 **CUENTA BINANCE VIP**", "url": LINKS["BINANCE"]},
+            ]
+            ad = random.choice(ads)
+            kb = [[InlineKeyboardButton("👉 VER OFERTA", url=ad["url"])]]
+            try:
+                await update.message.reply_text(f"📢 **PUBLICIDAD**\n\n{ad['text']}", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+                await asyncio.sleep(1.2)
+            except: pass
+
+async def mining_engine_loop():
+    """Motor de Minería Masiva (Batch Processing)."""
+    while True:
+        await asyncio.sleep(60)
+        if db_pool:
+            try:
+                async with db_pool.acquire() as conn:
+                    # Actualización masiva eficiente
+                    await conn.execute("""
+                        UPDATE users 
+                        SET balance_hive = balance_hive + (0.1 * mining_power)
+                        WHERE rank != 'LARVA' AND mining_active = TRUE
+                    """)
+            except Exception as e:
+                logger.error(f"Mining Error: {e}")
+
+# ==============================================================================
+# 5. CONTROLADORES DE TELEGRAM (PARTE A: CORE HANDLERS)
+# ==============================================================================
+
+(WAIT_EMAIL, WAIT_PROOF_CPA, WAIT_PROOF_VIP, WAIT_PROOF_FEE, WAIT_VIRAL_LINK, WAIT_PROOF_AFFILIATE) = range(6)
+
+async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    args = context.args
+    referrer_id = int(args[0]) if args and args[0].isdigit() else None
+    
+    user_data = await UserManager.get_or_create(user, referrer_id)
+    
+    if not user_data.get("email"):
+        tier_info = REGION_DATA.get(user_data.get('region_tier', 'TIER_3'))
+        msg = await update.message.reply_text("🛰️ **INICIANDO ESCANEO DE MERCADO...**")
+        await asyncio.sleep(1.0)
+        await msg.edit_text(
+            f"✅ **UBICACIÓN CONFIRMADA:** {user_data.get('country_code')} {tier_info.get('message', '')}\n"
+            f"📊 **POTENCIAL DIARIO:** {tier_info['daily_cap']}\n\n"
+            "🧬 **ACTIVACIÓN DE NODO:**\nIngresa tu Email Oficial:"
+        )
+        return WAIT_EMAIL
+    
+    await show_dashboard(update, context, user_data)
+    return ConversationHandler.END
+
+async def email_save(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    email = update.message.text.strip()
+    try:
+        validate_email(email)
+        if db_pool:
+            async with db_pool.acquire() as conn:
+                await conn.execute("UPDATE users SET email=$1, rank='OBRERO' WHERE telegram_id=$2", email, update.effective_user.id)
+        await update.message.reply_text("✅ **SISTEMA ONLINE.**")
+        await show_dashboard(update, context)
+        return ConversationHandler.END
+    except:
+        await update.message.reply_text("❌ Email inválido.")
+        return WAIT_EMAIL
+
+async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE, user_data: Dict = None):
+    if not user_data: user_data = await UserManager.get_or_create(update.effective_user)
+    await AdNetworkService.serve_interstitial(update)
+    
+    tier = user_data.get('region_tier', 'TIER_3')
+    stats = REGION_DATA.get(tier, REGION_DATA['TIER_3'])
+    bal = user_data.get('balance_usd', 0)
+    
+    proj_week = (bal + stats['opt_projection']) * 7
+    
+    rank_icon = "👑" if "VIP" in user_data['rank'] else "🐝"
+    
+    msg = (
+        f"💠 **HIVE TITAN OS** | ID: `{user_data['telegram_id']}`\n"
+        f"➖➖➖➖➖➖➖➖➖➖\n"
+        f"💵 **USD:** `${bal:.2f}`\n"
+        f"🍯 **HIVE:** `{user_data['balance_hive']:.2f}`\n"
+        f"🧬 **RANGO:** {rank_icon} {user_data['rank']}\n"
+        f"➖➖➖➖➖➖➖➖➖➖\n"
+        f"📈 **PROYECCIÓN (7 DÍAS):** `${proj_week:.2f}`\n"
+        f"💡 _Tip: Sube a VIP para retirar hoy._\n\n"
+        "👇 **PANEL DE CONTROL:**"
+    )
+    kb = [
+        ["🎓 ACADEMY / MARKET", "📱 VIRAL STUDIO"],
+        ["🍯 RECOLECTAR (CPA)", "⛏️ MINAR / ADS"],
+        ["🧬 EVOLUCIONAR", "💹 P2P DEX"],
+        ["🏦 RETIROS", "👤 PERFIL"]
+    ]
+    await update.message.reply_text(msg, reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True), parse_mode="Markdown")
