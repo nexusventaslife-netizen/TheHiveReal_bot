@@ -25,7 +25,9 @@ logger = logging.getLogger("Hive.Main")
 
 # --- CONFIGURACIÓN CRÍTICA ---
 TOKEN = os.getenv("TELEGRAM_TOKEN")
+# Limpieza de URL: Quitamos slash final y espacios
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip().rstrip("/")
+# Token Secreto Sanitizado
 SECRET_TOKEN = re.sub(r'[^a-zA-Z0-9_-]', '', os.getenv("SECRET_TOKEN", "Secret123"))
 
 if not TOKEN or not WEBHOOK_URL:
@@ -34,7 +36,7 @@ if not TOKEN or not WEBHOOK_URL:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- STARTUP ---
-    logger.info("🚀 Arrancando TheHiveReal (Modo Escala)...")
+    logger.info("🚀 Arrancando TheHiveReal (Modo Persistente)...")
     await init_db()
     
     application = Application.builder().token(TOKEN).build()
@@ -62,9 +64,10 @@ async def lifespan(app: FastAPI):
             url=full_webhook_url, 
             secret_token=SECRET_TOKEN,
             allowed_updates=Update.ALL_TYPES,
-            drop_pending_updates=True 
+            drop_pending_updates=True,
+            max_connections=100
         )
-        logger.info("✅ Webhook establecido correctamente.")
+        logger.info("✅ Webhook establecido y persistente.")
     except Exception as e:
         logger.error(f"❌ Falló set_webhook: {e}")
 
@@ -74,7 +77,10 @@ async def lifespan(app: FastAPI):
     # --- SHUTDOWN ---
     logger.info("🛑 Apagando servicios...")
     try:
-        await application.bot.delete_webhook()
+        # 🔥 CAMBIO IMPORTANTE: Comentamos delete_webhook
+        # Esto evita que el bot se desconecte de Telegram si Render reinicia.
+        # await application.bot.delete_webhook() 
+        
         await application.stop()
         await application.shutdown()
         await close_db()
@@ -90,14 +96,16 @@ app = FastAPI(lifespan=lifespan)
 async def root():
     return {"status": "TheHiveReal Online"}
 
-# ✅ FIX PARA RENDER: Endpoint /healthz explícito
+# ✅ Endpoint para Render (Evita reinicios constantes)
 @app.get("/healthz", status_code=200)
 @app.head("/healthz", status_code=200)
 async def health_check_render():
     return {"status": "ok"}
 
+# ✅ Ruta del Webhook
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
+    # Seguridad
     token_header = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
     if token_header != SECRET_TOKEN:
         return Response(status_code=status.HTTP_401_UNAUTHORIZED)
@@ -106,7 +114,10 @@ async def telegram_webhook(request: Request):
         data = await request.json()
         telegram_app = request.app.state.telegram_app
         update = Update.de_json(data, telegram_app.bot)
+        
+        # Procesar sin bloquear (Fire-and-forget)
         await telegram_app.process_update(update)
+        
         return Response(status_code=status.HTTP_200_OK)
     except Exception as e:
         logger.error(f"Error procesando update: {e}")
