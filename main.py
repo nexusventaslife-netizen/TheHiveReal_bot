@@ -5,7 +5,9 @@ from fastapi import FastAPI, Request
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ConversationHandler, filters
 from telegram import Update
 
-from database import init_db, process_secure_postback
+# Importamos utilidades de base de datos
+from database import init_db, process_secure_postback, redis_client as db_redis_client
+# Importamos la lógica del bot. Asumo que las funciones importadas existen en bot_logic.py
 from bot_logic import (
     start_command, 
     process_email_input, 
@@ -13,10 +15,12 @@ from bot_logic import (
     menu_handler, 
     mine_tap_callback, 
     withdraw_callback, 
-    reset_me, # <--- IMPORTANTE: Importamos la nueva función
+    reset_me, 
     WAIT_EMAIL, 
     WAIT_API_CHECK
 )
+# Importamos utilidades de caché
+from cache import init_cache
 
 # CONFIGURACIÓN
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
@@ -34,8 +38,18 @@ telegram_app = None
 @app.on_event("startup")
 async def startup():
     global telegram_app
+    # 1. Iniciar Base de Datos y Redis
     await init_db(DATABASE_URL)
     
+    # 2. Conectar el sistema de Caché con el cliente Redis de database.py
+    # Esto soluciona el problema de que cache.py no tenía cliente
+    if db_redis_client:
+        await init_cache(db_redis_client)
+        logger.info("✅ Cache system linked to Redis.")
+    else:
+        logger.warning("⚠️ Cache system initialized WITHOUT Redis.")
+
+    # 3. Iniciar Bot
     telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
     
     # --- MANEJADORES ---
@@ -60,7 +74,7 @@ async def startup():
     telegram_app.add_handler(CallbackQueryHandler(withdraw_callback, pattern="try_withdraw"))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
     
-    # Iniciar Bot
+    # Inicializar aplicación
     await telegram_app.initialize()
     await telegram_app.start()
     
@@ -69,6 +83,20 @@ async def startup():
         webhook_path = f"{WEBHOOK_URL}/webhook"
         await telegram_app.bot.set_webhook(url=webhook_path)
         logger.info(f"webhook set to: {webhook_path}")
+
+@app.on_event("shutdown")
+async def shutdown():
+    """Cierre limpio de conexiones"""
+    if telegram_app:
+        await telegram_app.stop()
+        await telegram_app.shutdown()
+    
+    from database import db_pool, redis_client
+    if db_pool:
+        await db_pool.close()
+    if redis_client:
+        await redis_client.close()
+    logger.info("🛑 System Shutdown Complete")
 
 # --- ENDPOINTS API ---
 
