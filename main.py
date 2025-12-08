@@ -5,9 +5,11 @@ from fastapi import FastAPI, Request
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ConversationHandler, filters
 from telegram import Update
 
-# Importamos utilidades de base de datos
-from database import init_db, process_secure_postback, redis_client as db_redis_client
-# Importamos la lógica del bot. Asumo que las funciones importadas existen en bot_logic.py
+# --- CORRECCIÓN AQUÍ ---
+# Importamos el módulo 'database' completo para acceder a sus variables actualizadas
+import database 
+from database import init_db, process_secure_postback
+
 from bot_logic import (
     start_command, 
     process_email_input, 
@@ -19,7 +21,6 @@ from bot_logic import (
     WAIT_EMAIL, 
     WAIT_API_CHECK
 )
-# Importamos utilidades de caché
 from cache import init_cache
 
 # CONFIGURACIÓN
@@ -41,23 +42,23 @@ async def startup():
     # 1. Iniciar Base de Datos y Redis
     await init_db(DATABASE_URL)
     
-    # 2. Conectar el sistema de Caché con el cliente Redis de database.py
-    # Esto soluciona el problema de que cache.py no tenía cliente
-    if db_redis_client:
-        await init_cache(db_redis_client)
+    # 2. Conectar Caché (CORREGIDO)
+    # Accedemos a database.redis_client que ya tendrá el valor actualizado por init_db
+    if database.redis_client:
+        await init_cache(database.redis_client)
         logger.info("✅ Cache system linked to Redis.")
     else:
-        logger.warning("⚠️ Cache system initialized WITHOUT Redis.")
+        logger.warning("⚠️ Cache system initialized WITHOUT Redis (Check REDIS_URL).")
 
     # 3. Iniciar Bot
     telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
     
     # --- MANEJADORES ---
     
-    # 1. Comando de Reinicio (Para tus pruebas)
+    # 1. Comando de Reinicio
     telegram_app.add_handler(CommandHandler("reset", reset_me))
 
-    # 2. Flujo de Conversación (Registro: Start -> Email -> API)
+    # 2. Flujo de Conversación
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start_command)],
         states={
@@ -91,23 +92,25 @@ async def shutdown():
         await telegram_app.stop()
         await telegram_app.shutdown()
     
-    from database import db_pool, redis_client
-    if db_pool:
-        await db_pool.close()
-    if redis_client:
-        await redis_client.close()
+    if database.db_pool:
+        await database.db_pool.close()
+    if database.redis_client:
+        await database.redis_client.close()
     logger.info("🛑 System Shutdown Complete")
 
 # --- ENDPOINTS API ---
 
 @app.get("/")
 async def root():
-    """Endpoint raíz para que Render sepa que estamos vivos (Health Check)"""
     return {"status": "Titan Node Online", "system": "Active"}
+
+@app.head("/")
+async def root_head():
+    """Soporte para Health Checks que usan HEAD"""
+    return {"status": "OK"}
 
 @app.post("/webhook")
 async def webhook(request: Request):
-    """Recibe actualizaciones de Telegram"""
     try:
         data = await request.json()
         update = Update.de_json(data, telegram_app.bot)
@@ -118,7 +121,6 @@ async def webhook(request: Request):
 
 @app.get("/postback/secure")
 async def secure_postback(uid: int, amount: float, network: str, sig: str):
-    """Recibe pagos seguros de OfferToro/CPAGrip"""
     base_str = f"{uid}{amount}{CPA_SECRET_KEY}"
     local_sig = hashlib.md5(base_str.encode()).hexdigest()
     
@@ -128,7 +130,6 @@ async def secure_postback(uid: int, amount: float, network: str, sig: str):
     
     result = await process_secure_postback(uid, amount, network)
     
-    # Notificar al usuario si es posible
     try:
         msg = f"💰 **PAGO RECIBIDO: ${amount}**\n"
         if result['status'] == 'ON_HOLD':
