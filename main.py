@@ -6,19 +6,29 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 from telegram import Update
 
 from database import init_db, process_secure_postback
-from bot_logic import start_command, process_email_input, check_gate_callback, menu_handler, mine_tap_callback, withdraw_callback, WAIT_EMAIL, WAIT_API_CHECK
+# Importamos la nueva función reset_me
+from bot_logic import (
+    start_command, process_email_input, check_gate_callback, 
+    menu_handler, mine_tap_callback, withdraw_callback, reset_me,
+    WAIT_EMAIL, WAIT_API_CHECK
+)
 
-# CONFIG
+# CONFIGURACIÓN
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
-CPA_SECRET_KEY = os.environ.get("CPA_SECRET", "mi_secreto_super_seguro_123")
+CPA_SECRET_KEY = os.environ.get("CPA_SECRET", "secret123")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Hive.Main")
 
 app = FastAPI()
 telegram_app = None
+
+# --- RUTA RAÍZ PARA EVITAR ERROR 404 EN RENDER ---
+@app.get("/")
+async def root():
+    return {"status": "Titan Node Online", "version": "V9.5"}
 
 @app.on_event("startup")
 async def startup():
@@ -27,7 +37,10 @@ async def startup():
     
     telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
     
-    # Conversation: start -> email -> api gate verify
+    # 1. COMANDOS DE UTILIDAD (Reset debe ir antes de ConversationHandler)
+    telegram_app.add_handler(CommandHandler("reset", reset_me))
+
+    # 2. CONVERSACIÓN DE INICIO (Email -> API Gate)
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start_command)],
         states={
@@ -39,7 +52,7 @@ async def startup():
     )
     telegram_app.add_handler(conv_handler)
     
-    # Other handlers
+    # 3. HANDLERS GLOBALES
     telegram_app.add_handler(CallbackQueryHandler(mine_tap_callback, pattern="mine_tap"))
     telegram_app.add_handler(CallbackQueryHandler(withdraw_callback, pattern="try_withdraw"))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
@@ -49,31 +62,39 @@ async def startup():
     
     if WEBHOOK_URL:
         await telegram_app.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook")
+        logger.info(f"webhook set to: {WEBHOOK_URL}/webhook")
 
 @app.post("/webhook")
 async def webhook(request: Request):
+    """Punto de entrada para actualizaciones de Telegram"""
     try:
         data = await request.json()
         update = Update.de_json(data, telegram_app.bot)
         await telegram_app.process_update(update)
     except Exception as e:
-        logger.error(f"Webhook error: {e}")
+        logger.error(f"Webhook processing error: {e}")
     return {"ok": True}
 
 @app.get("/postback/secure")
 async def secure_postback(uid: int, amount: float, network: str, sig: str):
+    """Endpoint seguro para recibir dinero de CPA"""
     base_str = f"{uid}{amount}{CPA_SECRET_KEY}"
     local_sig = hashlib.md5(base_str.encode()).hexdigest()
+    
     if local_sig != sig:
         logger.warning(f"🚨 HACK ATTEMPT: User {uid} fake postback.")
         return {"error": "Invalid Signature"}
+        
     result = await process_secure_postback(uid, amount, network)
+    
+    # Notificar al usuario si es posible
     try:
-        msg = f"💰 Pago recibido: ${amount}\n"
+        msg = f"💰 **PAGO RECIBIDO: ${amount}**\n"
         if result['status'] == 'ON_HOLD':
-            msg += "⚠️ En revisión (7 días)."
+            msg += "⚠️ Monto alto: En revisión de seguridad (7 días)."
         else:
-            msg += f"✅ Acreditado: ${result['user_share']:.2f}"
+            msg += f"✅ Acreditado: ${result['user_share']:.2f} a tu saldo."
         await telegram_app.bot.send_message(chat_id=uid, text=msg)
     except: pass
+    
     return {"status": "OK", "details": result}
