@@ -1,12 +1,11 @@
 import os
 import hashlib
 import logging
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ConversationHandler, filters
 from telegram import Update
 
 # --- IMPORTANTE: Importamos el módulo 'database' completo ---
-# Esto es vital para acceder a la variable redis_client actualizada
 import database 
 from database import init_db, process_secure_postback
 
@@ -43,11 +42,9 @@ async def startup():
     global telegram_app
     
     # 1. Iniciar Base de Datos y Redis
-    # init_db se encarga de conectar y asignar database.redis_client
     await init_db(DATABASE_URL)
     
-    # 2. Conectar el sistema de Caché (CORREGIDO)
-    # Accedemos a database.redis_client para obtener la conexión viva
+    # 2. Conectar el sistema de Caché (Usando la conexión viva de database)
     if database.redis_client:
         await init_cache(database.redis_client)
         logger.info("✅ Cache system linked to Redis successfully.")
@@ -59,10 +56,10 @@ async def startup():
     
     # --- MANEJADORES ---
     
-    # A. Comando de Reinicio (Dev)
+    # 1. Comando de Reinicio
     telegram_app.add_handler(CommandHandler("reset", reset_me))
 
-    # B. Flujo de Conversación (Registro)
+    # 2. Flujo de Conversación
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start_command)],
         states={
@@ -74,7 +71,7 @@ async def startup():
     )
     telegram_app.add_handler(conv_handler)
     
-    # C. Callbacks y Menús
+    # 3. Callbacks y Menús
     telegram_app.add_handler(CallbackQueryHandler(mine_tap_callback, pattern="mine_tap"))
     telegram_app.add_handler(CallbackQueryHandler(withdraw_callback, pattern="try_withdraw"))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
@@ -96,33 +93,23 @@ async def shutdown():
         await telegram_app.stop()
         await telegram_app.shutdown()
     
-    # Cerramos el pool desde el módulo database
     if database.db_pool:
         await database.db_pool.close()
     if database.redis_client:
         await database.redis_client.close()
     logger.info("🛑 System Shutdown Complete")
 
-# --- ENDPOINTS API ---
+# --- ENDPOINTS API Y HEALTH CHECKS ---
 
-@app.get("/")
+# Esta ruta maneja GET y HEAD para la raíz, solucionando el error 405
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
-    """Endpoint raíz"""
     return {"status": "Titan Node Online", "system": "Active"}
 
-@app.head("/")
-async def root_head():
-    """Soporte para Health Checks que usan HEAD (Evita error 405)"""
-    return {"status": "OK"}
-
-@app.get("/health")
+# Esta ruta maneja GET y HEAD para /health, solucionando el error específico de Render
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health_check():
-    """Render llama a este endpoint para verificar que la app no se ha congelado."""
-    return {
-        "status": "healthy", 
-        "database": "connected" if database.db_pool else "disconnected",
-        "redis": "connected" if database.redis_client else "disconnected"
-    }
+    return {"status": "OK", "db": "connected" if database.db_pool else "disconnected"}
 
 @app.post("/webhook")
 async def webhook(request: Request):
