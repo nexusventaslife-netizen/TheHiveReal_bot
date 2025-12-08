@@ -5,11 +5,12 @@ from fastapi import FastAPI, Request
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ConversationHandler, filters
 from telegram import Update
 
-# --- CORRECCIÓN AQUÍ ---
-# Importamos el módulo 'database' completo para acceder a sus variables actualizadas
+# --- IMPORTANTE: Importamos el módulo 'database' completo ---
+# Esto es necesario para ver los cambios en la variable global redis_client después de init_db
 import database 
 from database import init_db, process_secure_postback
 
+# Importamos la lógica del bot
 from bot_logic import (
     start_command, 
     process_email_input, 
@@ -21,6 +22,7 @@ from bot_logic import (
     WAIT_EMAIL, 
     WAIT_API_CHECK
 )
+# Importamos utilidades de caché
 from cache import init_cache
 
 # CONFIGURACIÓN
@@ -39,14 +41,16 @@ telegram_app = None
 @app.on_event("startup")
 async def startup():
     global telegram_app
+    
     # 1. Iniciar Base de Datos y Redis
+    # init_db actualiza la variable 'redis_client' dentro del módulo 'database'
     await init_db(DATABASE_URL)
     
-    # 2. Conectar Caché (CORREGIDO)
-    # Accedemos a database.redis_client que ya tendrá el valor actualizado por init_db
+    # 2. Conectar el sistema de Caché (CORREGIDO)
+    # Ahora accedemos a database.redis_client para obtener la conexión viva
     if database.redis_client:
         await init_cache(database.redis_client)
-        logger.info("✅ Cache system linked to Redis.")
+        logger.info("✅ Cache system linked to Redis successfully.")
     else:
         logger.warning("⚠️ Cache system initialized WITHOUT Redis (Check REDIS_URL).")
 
@@ -92,6 +96,7 @@ async def shutdown():
         await telegram_app.stop()
         await telegram_app.shutdown()
     
+    # Cerramos el pool desde el módulo database
     if database.db_pool:
         await database.db_pool.close()
     if database.redis_client:
@@ -102,15 +107,18 @@ async def shutdown():
 
 @app.get("/")
 async def root():
+    """Endpoint raíz"""
     return {"status": "Titan Node Online", "system": "Active"}
 
-@app.head("/")
-async def root_head():
-    """Soporte para Health Checks que usan HEAD"""
-    return {"status": "OK"}
+# --- NUEVO ENDPOINT PARA SOLUCIONAR EL ERROR 404 ---
+@app.get("/health")
+async def health_check():
+    """Render llama a este endpoint para verificar que la app no se ha congelado."""
+    return {"status": "healthy", "database": "connected" if database.db_pool else "disconnected"}
 
 @app.post("/webhook")
 async def webhook(request: Request):
+    """Recibe actualizaciones de Telegram"""
     try:
         data = await request.json()
         update = Update.de_json(data, telegram_app.bot)
@@ -121,6 +129,7 @@ async def webhook(request: Request):
 
 @app.get("/postback/secure")
 async def secure_postback(uid: int, amount: float, network: str, sig: str):
+    """Recibe pagos seguros de OfferToro/CPAGrip"""
     base_str = f"{uid}{amount}{CPA_SECRET_KEY}"
     local_sig = hashlib.md5(base_str.encode()).hexdigest()
     
