@@ -2,73 +2,95 @@ import os
 import logging
 import re
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler
-
-# Importamos las funciones de DB
+from telegram.ext import ContextTypes
 from database import (
-    add_user,
-    get_user,
-    update_user_email,
-    add_lead,
-    update_user_gate_status,
-    get_user_balance
+    add_user, 
+    add_lead, 
+    update_user_gate_status, 
+    get_user, 
+    get_user_balance,
+    add_hive_points,
+    update_user_email
 )
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("Hive.Logic")
+ADSTERRA_LINK = os.getenv("ADSTERRA_LINK", "https://google.com") 
 
-# Link de Adsterra (Fallback seguro a Google para no romper)
-ADSTERRA_LINK = os.getenv("ADSTERRA_LINK", "https://google.com")
-
+# --- COMANDO START (Punto de Entrada) ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     
-    # 1. Registrar usuario
+    # 1. Registrar usuario en DB (Si no existe)
     await add_user(user.id, user.first_name, user.username)
     
-    # 2. Consultar estado
+    # 2. Consultar estado actual
     db_user = await get_user(user.id)
     
-    # CASO A: Todo completo -> Menú
+    # CASO A: Usuario Completo (Email + Gate) -> Ver Menú
     if db_user and db_user.get('email') and db_user.get('api_gate_passed'):
         await menu_handler(update, context)
         return
 
-    # CASO B: Tiene Email, falta Gate
+    # CASO B: Tiene Email pero falta Gate (Adsterra)
     if db_user and db_user.get('email') and not db_user.get('api_gate_passed'):
         await show_gate_message(update, context)
         return
 
-    # CASO C: Nuevo -> Pedir Email
+    # CASO C: Usuario Nuevo (Falta Email)
     await update.message.reply_text(
-        f"👋 <b>Hola {user.first_name}!</b> Bienvenido a TheHiveReal.\n\n"
-        "📧 <b>PASO 1:</b> Para crear tu billetera, envíame tu <b>correo electrónico</b>.",
+        f"👋 <b>Hola {user.first_name}!</b>\n\n"
+        "🔒 Para proteger la economía del bot, necesitamos un registro único.\n\n"
+        "📧 <b>ESCRIBE TU EMAIL:</b> Por favor, envíame tu correo electrónico ahora para continuar.",
         parse_mode="HTML"
     )
-    context.user_data['waiting_for_email'] = True
 
+# --- PROCESAMIENTO INTELIGENTE DE EMAIL ---
 async def process_email_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text.strip()
     
-    # Validación simple
-    if not re.match(r'[^@]+@[^@]+\.[^@]+', text):
-        await update.message.reply_text("❌ Email inválido. Inténtalo de nuevo.")
+    # 1. VERIFICAR SI EL USUARIO YA TIENE EMAIL
+    # Si ya tiene email, NO intentamos validarlo de nuevo. Lo mandamos al menú o al gate.
+    db_user = await get_user(user_id)
+    
+    if db_user and db_user.get('email'):
+        # Ya está registrado, no necesitamos validar nada.
+        if not db_user.get('api_gate_passed'):
+            await show_gate_message(update, context)
+        else:
+            await menu_handler(update, context)
         return
 
-    await update_user_email(user_id, text)
-    await add_lead(user_id, text) # Guardar en harvest
+    # 2. VALIDACIÓN (Solo si NO tiene email)
+    # Regex simple para evitar falsos positivos con texto normal
+    email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     
-    await update.message.reply_text(f"✅ Email registrado. Pasando a verificación...")
+    if not re.match(email_regex, text):
+        await update.message.reply_text(
+            "❌ <b>Email no válido.</b>\n"
+            "Por favor asegúrate de enviar un correo real (ejemplo: `nombre@gmail.com`).\n"
+            "Inténtalo de nuevo 👇",
+            parse_mode="HTML"
+        )
+        return
+
+    # 3. GUARDAR EMAIL
+    await update_user_email(user_id, text)
+    await add_lead(user_id, text)
+    
+    # 4. AVANZAR
+    await update.message.reply_text(f"✅ Guardado: {text}")
     await show_gate_message(update, context)
 
+
+# --- GATE DE SEGURIDAD (ADSTERRA) ---
 async def show_gate_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
-        "🚨 <b>VERIFICACIÓN DE SEGURIDAD</b>\n\n"
-        "Para activar la minería, completa este paso rápido:\n"
-        "1. Toca <b>'ACTIVAR CUENTA'</b>.\n"
-        "2. Espera 5 seg en la página.\n"
-        "3. Toca <b>'YA LO HICE'</b>."
+        "🚨 <b>VERIFICACIÓN FINAL</b> 🚨\n\n"
+        "Para activar tu billetera:\n"
+        "1. Toca <b>'ACTIVAR CUENTA'</b> (Link Seguro).\n"
+        "2. Espera 5 segundos.\n"
+        "3. Vuelve y toca <b>'YA LO HICE'</b>."
     )
     keyboard = [
         [InlineKeyboardButton("🚀 1. ACTIVAR CUENTA", url=ADSTERRA_LINK)],
@@ -79,28 +101,39 @@ async def show_gate_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message:
         await update.message.reply_text(text, parse_mode="HTML", reply_markup=reply_markup)
     elif update.callback_query:
-        await update.callback_query.message.edit_text(text, parse_mode="HTML", reply_markup=reply_markup)
+        # Intenta editar, si falla (mensaje viejo) envía uno nuevo
+        try:
+            await update.callback_query.message.edit_text(text, parse_mode="HTML", reply_markup=reply_markup)
+        except Exception:
+            await context.bot.send_message(update.effective_chat.id, text, parse_mode="HTML", reply_markup=reply_markup)
 
 async def check_gate_verify_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer("🔄 Verificando...")
     
-    # Validamos y pasamos al menú
+    # Validar
     await update_user_gate_status(query.from_user.id, True)
-    await query.message.edit_text("✅ <b>¡CUENTA ACTIVADA!</b>", parse_mode="HTML")
+    
+    try:
+        await query.message.edit_text("✅ <b>¡CUENTA ACTIVADA!</b>", parse_mode="HTML")
+    except:
+        pass
+        
     await menu_handler(update, context)
 
+# --- MENÚ PRINCIPAL ---
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     bal = await get_user_balance(user_id)
     
     text = (
-        f"🐝 <b>DASHBOARD</b>\n"
-        f"💰 USD: ${bal['balance_usd']:.4f}\n"
-        f"🍯 Miel: {bal['balance_hive']}\n"
+        f"🐝 <b>HIVE DASHBOARD</b>\n\n"
+        f"💵 Saldo: <b>${bal['balance_usd']:.4f} USD</b>\n"
+        f"🍯 Miel: <b>{bal['balance_hive']}</b>\n\n"
+        "👇 Toca MINAR para ganar puntos."
     )
     keyboard = [
-        [InlineKeyboardButton("⛏️ MINAR", callback_data="mine_tap")],
+        [InlineKeyboardButton("⛏️ MINAR MIEL", callback_data="mine_tap")],
         [InlineKeyboardButton("💸 RETIRAR", callback_data="withdraw")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -110,11 +143,18 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(text, parse_mode="HTML", reply_markup=reply_markup)
 
+# --- ACCIONES ---
 async def mine_tap_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.answer("⛏️ +5 Miel (Simulado)")
+    user_id = update.effective_user.id
+    
+    # Sumar puntos
+    await add_hive_points(user_id, 10) # 10 puntos por click
+    
+    await update.callback_query.answer("⛏️ +10 Miel!")
+    # No editamos el mensaje para evitar Rate Limit, solo el popup (answer)
 
 async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.answer("Minimo $5.00 USD", show_alert=True)
+    await update.callback_query.answer("⚠️ Mínimo $10.00 USD", show_alert=True)
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Soporte: @admin")
+    await update.message.reply_text("Comandos: /start, /menu")
