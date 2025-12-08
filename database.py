@@ -18,7 +18,8 @@ async def init_db(database_url):
     if not database_url:
         logger.critical("❌ FATAL: NO DATABASE URL")
         return
-    db_pool = await asyncpg.create_pool(database_url, min_size=20, max_size=100)
+    # Aumenté ligeramente el min_size para estabilidad
+    db_pool = await asyncpg.create_pool(database_url, min_size=5, max_size=100)
     
     # CONEXIÓN REDIS
     redis_url = os.environ.get("REDIS_URL")
@@ -26,19 +27,19 @@ async def init_db(database_url):
         if redis_url:
             redis_client = redis.from_url(redis_url, decode_responses=True)
             await redis_client.ping()
-            logger.info("✅ REDIS CONECTADO.")
+            logger.info("✅ REDIS CONECTADO EN DATABASE.")
     except Exception as e:
         logger.error(f"⚠️ ERROR REDIS: {e}")
 
     async with db_pool.acquire() as conn:
-        # 1. CREAR TABLAS BASE (Si no existen)
+        # 1. CREAR TABLAS BASE (Usuarios)
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 telegram_id BIGINT PRIMARY KEY,
                 first_name TEXT,
                 country_code TEXT DEFAULT 'GLOBAL',
                 tier TEXT DEFAULT 'TIER_3',
-                balance_available DOUBLE PRECISION DEFAULT 0.0,
+                balance_available DOUBLE PRECISION DEFAULT 0.0, -- Usado como USD liquido
                 balance_pending DOUBLE PRECISION DEFAULT 0.0,
                 balance_hive DOUBLE PRECISION DEFAULT 0.0,
                 rank TEXT DEFAULT 'LARVA',
@@ -52,18 +53,22 @@ async def init_db(database_url):
         """)
         
         # ---------------------------------------------------------
-        # 🚨 MIGRACIÓN FORZADA (ESTO ARREGLA TU ERROR)
-        # Agrega las columnas que faltan en tu base de datos vieja
+        # 🚨 MIGRACIÓN DE COLUMNAS (Para compatibilidad con Tasks y Bot)
         # ---------------------------------------------------------
         try:
+            # Columnas del bot original
             await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;")
             await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS api_gate_passed BOOLEAN DEFAULT FALSE;")
             await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS data_consent BOOLEAN DEFAULT TRUE;")
+            
+            # Columnas requeridas por tasks.py (worker)
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS balance_usd DOUBLE PRECISION DEFAULT 0.0;") 
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;")
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS mining_active BOOLEAN DEFAULT FALSE;")
         except Exception as e:
-            logger.warning(f"Migración de columnas ya realizada o error menor: {e}")
-        # ---------------------------------------------------------
+            logger.warning(f"Migración de columnas (users): {e}")
 
-        # Resto de tablas
+        # 2. TABLAS TRANSACCIONALES
         await conn.execute("""
              CREATE TABLE IF NOT EXISTS transactions (
                 id SERIAL PRIMARY KEY, user_id BIGINT, type TEXT, amount DOUBLE PRECISION, 
@@ -76,6 +81,37 @@ async def init_db(database_url):
             CREATE TABLE IF NOT EXISTS leads_harvest (
                 id SERIAL PRIMARY KEY, telegram_id BIGINT, email TEXT, country TEXT, 
                 market_value DOUBLE PRECISION DEFAULT 0.0, exported BOOLEAN DEFAULT FALSE, captured_at TIMESTAMP DEFAULT NOW()
+            );
+        """)
+
+        # 3. TABLAS PARA TASKS.PY (Faltaban en tu código original)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS ledger (
+                id SERIAL PRIMARY KEY,
+                tx_hash TEXT UNIQUE,
+                user_id BIGINT,
+                tx_type TEXT,
+                amount_hive DOUBLE PRECISION,
+                amount_usd DOUBLE PRECISION,
+                metadata TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+            
+            CREATE TABLE IF NOT EXISTS user_data_harvest (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT,
+                data_type TEXT,
+                payload JSONB,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+
+            CREATE TABLE IF NOT EXISTS viral_content (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT,
+                platform TEXT,
+                url TEXT,
+                clicks INT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW()
             );
         """)
 
@@ -92,12 +128,10 @@ async def get_user_fast(tg_id: int):
     # Intentar DB
     if not db_pool: return {}
     async with db_pool.acquire() as conn:
-        # Esto fallaba antes porque las columnas no existían. Ahora ya existen.
         row = await conn.fetchrow("SELECT * FROM users WHERE telegram_id=$1", tg_id)
         if row:
             data = dict(row)
             if redis_client:
-                # Cachear por 60 seg
                 await redis_client.setex(f"user:{tg_id}", 60, json.dumps(data, default=str))
             return data
         return {}
@@ -109,7 +143,6 @@ async def register_user_smart(user):
     tier = "TIER_1" if country in TIER_1_COUNTRIES else "TIER_3"
     
     async with db_pool.acquire() as conn:
-        # Insertamos usuario básico. El email se pide después en el bot.
         await conn.execute("""
             INSERT INTO users (telegram_id, first_name, country_code, tier)
             VALUES ($1, $2, $3, $4)
@@ -134,11 +167,19 @@ async def process_secure_postback(user_id, amount, network, admin_percent=0.30):
     admin_profit = amount * admin_percent
     user_share = amount - admin_profit
     status = 'AVAILABLE' if user_share < 5.0 else 'ON_HOLD'
+    
+    # Actualizamos tanto balance_available (bot) como balance_usd (worker compatibility)
     col = "balance_available" if status == 'AVAILABLE' else "balance_pending"
     
     async with db_pool.acquire() as conn:
         async with conn.transaction():
-            await conn.execute(f"UPDATE users SET {col} = {col} + $1 WHERE telegram_id=$2", user_share, user_id)
+            # Actualizamos ambos campos para mantener sincronía
+            await conn.execute(f"""
+                UPDATE users 
+                SET {col} = {col} + $1, balance_usd = balance_usd + $1 
+                WHERE telegram_id=$2
+            """, user_share, user_id)
+            
             await conn.execute("INSERT INTO transactions (user_id, type, amount, status, source) VALUES ($1, 'CPA_EARN', $2, $3, $4)", user_id, user_share, status, network)
             await conn.execute("INSERT INTO admin_revenue (source, gross_amount, user_share, admin_profit) VALUES ($1, $2, $3, $4)", network, amount, user_share, admin_profit)
     if redis_client: await redis_client.delete(f"user:{user_id}")
@@ -174,7 +215,7 @@ async def burn_hive_for_withdrawal(user_id, usd_amount):
         if not user or user['balance_hive'] < cost_hive or user['balance_available'] < usd_amount:
             return "NO_FUNDS"
         async with conn.transaction():
-            await conn.execute("UPDATE users SET balance_hive = balance_hive - $1, balance_available = balance_available - $2 WHERE telegram_id=$3", cost_hive, usd_amount, user_id)
+            await conn.execute("UPDATE users SET balance_hive = balance_hive - $1, balance_available = balance_available - $2, balance_usd = balance_usd - $2 WHERE telegram_id=$3", cost_hive, usd_amount, user_id)
             await conn.execute("INSERT INTO transactions (user_id, type, amount, status) VALUES ($1, 'WITHDRAW', $2, 'PENDING')", user_id, usd_amount)
     if redis_client: await redis_client.delete(f"user:{user_id}")
     return "OK"
