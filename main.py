@@ -6,7 +6,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 from telegram import Update
 
 # --- IMPORTANTE: Importamos el módulo 'database' completo ---
-# Esto es necesario para ver los cambios en la variable global redis_client después de init_db
+# Esto es vital para acceder a la variable redis_client actualizada
 import database 
 from database import init_db, process_secure_postback
 
@@ -43,11 +43,11 @@ async def startup():
     global telegram_app
     
     # 1. Iniciar Base de Datos y Redis
-    # init_db actualiza la variable 'redis_client' dentro del módulo 'database'
+    # init_db se encarga de conectar y asignar database.redis_client
     await init_db(DATABASE_URL)
     
     # 2. Conectar el sistema de Caché (CORREGIDO)
-    # Ahora accedemos a database.redis_client para obtener la conexión viva
+    # Accedemos a database.redis_client para obtener la conexión viva
     if database.redis_client:
         await init_cache(database.redis_client)
         logger.info("✅ Cache system linked to Redis successfully.")
@@ -59,10 +59,10 @@ async def startup():
     
     # --- MANEJADORES ---
     
-    # 1. Comando de Reinicio
+    # A. Comando de Reinicio (Dev)
     telegram_app.add_handler(CommandHandler("reset", reset_me))
 
-    # 2. Flujo de Conversación
+    # B. Flujo de Conversación (Registro)
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start_command)],
         states={
@@ -74,7 +74,7 @@ async def startup():
     )
     telegram_app.add_handler(conv_handler)
     
-    # 3. Callbacks y Menús
+    # C. Callbacks y Menús
     telegram_app.add_handler(CallbackQueryHandler(mine_tap_callback, pattern="mine_tap"))
     telegram_app.add_handler(CallbackQueryHandler(withdraw_callback, pattern="try_withdraw"))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
@@ -110,11 +110,19 @@ async def root():
     """Endpoint raíz"""
     return {"status": "Titan Node Online", "system": "Active"}
 
-# --- NUEVO ENDPOINT PARA SOLUCIONAR EL ERROR 404 ---
+@app.head("/")
+async def root_head():
+    """Soporte para Health Checks que usan HEAD (Evita error 405)"""
+    return {"status": "OK"}
+
 @app.get("/health")
 async def health_check():
     """Render llama a este endpoint para verificar que la app no se ha congelado."""
-    return {"status": "healthy", "database": "connected" if database.db_pool else "disconnected"}
+    return {
+        "status": "healthy", 
+        "database": "connected" if database.db_pool else "disconnected",
+        "redis": "connected" if database.redis_client else "disconnected"
+    }
 
 @app.post("/webhook")
 async def webhook(request: Request):
