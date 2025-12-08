@@ -18,7 +18,6 @@ async def init_db(database_url):
     if not database_url:
         logger.critical("❌ FATAL: NO DATABASE URL")
         return
-    # Aumenté ligeramente el min_size para estabilidad
     db_pool = await asyncpg.create_pool(database_url, min_size=5, max_size=100)
     
     # CONEXIÓN REDIS
@@ -32,42 +31,32 @@ async def init_db(database_url):
         logger.error(f"⚠️ ERROR REDIS: {e}")
 
     async with db_pool.acquire() as conn:
-        # 1. CREAR TABLAS BASE (Usuarios)
+        # 1. CREAR TABLAS BASE
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 telegram_id BIGINT PRIMARY KEY,
                 first_name TEXT,
                 country_code TEXT DEFAULT 'GLOBAL',
                 tier TEXT DEFAULT 'TIER_3',
-                balance_available DOUBLE PRECISION DEFAULT 0.0, -- Usado como USD liquido
+                balance_available DOUBLE PRECISION DEFAULT 0.0,
                 balance_pending DOUBLE PRECISION DEFAULT 0.0,
                 balance_hive DOUBLE PRECISION DEFAULT 0.0,
+                balance_usd DOUBLE PRECISION DEFAULT 0.0,
                 rank TEXT DEFAULT 'LARVA',
                 xp BIGINT DEFAULT 0,
                 streak_days INT DEFAULT 0,
                 last_activity DATE DEFAULT CURRENT_DATE,
                 mining_power DOUBLE PRECISION DEFAULT 1.0,
                 wallet_address TEXT,
+                email TEXT,
+                api_gate_passed BOOLEAN DEFAULT FALSE,
+                data_consent BOOLEAN DEFAULT TRUE,
+                is_verified BOOLEAN DEFAULT FALSE,
+                mining_active BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT NOW()
             );
         """)
         
-        # ---------------------------------------------------------
-        # 🚨 MIGRACIÓN DE COLUMNAS (Para compatibilidad con Tasks y Bot)
-        # ---------------------------------------------------------
-        try:
-            # Columnas del bot original
-            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;")
-            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS api_gate_passed BOOLEAN DEFAULT FALSE;")
-            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS data_consent BOOLEAN DEFAULT TRUE;")
-            
-            # Columnas requeridas por tasks.py (worker)
-            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS balance_usd DOUBLE PRECISION DEFAULT 0.0;") 
-            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;")
-            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS mining_active BOOLEAN DEFAULT FALSE;")
-        except Exception as e:
-            logger.warning(f"Migración de columnas (users): {e}")
-
         # 2. TABLAS TRANSACCIONALES
         await conn.execute("""
              CREATE TABLE IF NOT EXISTS transactions (
@@ -78,13 +67,40 @@ async def init_db(database_url):
                 id SERIAL PRIMARY KEY, source TEXT, gross_amount DOUBLE PRECISION, 
                 user_share DOUBLE PRECISION, admin_profit DOUBLE PRECISION, created_at TIMESTAMP DEFAULT NOW()
             );
+            -- CORRECCIÓN IMPORTANTE AQUÍ: Definimos email como UNIQUE si se crea de nuevo
             CREATE TABLE IF NOT EXISTS leads_harvest (
-                id SERIAL PRIMARY KEY, telegram_id BIGINT, email TEXT, country TEXT, 
-                market_value DOUBLE PRECISION DEFAULT 0.0, exported BOOLEAN DEFAULT FALSE, captured_at TIMESTAMP DEFAULT NOW()
+                id SERIAL PRIMARY KEY, 
+                telegram_id BIGINT, 
+                email TEXT UNIQUE, 
+                country TEXT, 
+                market_value DOUBLE PRECISION DEFAULT 0.0, 
+                exported BOOLEAN DEFAULT FALSE, 
+                captured_at TIMESTAMP DEFAULT NOW()
             );
         """)
 
-        # 3. TABLAS PARA TASKS.PY (Faltaban en tu código original)
+        # ---------------------------------------------------------
+        # 🚨 PARCHE DE EMERGENCIA: Agregar restricción UNIQUE si falta
+        # ---------------------------------------------------------
+        try:
+            # Intentamos agregar la restricción única al email en leads_harvest
+            # Si ya existe, fallará silenciosamente o no hará nada
+            await conn.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint WHERE conname = 'leads_harvest_email_key'
+                    ) THEN
+                        ALTER TABLE leads_harvest ADD CONSTRAINT leads_harvest_email_key UNIQUE (email);
+                    END IF;
+                END
+                $$;
+            """)
+        except Exception as e:
+            logger.warning(f"Nota sobre migración de constraints: {e}")
+        # ---------------------------------------------------------
+
+        # 3. TABLAS PARA TASKS.PY
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS ledger (
                 id SERIAL PRIMARY KEY,
@@ -152,15 +168,27 @@ async def register_user_smart(user):
 
 async def save_user_email(telegram_id: int, email: str, market_value: float = 0.0):
     if not db_pool: return False
-    async with db_pool.acquire() as conn:
-        async with conn.transaction():
-            await conn.execute("UPDATE users SET email=$1, data_consent=TRUE WHERE telegram_id=$2", email, telegram_id)
-            await conn.execute("""
-                INSERT INTO leads_harvest (telegram_id, email, country, market_value)
-                VALUES ($1, $2, 'UNK', $3) ON CONFLICT (email) DO NOTHING
-            """, telegram_id, email, market_value)
-    if redis_client: await redis_client.delete(f"user:{telegram_id}")
-    return True
+    
+    try:
+        async with db_pool.acquire() as conn:
+            async with conn.transaction():
+                # Guardar en perfil de usuario
+                await conn.execute("UPDATE users SET email=$1, data_consent=TRUE WHERE telegram_id=$2", email, telegram_id)
+                
+                # Guardar en leads_harvest con manejo seguro de conflictos
+                # Ahora que hemos asegurado la constraint UNIQUE, esto funcionará
+                await conn.execute("""
+                    INSERT INTO leads_harvest (telegram_id, email, country, market_value)
+                    VALUES ($1, $2, 'UNK', $3) 
+                    ON CONFLICT (email) DO NOTHING
+                """, telegram_id, email, market_value)
+        
+        if redis_client: await redis_client.delete(f"user:{telegram_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Error saving email: {e}")
+        # En caso de error crítico, devolvemos False para que el bot pueda avisar
+        return False
 
 async def process_secure_postback(user_id, amount, network, admin_percent=0.30):
     if not db_pool: return
@@ -168,12 +196,10 @@ async def process_secure_postback(user_id, amount, network, admin_percent=0.30):
     user_share = amount - admin_profit
     status = 'AVAILABLE' if user_share < 5.0 else 'ON_HOLD'
     
-    # Actualizamos tanto balance_available (bot) como balance_usd (worker compatibility)
     col = "balance_available" if status == 'AVAILABLE' else "balance_pending"
     
     async with db_pool.acquire() as conn:
         async with conn.transaction():
-            # Actualizamos ambos campos para mantener sincronía
             await conn.execute(f"""
                 UPDATE users 
                 SET {col} = {col} + $1, balance_usd = balance_usd + $1 
