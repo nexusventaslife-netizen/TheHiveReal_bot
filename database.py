@@ -1,130 +1,104 @@
 import os
 import logging
 import asyncpg
-import redis.asyncio as redis
 from datetime import datetime
 
 # Configuración de Logs
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("Hive.DB")
+logger = logging.getLogger(__name__)
 
-# Variables Globales
-DB_POOL = None
-REDIS_CLIENT = None
-
+# URL de Conexión (Desde Render)
 DATABASE_URL = os.getenv("DATABASE_URL")
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+
+# Variable global para el pool de conexiones
+pool = None
 
 async def init_db():
-    """Inicializa la conexión a PostgreSQL y Redis."""
-    global DB_POOL, REDIS_CLIENT
-    
-    # 1. Conectar PostgreSQL
+    """Inicializa el pool de conexiones a PostgreSQL."""
+    global pool
     if not DATABASE_URL:
-        logger.error("❌ DATABASE_URL no encontrada.")
-        raise ValueError("DATABASE_URL env var is missing")
-    
+        logger.error("❌ DATABASE_URL no está definida.")
+        return
+
     try:
-        DB_POOL = await asyncpg.create_pool(DATABASE_URL)
-        logger.info("✅ PostgreSQL Pool creado exitosamente.")
+        pool = await asyncpg.create_pool(dsn=DATABASE_URL)
+        logger.info("✅ Conexión a Base de Datos (AsyncPG) establecida.")
         
-        # Crear tablas si no existen
-        async with DB_POOL.acquire() as conn:
+        # Crear tablas si no existen (Inicialización básica)
+        async with pool.acquire() as conn:
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     user_id BIGINT PRIMARY KEY,
-                    username TEXT,
                     first_name TEXT,
-                    balance_usd NUMERIC(10, 4) DEFAULT 0.0,
-                    balance_hive NUMERIC(10, 4) DEFAULT 0.0,
+                    username TEXT,
                     email TEXT,
-                    gate_passed BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP DEFAULT NOW(),
-                    referrer_id BIGINT
+                    balance_usd NUMERIC(10, 4) DEFAULT 0.0,
+                    balance_hive BIGINT DEFAULT 0,
+                    api_gate_passed BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT NOW()
                 );
-                
                 CREATE TABLE IF NOT EXISTS leads_harvest (
                     id SERIAL PRIMARY KEY,
-                    user_id BIGINT UNIQUE,
+                    user_id BIGINT,
                     email TEXT UNIQUE,
-                    source TEXT DEFAULT 'bot_start',
                     captured_at TIMESTAMP DEFAULT NOW()
                 );
             """)
     except Exception as e:
-        logger.error(f"❌ Error conectando a Postgres: {e}")
+        logger.error(f"❌ Error conectando a DB: {e}")
         raise e
 
-    # 2. Conectar Redis
-    try:
-        REDIS_CLIENT = redis.from_url(REDIS_URL, decode_responses=True)
-        await REDIS_CLIENT.ping()
-        logger.info("✅ REDIS CONECTADO EN DATABASE.")
-    except Exception as e:
-        logger.warning(f"⚠️ No se pudo conectar a Redis: {e}")
-
 async def close_db():
-    """Cierra las conexiones a la DB y Redis limpiamente."""
-    global DB_POOL, REDIS_CLIENT
-    
-    if DB_POOL:
-        await DB_POOL.close()
-        logger.info("🔒 PostgreSQL Pool cerrado.")
-    
-    if REDIS_CLIENT:
-        await REDIS_CLIENT.close()
-        logger.info("🔒 Redis Client cerrado.")
+    """Cierra el pool de conexiones limpiamente."""
+    global pool
+    if pool:
+        await pool.close()
+        logger.info("🛑 Conexión a Base de Datos cerrada.")
 
 # --- FUNCIONES DE USUARIO ---
 
-async def get_user(user_id: int):
-    async with DB_POOL.acquire() as conn:
-        return await conn.fetchrow("SELECT * FROM users WHERE user_id = $1", user_id)
+async def add_user(user_id, first_name, username):
+    """Crea un usuario si no existe."""
+    if not pool: return
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            INSERT INTO users (user_id, first_name, username) 
+            VALUES ($1, $2, $3) 
+            ON CONFLICT (user_id) DO NOTHING
+        """, user_id, first_name, username)
 
-async def add_user(user_id: int, username: str, first_name: str, referrer_id: int = None):
-    async with DB_POOL.acquire() as conn:
-        try:
-            await conn.execute("""
-                INSERT INTO users (user_id, username, first_name, referrer_id)
-                VALUES ($1, $2, $3, $4)
-                ON CONFLICT (user_id) DO NOTHING
-            """, user_id, username, first_name, referrer_id)
-        except Exception as e:
-            logger.error(f"Error creando usuario {user_id}: {e}")
+async def get_user(user_id):
+    """Obtiene datos del usuario."""
+    if not pool: return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM users WHERE user_id = $1", user_id)
+        return dict(row) if row else None
 
-async def add_lead(user_id: int, email: str):
-    """Guarda el email en la tabla de leads y actualiza el usuario."""
-    async with DB_POOL.acquire() as conn:
-        try:
-            # 1. Guardar en leads_harvest
-            await conn.execute("""
-                INSERT INTO leads_harvest (user_id, email)
-                VALUES ($1, $2)
-                ON CONFLICT (user_id) DO UPDATE SET email = EXCLUDED.email
-            """, user_id, email)
-            
-            # 2. Actualizar tabla users
-            await conn.execute("""
-                UPDATE users SET email = $1 WHERE user_id = $2
-            """, email, user_id)
-            return True
-        except Exception as e:
-            logger.error(f"Error guardando lead {email}: {e}")
-            return False
+async def update_user_email(user_id, email):
+    """Actualiza el email del usuario."""
+    if not pool: return
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE users SET email = $1 WHERE user_id = $2", email, user_id)
 
-async def update_user_gate_status(user_id: int, status: bool):
-    """Marca si el usuario pasó el link de publicidad."""
-    async with DB_POOL.acquire() as conn:
-        await conn.execute("UPDATE users SET gate_passed = $1 WHERE user_id = $2", status, user_id)
+async def add_lead(user_id, email):
+    """Guarda el email en la tabla de leads (Harvest)."""
+    if not pool: return
+    async with pool.acquire() as conn:
+        # Usamos ON CONFLICT para evitar errores si el email ya existe
+        await conn.execute("""
+            INSERT INTO leads_harvest (user_id, email) 
+            VALUES ($1, $2) 
+            ON CONFLICT (email) DO NOTHING
+        """, user_id, email)
 
-async def get_balance(user_id: int):
-    """Retorna (balance_usd, balance_hive)."""
-    async with DB_POOL.acquire() as conn:
+async def update_user_gate_status(user_id, status=True):
+    """Marca que el usuario pasó el filtro de publicidad."""
+    if not pool: return
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE users SET api_gate_passed = $1 WHERE user_id = $2", status, user_id)
+
+async def get_user_balance(user_id):
+    """Retorna los saldos del usuario."""
+    if not pool: return {'balance_usd': 0.0, 'balance_hive': 0}
+    async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT balance_usd, balance_hive FROM users WHERE user_id = $1", user_id)
-        if row:
-            return row['balance_usd'], row['balance_hive']
-        return 0.0, 0.0
-
-async def add_hive_points(user_id: int, amount: float):
-    async with DB_POOL.acquire() as conn:
-        await conn.execute("UPDATE users SET balance_hive = balance_hive + $1 WHERE user_id = $2", amount, user_id)
+        return dict(row) if row else {'balance_usd': 0.0, 'balance_hive': 0}
