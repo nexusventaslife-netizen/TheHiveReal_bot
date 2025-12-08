@@ -5,11 +5,11 @@ from fastapi import FastAPI, Request, Response
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ConversationHandler, filters
 from telegram import Update
 
-# --- IMPORTANTE: Importamos el módulo 'database' completo ---
+# Importamos módulo completo para acceder a variables globales actualizadas
 import database 
 from database import init_db, process_secure_postback
 
-# Importamos la lógica del bot
+# Importamos lógica del bot
 from bot_logic import (
     start_command, 
     process_email_input, 
@@ -21,7 +21,6 @@ from bot_logic import (
     WAIT_EMAIL, 
     WAIT_API_CHECK
 )
-# Importamos utilidades de caché
 from cache import init_cache
 
 # CONFIGURACIÓN
@@ -41,25 +40,25 @@ telegram_app = None
 async def startup():
     global telegram_app
     
-    # 1. Iniciar Base de Datos y Redis
+    # 1. Base de Datos y Redis
     await init_db(DATABASE_URL)
     
-    # 2. Conectar el sistema de Caché (Usando la conexión viva de database)
+    # 2. Conectar Caché (Usando la conexión creada en database.py)
     if database.redis_client:
         await init_cache(database.redis_client)
         logger.info("✅ Cache system linked to Redis successfully.")
     else:
-        logger.warning("⚠️ Cache system initialized WITHOUT Redis (Check REDIS_URL).")
+        logger.warning("⚠️ Cache system running in MEMORY ONLY (Check REDIS_URL).")
 
     # 3. Iniciar Bot
     telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
     
-    # --- MANEJADORES ---
+    # --- MANEJADORES Y FILTROS ---
     
-    # 1. Comando de Reinicio
+    # Comando Reset (Solo admin/dev)
     telegram_app.add_handler(CommandHandler("reset", reset_me))
 
-    # 2. Flujo de Conversación
+    # Flujo de Entrada Obligatorio (Start -> Email -> API Check)
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start_command)],
         states={
@@ -71,16 +70,14 @@ async def startup():
     )
     telegram_app.add_handler(conv_handler)
     
-    # 3. Callbacks y Menús
+    # Menú Principal (Solo accesible tras pasar filtros)
     telegram_app.add_handler(CallbackQueryHandler(mine_tap_callback, pattern="mine_tap"))
     telegram_app.add_handler(CallbackQueryHandler(withdraw_callback, pattern="try_withdraw"))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
     
-    # Inicializar aplicación
     await telegram_app.initialize()
     await telegram_app.start()
     
-    # Configurar Webhook
     if WEBHOOK_URL:
         webhook_path = f"{WEBHOOK_URL}/webhook"
         await telegram_app.bot.set_webhook(url=webhook_path)
@@ -88,32 +85,32 @@ async def startup():
 
 @app.on_event("shutdown")
 async def shutdown():
-    """Cierre limpio de conexiones"""
     if telegram_app:
         await telegram_app.stop()
         await telegram_app.shutdown()
-    
     if database.db_pool:
         await database.db_pool.close()
     if database.redis_client:
         await database.redis_client.close()
     logger.info("🛑 System Shutdown Complete")
 
-# --- ENDPOINTS API Y HEALTH CHECKS ---
+# --- ENDPOINTS CRÍTICOS (Health Checks & Webhooks) ---
 
-# Esta ruta maneja GET y HEAD para la raíz, solucionando el error 405
+# SOLUCIÓN AL ERROR 405: Permitimos HEAD en todas las rutas de salud
 @app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return {"status": "Titan Node Online", "system": "Active"}
 
-# Esta ruta maneja GET y HEAD para /health, solucionando el error específico de Render
 @app.api_route("/health", methods=["GET", "HEAD"])
 async def health_check():
-    return {"status": "OK", "db": "connected" if database.db_pool else "disconnected"}
+    """Render usa esto para verificar vida. Debe devolver 200 OK siempre."""
+    return {
+        "status": "healthy",
+        "database": "connected" if database.db_pool else "disconnected"
+    }
 
 @app.post("/webhook")
 async def webhook(request: Request):
-    """Recibe actualizaciones de Telegram"""
     try:
         data = await request.json()
         update = Update.de_json(data, telegram_app.bot)
@@ -122,9 +119,14 @@ async def webhook(request: Request):
         logger.error(f"Webhook error: {e}")
     return {"ok": True}
 
+# --- MONETIZACIÓN: POSTBACK CPA ---
 @app.get("/postback/secure")
 async def secure_postback(uid: int, amount: float, network: str, sig: str):
-    """Recibe pagos seguros de OfferToro/CPAGrip"""
+    """
+    Endpoint para redes de CPA (OfferToro, CPAGrip).
+    Estructura esperada: ?uid={user_id}&amount={payout}&network={source}&sig={md5_hash}
+    """
+    # Verificación de firma para seguridad
     base_str = f"{uid}{amount}{CPA_SECRET_KEY}"
     local_sig = hashlib.md5(base_str.encode()).hexdigest()
     
@@ -132,15 +134,15 @@ async def secure_postback(uid: int, amount: float, network: str, sig: str):
         logger.warning(f"🚨 HACK ATTEMPT: User {uid} fake postback.")
         return {"error": "Invalid Signature"}
     
+    # Procesar pago
     result = await process_secure_postback(uid, amount, network)
     
+    # Notificar al usuario (Fidelización)
     try:
-        msg = f"💰 **PAGO RECIBIDO: ${amount}**\n"
+        msg = f"💰 **¡DINERO RECIBIDO!**\nHas ganado: `${amount}`\nFuente: {network}"
         if result['status'] == 'ON_HOLD':
-            msg += "⚠️ En revisión de seguridad (7 días)."
-        else:
-            msg += f"✅ Acreditado: ${result['user_share']:.2f}"
+            msg += "\n⚠️ Saldo en retención por seguridad (Anti-Fraude)."
         await telegram_app.bot.send_message(chat_id=uid, text=msg)
     except: pass
     
-    return {"status": "OK", "details": result}
+    return {"status": "OK"}
