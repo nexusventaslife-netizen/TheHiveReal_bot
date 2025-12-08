@@ -1,8 +1,11 @@
 fastapi
-uvicorn
-python-telegram-bot==20.6
+uvicorn[standard]
 asyncpg
-email-validator
-pillow
+python-telegram-bot>=20
+redis>=4.5.0
+arq
+fastapi-limiter
 imagehash
-python-multipart
+Pillow
+email-validator
+python-dotenv
