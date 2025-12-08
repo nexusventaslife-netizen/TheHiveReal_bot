@@ -168,3 +168,13 @@ async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.callback_query.answer("❌ No tienes HIVE suficiente (500 HIVE para $5).", show_alert=True)
     elif res == "NO_USD":
         await update.callback_query.answer("❌ Saldo insuficiente.", show_alert=True)
+from database import db_pool # Asegúrate de importar esto arriba
+
+async def reset_me(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando secreto para borrar mi cuenta y probar desde cero"""
+    user_id = update.effective_user.id
+    if not db_pool: return
+    async with db_pool.acquire() as conn:
+        await conn.execute("DELETE FROM users WHERE telegram_id=$1", user_id)
+    
+    await update.message.reply_text("🔄 **CUENTA BORRADA.**\nEscribe /start para probar el registro de nuevo.")
