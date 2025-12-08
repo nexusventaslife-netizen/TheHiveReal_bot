@@ -1,124 +1,135 @@
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
+
+# IMPORTANTE: Importamos el módulo completo, no la variable suelta.
+# Esto soluciona el error "Base de datos no conectada".
+import database 
 from database import (
     register_user_smart, 
     get_user_fast, 
     save_user_email, 
     unlock_api_gate, 
-    update_gamification, 
-    db_pool,
-    redis_client
+    update_gamification
 )
 
 logger = logging.getLogger("Hive.Logic")
 
-# Constantes para ConversationHandler (deben coincidir con lo que main.py espera)
+# Estados para la conversación
 WAIT_EMAIL = 1
 WAIT_API_CHECK = 2
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Inicio del bot: Verifica estado del usuario y decide el flujo."""
+    """
+    Punto de entrada. Aplica SEGURIDAD y FILTROS ANTI-BOT.
+    Nadie entra al menú sin Email y API Check.
+    """
     user = update.effective_user
     logger.info(f"User {user.id} started bot")
     
-    # 1. Registro silencioso en base de datos
+    # 1. Registro inicial silencioso
     await register_user_smart(user)
     
-    # 2. Verificar estado actual del usuario
+    # 2. Obtener estado actual del usuario
     db_user = await get_user_fast(user.id)
     
-    # Flujo A: Si no tiene email, forzamos el flujo de conversación
+    # --- FILTRO 1: EMAIL OBLIGATORIO (Anti-Spam) ---
     if not db_user.get('email'):
         await update.message.reply_text(
-            f"👋 **Bienvenido, {user.first_name}!**\n\n"
-            "Para acceder al Panal (The Hive), necesitamos verificar tu identidad.\n"
-            "📧 **Por favor, envía tu correo electrónico para continuar:**",
+            f"🛡 **SISTEMA DE SEGURIDAD THE HIVE**\n\n"
+            f"Hola {user.first_name}. Para evitar bots y proteger la economía del servidor, "
+            "necesitamos validar tu identidad.\n\n"
+            "📧 **Paso 1:** Escribe tu correo electrónico para continuar:",
             parse_mode="Markdown"
         )
         return WAIT_EMAIL
     
-    # Flujo B: Si tiene email pero no ha pasado el API Gate
+    # --- FILTRO 2: API GATE / DESCARGA OBLIGATORIA (Monetización/Seguridad) ---
     if not db_user.get('api_gate_passed'):
-        keyboard = [[InlineKeyboardButton("🔍 Verificar Conexión", callback_data="check_gate")]]
+        keyboard = [[InlineKeyboardButton("🔓 ACTIVAR CUENTA", callback_data="check_gate")]]
         await update.message.reply_text(
-            "🔒 **Verificación de Seguridad**\n\n"
-            "Tu email ya está registrado. Falta un último paso de seguridad.",
+            "🔒 **CUENTA BLOQUEADA**\n\n"
+            "Tu email está registrado, pero falta la validación del nodo.\n"
+            "Esto asegura que eres un usuario real y único.\n\n"
+            "👇 Presiona el botón para verificar tu conexión API:",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown"
         )
         return WAIT_API_CHECK
 
-    # Flujo C: Usuario completo, mostrar menú principal
+    # --- SI PASA TODO: AL MENÚ ---
     await menu_handler(update, context)
     return ConversationHandler.END
 
 async def process_email_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Recibe y guarda el email del usuario."""
+    """Guarda el email y pasa al siguiente filtro."""
     text = update.message.text.strip()
     user_id = update.effective_user.id
     
-    # Validación simple de email
+    # Validación básica
     if "@" not in text or "." not in text:
-        await update.message.reply_text("❌ **Email inválido.** Por favor intenta de nuevo:")
+        await update.message.reply_text("❌ Email inválido. Intenta de nuevo:")
         return WAIT_EMAIL
     
-    # Guardar email en DB
+    # Guardar en DB
     await save_user_email(user_id, text, market_value=0.10)
     
-    keyboard = [[InlineKeyboardButton("✅ Verificar Acceso", callback_data="check_gate")]]
+    keyboard = [[InlineKeyboardButton("🔓 ACTIVAR CUENTA", callback_data="check_gate")]]
     await update.message.reply_text(
-        f"✅ **Email guardado:** `{text}`\n\n"
-        "Presiona el botón abajo para validar tu acceso al sistema.",
+        f"✅ **Email verificado:** `{text}`\n\n"
+        "⚠ **ÚLTIMO PASO:** Tu cuenta está en 'Modo Restringido'.\n"
+        "Necesitamos verificar tu dispositivo.",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
     return WAIT_API_CHECK
 
 async def check_gate_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Callback cuando el usuario presiona 'Verificar API'."""
+    """Simula la verificación de API/Descarga."""
     query = update.callback_query
-    await query.answer("🔄 Verificando credenciales...")
+    await query.answer("🔄 Conectando con servidor de validación...")
     
     user_id = update.effective_user.id
     
-    # Desbloquear usuario en DB
+    # AQUÍ SE APLICA LA LÓGICA DE DESBLOQUEO
+    # En el futuro, aquí podrías verificar si realmente instalaron una app o vieron un anuncio.
     await unlock_api_gate(user_id)
     
     await query.edit_message_text(
-        "🔓 **ACCESO CONCEDIDO**\n"
-        "Bienvenido a la Colmena."
-    , parse_mode="Markdown")
+        "🚀 **¡ACCESO CONCEDIDO!**\n\n"
+        "Bienvenido a The Hive. Ya puedes generar ingresos.",
+        parse_mode="Markdown"
+    )
     
-    # Mostrar el menú principal
+    # Mostrar menú principal
     await show_main_menu(update.effective_chat.id, context)
     return ConversationHandler.END
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Manejador para mensajes de texto normales o retorno al menú."""
+    """Manejador del menú principal."""
     await show_main_menu(update.effective_chat.id, context)
 
 async def show_main_menu(chat_id, context):
-    """Función auxiliar para enviar el menú visual."""
-    # Recuperamos datos frescos del usuario
+    """Interfaz Gráfica del Menú Principal."""
     user_data = await get_user_fast(chat_id)
     
-    # Valores por defecto si es la primera vez
     balance_hive = user_data.get('balance_hive', 0.0)
-    balance_usd = user_data.get('balance_available', 0.0)
+    balance_usd = user_data.get('balance_available', 0.0) # Usamos available (The Hive original)
     rank = user_data.get('rank', 'LARVA')
     
     text = (
-        f"🐝 **PANEL DE CONTROL - THE HIVE**\n\n"
-        f"👤 Rango: **{rank}**\n"
-        f"🍯 Miel (Points): `{balance_hive:.2f}`\n"
-        f"💵 Saldo USD: `${balance_usd:.2f}`\n\n"
-        "👇 _Selecciona una acción:_"
+        f"🐝 **THE HIVE: DASHBOARD**\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"🏆 Rango: **{rank}**\n"
+        f"💰 Saldo: **${balance_usd:.2f} USD**\n"
+        f"🍯 Miel: **{balance_hive:.0f} pts**\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        "¿Qué deseas hacer hoy?"
     )
     
     keyboard = [
-        [InlineKeyboardButton("⛏ MINAR MIEL", callback_data="mine_tap")],
-        [InlineKeyboardButton("🏦 RETIRAR FONDOS", callback_data="try_withdraw")]
+        [InlineKeyboardButton("⛏ MINAR MIEL (Tap)", callback_data="mine_tap")],
+        [InlineKeyboardButton("🏦 RETIRAR DINERO", callback_data="try_withdraw")]
     ]
     
     await context.bot.send_message(
@@ -129,22 +140,17 @@ async def show_main_menu(chat_id, context):
     )
 
 async def mine_tap_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Acción al presionar Minar."""
     query = update.callback_query
     user_id = update.effective_user.id
     
-    # Actualizamos racha y actividad
     stats = await update_gamification(user_id)
     streak = stats.get('streak', 0)
     
-    # Feedback visual (sin editar mensaje para no saturar API)
-    await query.answer(f"⛏ ¡Recolectando! Racha: {streak} días", show_alert=False)
+    await query.answer(f"⛏ +10 Miel recolectada | Racha: {streak} días", show_alert=False)
 
 async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Acción al presionar Retirar."""
     query = update.callback_query
     user_id = update.effective_user.id
-    
     await query.answer()
     
     user_data = await get_user_fast(user_id)
@@ -152,34 +158,39 @@ async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if balance < 10.0:
         await query.message.reply_text(
-            f"⚠️ **Saldo insuficiente**\n"
-            f"Tu saldo: `${balance:.2f}`\n"
-            f"Mínimo para retirar: `$10.00`",
-            parse_mode="Markdown",
+            f"❌ **Saldo insuficiente**\nMinimo: $10.00\nTu saldo: ${balance:.2f}",
             quote=True
         )
     else:
-        await query.message.reply_text("✅ Iniciando proceso de retiro seguro...", quote=True)
+        await query.message.reply_text("✅ Procesando solicitud de retiro...", quote=True)
 
 async def reset_me(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """COMANDO DE DESARROLLO: Borra tu cuenta para probar el registro desde cero"""
+    """
+    COMANDO /reset: Reinicia la cuenta para pruebas.
+    SOLUCIONADO: Ahora usa database.db_pool para acceder a la conexión viva.
+    """
     user = update.effective_user
-    if not db_pool: 
-        await update.message.reply_text("❌ Error: Base de datos no conectada.")
+    
+    # Verificación correcta de la conexión
+    if not database.db_pool: 
+        await update.message.reply_text("❌ Error crítico: Base de datos desconectada.")
         return
 
-    async with db_pool.acquire() as conn:
-        # Borramos todo rastro tuyo
-        await conn.execute("DELETE FROM users WHERE telegram_id=$1", user.id)
-        await conn.execute("DELETE FROM leads_harvest WHERE telegram_id=$1", user.id)
-        await conn.execute("DELETE FROM transactions WHERE user_id=$1", user.id)
-        
-        # Limpiamos caché de Redis si existe
-        if redis_client:
-            await redis_client.delete(f"user:{user.id}")
+    try:
+        async with database.db_pool.acquire() as conn:
+            await conn.execute("DELETE FROM users WHERE telegram_id=$1", user.id)
+            await conn.execute("DELETE FROM leads_harvest WHERE telegram_id=$1", user.id)
+            await conn.execute("DELETE FROM transactions WHERE user_id=$1", user.id)
+            # Limpiar tablas extra si existen
+            await conn.execute("DELETE FROM ledger WHERE user_id=$1", user.id)
+            
+            if database.redis_client:
+                await database.redis_client.delete(f"user:{user.id}")
 
-    await update.message.reply_text(
-        "🔄 **CUENTA DE FÁBRICA RESTAURADA**\n\n"
-        "El sistema ya no te conoce.\n"
-        "Escribe **/start** para simular ser un usuario nuevo (te pedirá Email y API)."
-    )
+        await update.message.reply_text(
+            "🔄 **RESET COMPLETADO**\n\n"
+            "Tu cuenta ha sido eliminada.\n"
+            "Escribe **/start** para probar el flujo de Email y API nuevamente."
+        )
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ Error SQL: {e}")
