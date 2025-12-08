@@ -1,228 +1,176 @@
 import os
 import logging
-import re
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler
-
-# Importamos las funciones de base de datos
-# Asegúrate de que database.py tenga estas funciones o adáptalas
+from telegram.ext import ContextTypes
 from database import (
-    add_user,
-    get_user,
-    update_user_email,
-    add_lead,
-    update_user_gate_status,
-    get_user_balance
+    add_user, 
+    add_lead, 
+    update_user_gate_status, 
+    get_user, 
+    get_balance,
+    add_hive_points
 )
 
-# --- CONFIGURACIÓN ---
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("Hive.Logic")
 
-# Link de Adsterra desde Variables de Entorno (Fallback a Google si falla para no romper el bot)
-ADSTERRA_LINK = os.getenv("ADSTERRA_LINK", "https://google.com")
+# ENLACE DE ADSTERRA (Cámbialo en Render Environment Variables o usa este fallback)
+# Este link es el que genera $$$.
+ADSTERRA_LINK = os.getenv("ADSTERRA_DIRECT_LINK", "https://google.com") 
 
-# --- FLUJO DE INICIO (/start) ---
-
+# --- COMANDO START ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Punto de entrada. Verifica el estado del usuario en la DB
-    y lo dirige al paso que le falta (Email -> Gate -> Menú).
-    """
     user = update.effective_user
-    chat_id = update.effective_chat.id
+    args = context.args  # Para referidos en el futuro
     
-    # 1. Registrar o recuperar usuario de la DB
-    # (add_user debe manejar si el usuario ya existe para no dar error)
-    await add_user(user.id, user.first_name, user.username)
+    # Registrar usuario en DB
+    await add_user(user.id, user.username, user.first_name)
     
-    # 2. Consultar datos actuales del usuario
+    # Verificar si ya pasó el Gate
     db_user = await get_user(user.id)
-    
-    # --- LÓGICA DE ESTADOS ---
-    
-    # CASO A: Ya completó todo -> Ir al Menú
-    if db_user and db_user.get('email') and db_user.get('api_gate_passed'):
+    if db_user and db_user['gate_passed']:
         await menu_handler(update, context)
         return
 
-    # CASO B: Tiene Email pero falta el Gate (Adsterra)
-    if db_user and db_user.get('email') and not db_user.get('api_gate_passed'):
-        await show_gate_message(update, context)
-        return
-
-    # CASO C: Usuario Nuevo o sin Email -> Pedir Email
+    # Si no ha pasado el gate, pedir Email
     await update.message.reply_text(
-        f"👋 <b>Hola {user.first_name}!</b> Bienvenido a TheHiveReal.\n\n"
-        "🤖 Somos una Reward App que te paga por tareas simples.\n\n"
-        "📧 <b>PASO 1:</b> Para crear tu billetera y evitar bots, "
-        "por favor <b>envíame tu correo electrónico</b> ahora mismo.",
-        parse_mode="HTML"
+        f"👋 Hola {user.first_name}!\n\n"
+        "🔒 **Sistema de Seguridad TheHive**\n"
+        "Para proteger la economía del token y evitar bots, necesitamos validar tu registro.\n\n"
+        "📧 **Paso 1:** Por favor, escribe y envíame tu **correo electrónico** para continuar."
     )
-    # Marcamos en el contexto que esperamos un email (opcional si usas lógica stateless)
-    context.user_data['waiting_for_email'] = True
+    # Marcar estado interno (opcional si usas ConversationHandler, pero esto funciona con el MessageHandler simple del main)
+    context.user_data['awaiting_email'] = True
 
-
-# --- MANEJO DE EMAIL ---
-
+# --- PROCESAMIENTO DE EMAIL Y GATE ---
 async def process_email_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Captura cualquier texto enviado por el usuario y valida si es un email.
+    Recibe el email, lo guarda y muestra el botón de Adsterra.
     """
-    # Si estamos en el menú, ignorar textos o manejar comandos
-    # Aquí asumimos que si no ha pasado el gate, cualquier texto es un intento de email
-    
     user_id = update.effective_user.id
-    text = update.message.text.strip()
+    email_text = update.message.text.strip()
     
-    # Validación simple de Regex para Email
-    email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    
-    if not re.match(email_regex, text):
-        await update.message.reply_text("❌ Eso no parece un email válido. Inténtalo de nuevo.")
+    # Validación simple de formato email
+    if "@" not in email_text or "." not in email_text:
+        await update.message.reply_text("❌ Formato inválido. Por favor envía un email real (ej: usuario@gmail.com).")
         return
 
-    # 1. Guardar Email en la tabla de usuarios
-    await update_user_email(user_id, text)
-    
-    # 2. Guardar en leads_harvest (Para venta de datos/backup)
-    await add_lead(user_id, text)
-    
-    await update.message.reply_text(f"✅ Email <b>{text}</b> registrado correctamente.", parse_mode="HTML")
-    
-    # 3. Pasar inmediatamente al Gate de Monetización
-    await show_gate_message(update, context)
+    # Guardar en DB
+    success = await add_lead(user_id, email_text)
+    if not success:
+        await update.message.reply_text("⚠️ Hubo un error guardando tus datos. Intenta de nuevo.")
+        return
 
-
-# --- GATE DE SEGURIDAD (MONETIZACIÓN ADSTERRA) ---
-
-async def show_gate_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Muestra el botón de Adsterra.
-    Usa estrategia de DOBLE BOTÓN para asegurar el click y la validación.
-    """
-    # Texto persuasivo
-    text = (
-        "🚨 <b>ÚLTIMO PASO DE SEGURIDAD</b> 🚨\n\n"
-        "Nuestro sistema detecta tráfico nuevo. Para activar tu billetera y empezar a minar, "
-        "necesitas validar tu sesión.\n\n"
-        "👇 <b>INSTRUCCIONES:</b>\n"
-        "1. Toca <b>'ACTIVAR CUENTA'</b> (Se abrirá un enlace seguro).\n"
-        "2. Espera 5 segundos en la página.\n"
-        "3. Vuelve aquí y toca <b>'✅ YA LO HICE'</b>."
+    # --- LÓGICA DE MONETIZACIÓN (ADSTERRA) ---
+    logger.info(f"Email capturado para {user_id}. Mostrando Link de Adsterra: {ADSTERRA_LINK}")
+    
+    # Botón 1: Va a Adsterra (Usuario ve anuncios -> Tú ganas $$$)
+    # Botón 2: Callback para verificar que volvió
+    keyboard = [
+        [InlineKeyboardButton("🔓 ACTIVAR CUENTA (Click Aquí)", url=ADSTERRA_LINK)],
+        [InlineKeyboardButton("✅ YA COMPLETÉ EL PASO", callback_data="check_gate")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        f"✅ Email `{email_text}` registrado.\n\n"
+        "🚨 **ÚLTIMO PASO DE ACTIVACIÓN** 🚨\n"
+        "Tu billetera está bloqueada temporalmente. Para desbloquearla:\n\n"
+        "1. Toca el botón **'ACTIVAR CUENTA'** y espera 5 segundos en la página.\n"
+        "2. Vuelve aquí y toca **'YA COMPLETÉ EL PASO'**.\n\n"
+        "👇 _Hazlo ahora para entrar al menú_",
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
     )
 
-    keyboard = [
-        # BOTÓN 1: URL EXTERNA (Adsterra) - Telegram abre el navegador
-        [InlineKeyboardButton("🚀 1. ACTIVAR CUENTA (Click Aquí)", url=ADSTERRA_LINK)],
-        
-        # BOTÓN 2: CALLBACK INTERNO - Verifica la acción
-        [InlineKeyboardButton("✅ 2. YA LO HICE / VERIFICAR", callback_data="check_gate_verify")]
-    ]
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    # Enviar o Editar mensaje dependiendo del contexto
-    if update.message:
-        await update.message.reply_text(text, parse_mode="HTML", reply_markup=reply_markup)
-    elif update.callback_query:
-        # Si venimos de un callback anterior, editamos para no hacer spam
-        try:
-            await update.callback_query.message.edit_text(text, parse_mode="HTML", reply_markup=reply_markup)
-        except Exception:
-            # Fallback si el mensaje es muy viejo
-            await update.callback_query.message.reply_text(text, parse_mode="HTML", reply_markup=reply_markup)
-
-
-async def check_gate_verify_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def check_gate_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Maneja el botón 'YA LO HICE'.
+    Callback cuando el usuario dice que ya vio el anuncio.
     """
     query = update.callback_query
     user_id = query.from_user.id
     
-    await query.answer("🔄 Verificando conexión...")
-
-    # AQUÍ ESTÁ EL TRUCO:
-    # Como Adsterra no nos avisa server-to-server, confiamos en el click del usuario
-    # pero forzamos la interacción de dos pasos.
+    await query.answer("🔄 Verificando...")
     
-    # 1. Actualizar DB
-    await update_user_gate_status(user_id, status=True)
-
-    # 2. Feedback positivo
-    await query.message.reply_text("✅ <b>¡CUENTA ACTIVADA!</b> Accediendo al sistema...", parse_mode="HTML")
+    # Aquí asumimos que lo hizo (Estrategia Adsterra Direct Link)
+    # En el futuro, con Shortlinks (Ouo.io), aquí validaremos el token real.
     
-    # 3. Ir al Menú Principal
+    await update_user_gate_status(user_id, True)
+    
+    await query.edit_message_text(
+        "✅ **¡CUENTA VERIFICADA!**\n\n"
+        "Bienvenido a la Colmena. Ya puedes empezar a generar Miel.",
+        parse_mode="Markdown"
+    )
+    
+    # Mostrar menú principal
     await menu_handler(update, context)
 
-
-# --- MENÚ PRINCIPAL Y LÓGICA DEL BOT ---
-
+# --- MENÚ PRINCIPAL ---
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Dashboard principal del usuario.
-    """
-    user = update.effective_user
-    user_id = user.id
+    user_id = update.effective_user.id
     
-    # Obtener saldos actualizados de la DB
-    # Retorna tupla o dict: {'balance_usd': 0.00, 'balance_hive': 0}
-    financials = await get_user_balance(user_id) 
+    # Obtener saldo fresco de la DB
+    usd, hive = await get_balance(user_id)
     
-    usd = financials.get('balance_usd', 0.0)
-    hive = financials.get('balance_hive', 0)
-
-    text = (
-        f"🐝 <b>THE HIVE REAL - DASHBOARD</b>\n"
-        f"👤 Usuario: {user.first_name}\n"
-        f"➖➖➖➖➖➖➖➖➖➖\n"
-        f"💰 <b>Saldo USD:</b> ${usd:.4f}\n"
-        f"🍯 <b>Miel (Puntos):</b> {hive} HIVE\n"
-        f"➖➖➖➖➖➖➖➖➖➖\n"
-        f"¡Mina puntos o invita amigos para ganar dinero real!"
-    )
-
     keyboard = [
-        [InlineKeyboardButton("⛏️ MINAR MIEL", callback_data="mine_tap")],
-        [InlineKeyboardButton("👥 REFERIDOS", callback_data="referrals_menu"), 
-         InlineKeyboardButton("💸 RETIRAR", callback_data="withdraw_menu")],
-        [InlineKeyboardButton("🆘 SOPORTE / AYUDA", callback_data="help_menu")]
+        [InlineKeyboardButton("⛏️ MINAR MIEL (Tap)", callback_data="mine_tap")],
+        [InlineKeyboardButton("🏦 RETIRAR FONDOS", callback_data="withdraw")],
+        [InlineKeyboardButton("🔗 REFERIDOS (Pronto)", callback_data="ref_system")]
     ]
-    
     reply_markup = InlineKeyboardMarkup(keyboard)
-
+    
+    text = (
+        f"🐝 **DASHBOARD PRINCIPAL**\n\n"
+        f"💵 Saldo USD: **${usd:.4f}**\n"
+        f"🍯 Miel (Puntos): **{hive:.2f}**\n\n"
+        "La Miel se convierte a USD cada 24h."
+    )
+    
     if update.callback_query:
-        await update.callback_query.message.edit_text(text, parse_mode="HTML", reply_markup=reply_markup)
+        # Si venimos de un botón, editamos para no hacer spam
+        try:
+            await update.callback_query.message.edit_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+        except Exception:
+            # Si el mensaje es muy viejo o idéntico, enviamos uno nuevo
+            await context.bot.send_message(user_id, text, reply_markup=reply_markup, parse_mode="Markdown")
     else:
-        await update.message.reply_text(text, parse_mode="HTML", reply_markup=reply_markup)
+        # Si venimos del comando /menu
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
 
-
-# --- HANDLERS DE ACCIONES DEL MENÚ ---
+# --- FUNCIONES DE MINERÍA Y RETIRO ---
 
 async def mine_tap_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Simulación de minería. Aquí integraremos Shortlinks (Ouo.io) en el futuro.
-    """
     query = update.callback_query
-    await query.answer("⛏️ ¡Minando... +5 HIVE!")
+    user_id = query.from_user.id
     
-    # TODO: Llamar a DB para sumar puntos
-    # await add_balance(user_id, hive=5)
+    # Gamificación simple: Sumar 0.5 puntos de Miel
+    await add_hive_points(user_id, 0.5)
+    await query.answer("🔨 +0.5 Miel minada!")
     
-    # Efecto visual simple: Editar el mensaje con el nuevo saldo (opcional)
-    # Por ahora solo notificamos con el alert de arriba.
-    pass
+    # Actualizar visualmente (Opcional: Para no saturar la API, no editamos el mensaje en cada click, solo alertamos)
+    # Si quieres actualizar el texto, descomenta la siguiente línea, pero cuidado con el Rate Limit de Telegram:
+    # await menu_handler(update, context)
 
 async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await query.message.reply_text("⚠️ El mínimo de retiro es $5.00 USD. Sigue minando.")
+    
+    usd, _ = await get_balance(query.from_user.id)
+    
+    if usd < 10.0:
+        await query.message.reply_text(
+            f"❌ **Mínimo de retiro: $10.00 USD**\n"
+            f"Tu saldo actual: ${usd:.4f}\n\n"
+            "Sigue minando o invita amigos para llegar más rápido.",
+            parse_mode="Markdown"
+        )
+    else:
+        await query.message.reply_text("✅ Tienes fondos suficientes. Contacta a soporte para procesar el pago.")
 
-async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    UTILIDAD DE DEBUG: Permite resetear tu propio usuario para probar el flujo de nuevo.
-    """
-    # Solo permitir al admin o en modo debug
-    # await reset_user_db(update.effective_user.id)
-    await update.message.reply_text("🔄 Usuario reseteado (Simulación). Escribe /start para probar de cero.")
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🆘 **AYUDA**\n\n"
+        "/start - Reiniciar el bot\n"
+        "/menu - Ver saldo y minar\n"
+        "Si tienes problemas, contacta a @Soporte."
+    )
