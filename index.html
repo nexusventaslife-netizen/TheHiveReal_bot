@@ -5,32 +5,130 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Verificación de Seguridad - TheHive</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #121212; color: white; text-align: center; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        .container { width: 100%; max-width: 400px; background: #1e1e1e; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.7); border: 1px solid #333; }
-        h1 { color: #f1c40f; margin-bottom: 10px; font-size: 24px; }
-        p { color: #bdc3c7; margin-bottom: 25px; font-size: 15px; line-height: 1.5; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #000000; 
+            color: white; 
+            text-align: center; 
+            padding: 20px; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            margin: 0; 
+        }
+        .container { 
+            width: 100%; 
+            max-width: 400px; 
+            background: #111; 
+            padding: 30px; 
+            border-radius: 20px; 
+            box-shadow: 0 0 50px rgba(241, 196, 15, 0.1); 
+            border: 1px solid #333; 
+        }
+        h1 { color: #f1c40f; margin-bottom: 10px; font-size: 24px; text-transform: uppercase; letter-spacing: 2px; }
+        p { color: #bdc3c7; margin-bottom: 25px; font-size: 14px; line-height: 1.5; }
         
-        .btn { display: flex; align-items: center; justify-content: center; width: 100%; padding: 18px; margin: 15px 0; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; text-decoration: none; transition: 0.3s; box-sizing: border-box; }
+        .btn { 
+            display: block; 
+            width: 100%; 
+            padding: 15px; 
+            margin: 15px 0; 
+            border: none; 
+            border-radius: 8px; 
+            font-size: 16px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            text-decoration: none; 
+            transition: 0.3s; 
+            box-sizing: border-box; 
+            position: relative;
+        }
         
         /* Botón ByBit (Dorado) */
-        .btn-gold { background: linear-gradient(135deg, #f1c40f, #f39c12); color: #1a1a1a; box-shadow: 0 4px 15px rgba(241, 196, 15, 0.3); }
+        .btn-gold { background: #f1c40f; color: #000; }
+        .btn-gold:hover { background: #d4ac0d; box-shadow: 0 0 15px #f1c40f; }
         
         /* Botón Adsterra (Azul) */
-        .btn-blue { background: linear-gradient(135deg, #3498db, #2980b9); color: white; box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3); }
+        .btn-blue { background: #3498db; color: white; }
+        .btn-blue:hover { background: #2980b9; box-shadow: 0 0 15px #3498db; }
 
-        /* Botón BC.Game (Verde Neon) */
-        .btn-green { background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3); }
+        /* Botón Casino (Verde) */
+        .btn-green { background: #2ecc71; color: white; }
+        .btn-green:hover { background: #27ae60; box-shadow: 0 0 15px #2ecc71; }
         
-        .btn:hover { transform: translateY(-3px); filter: brightness(1.1); }
+        .verify-box { 
+            margin-top: 30px; 
+            padding: 20px; 
+            background: #222; 
+            border-radius: 10px; 
+            border: 1px dashed #444; 
+        }
         
-        .verify-box { margin-top: 30px; padding: 20px; background: #252525; border-radius: 10px; border: 1px dashed #555; }
-        .code { font-size: 28px; letter-spacing: 3px; color: #2ecc71; font-weight: bold; display: none; margin-top: 10px; background: #000; padding: 10px; border-radius: 5px; }
+        .hidden-code { 
+            font-size: 24px; 
+            letter-spacing: 3px; 
+            color: #f1c40f; 
+            font-weight: bold; 
+            display: none; 
+            margin-top: 15px; 
+            background: #000; 
+            padding: 15px; 
+            border-radius: 5px; 
+            border: 1px solid #f1c40f;
+        }
         
-        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #f1c40f; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: none; margin: 10px auto; }
+        .loader { 
+            border: 3px solid #333; 
+            border-top: 3px solid #f1c40f; 
+            border-radius: 50%; 
+            width: 30px; 
+            height: 30px; 
+            animation: spin 1s linear infinite; 
+            display: none; 
+            margin: 15px auto; 
+        }
+        
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .instruction-text { font-size: 12px; color: #777; margin-top: 10px; }
     </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>🔒 VERIFICACIÓN</h1>
+        <p>Para obtener tu código de acceso y activar la minería, completa una de las siguientes tareas:</p>
+
+        <!-- ENLACES DE MONETIZACIÓN (AQUÍ PON TUS LINKS REALES) -->
+        <a href="TU_LINK_BYBIT" target="_blank" class="btn btn-gold" onclick="startVerification()">1. Registro ByBit (VIP)</a>
+        <a href="TU_LINK_ADSTERRA" target="_blank" class="btn btn-blue" onclick="startVerification()">2. Ver Anuncio Rápido</a>
+        <a href="TU_LINK_BCGAME" target="_blank" class="btn btn-green" onclick="startVerification()">3. Bono Casino</a>
+
+        <div class="verify-box">
+            <p id="status-text">Esperando acción...</p>
+            <div id="loader" class="loader"></div>
+            <div id="final-code" class="hidden-code">HIVE-777</div>
+            <p class="instruction-text">Copia este código y envíalo al Bot.</p>
+        </div>
+    </div>
+
     <script>
-        function showCode() {
-            document.getElementById('instruction').innerText = "⏳ Verificando acción...";
-            document.getElementById('loader').style.display = 'block';*
-
+        function startVerification() {
+            // Cambia el texto y muestra el cargando
+            document.getElementById('status-text').innerText = "Verificando tu tarea...";
+            document.getElementById('status-text').style.color = "#f1c40f";
+            document.getElementById('loader').style.display = 'block';
+            
+            // Simula espera de 5 segundos y muestra el código
+            setTimeout(function() {
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('status-text').innerText = "✅ VERIFICADO. TU CÓDIGO:";
+                document.getElementById('status-text').style.color = "#2ecc71";
+                document.getElementById('final-code').style.display = 'block';
+            }, 5000); // 5000 milisegundos = 5 segundos
+        }
+    </script>
+
+</body>
+</html>
