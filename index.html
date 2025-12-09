@@ -23,10 +23,10 @@
             background: #111; 
             padding: 30px; 
             border-radius: 20px; 
-            box-shadow: 0 0 50px rgba(241, 196, 15, 0.1); 
+            box-shadow: 0 0 50px rgba(52, 152, 219, 0.1); 
             border: 1px solid #333; 
         }
-        h1 { color: #f1c40f; margin-bottom: 10px; font-size: 24px; text-transform: uppercase; }
+        h1 { color: #3498db; margin-bottom: 10px; font-size: 24px; text-transform: uppercase; }
         p { color: #bdc3c7; margin-bottom: 25px; font-size: 14px; }
         
         .btn { 
@@ -42,21 +42,35 @@
             text-decoration: none; 
             transition: 0.3s; 
             box-sizing: border-box; 
+            position: relative;
         }
         
-        /* Colores */
+        /* COLORES */
         .btn-gold { background: #f1c40f; color: #000; }
-        .btn-blue { background: #3498db; color: white; }
+        .btn-gold:hover { background: #d4ac0d; box-shadow: 0 0 15px #f1c40f; }
+        
+        /* Monetag - Azul Intenso */
+        .btn-monetag { background: linear-gradient(45deg, #2980b9, #6dd5fa); color: white; }
+        .btn-monetag:hover { background: linear-gradient(45deg, #3498db, #86a8e7); box-shadow: 0 0 20px #2980b9; }
+
         .btn-green { background: #2ecc71; color: white; }
-        .btn-confirm { background: #e74c3c; color: white; display: none; margin-top: 20px; animation: pulse 2s infinite; }
+        .btn-green:hover { background: #27ae60; box-shadow: 0 0 15px #2ecc71; }
+        
+        /* Botón Confirmar */
+        .btn-confirm { 
+            background: #e74c3c; 
+            color: white; 
+            display: none; 
+            margin-top: 20px; 
+            animation: pulse 2s infinite; 
+        }
         
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); } 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); } }
 
         .verify-box { margin-top: 30px; padding: 20px; background: #222; border-radius: 10px; border: 1px dashed #444; }
-        .hidden-code { font-size: 28px; letter-spacing: 3px; color: #2ecc71; font-weight: bold; display: none; margin-top: 15px; background: #000; padding: 15px; border-radius: 5px; border: 1px solid #2ecc71; }
+        .hidden-code { font-size: 28px; letter-spacing: 3px; color: #2ecc71; font-weight: bold; display: none; margin-top: 15px; background: #000; padding: 15px; border-radius: 5px; border: 1px solid #2ecc71; user-select: all; }
         .instruction-text { font-size: 12px; color: #777; margin-top: 10px; }
         
-        /* Botón para volver a Telegram */
         .btn-telegram {
             display: none;
             background-color: #0088cc;
@@ -68,53 +82,70 @@
 <body>
 
     <div class="container">
-        <h1>⚠️ ACCIÓN REQUERIDA</h1>
-        <p>Para recibir tu código, debes <b>COMPLETAR</b> el registro o descarga.</p>
+        <h1>⚠️ VERIFICACIÓN</h1>
+        <p>Para activar tu cuenta, completa una tarea rápida:</p>
 
-        <!-- ENLACES REALES -->
-        <a href="https://www.bybit.com/sign-up?ref=BBJWAX4" target="_blank" class="btn btn-gold" onclick="startVerification()">1. Registrarse en ByBit</a>
-        <a href="https://www.effectivegatecpm.com/nape4jr5mw?key=fdb64c1d24876eabf086283a7fb126f7" target="_blank" class="btn btn-blue" onclick="startVerification()">2. Descargar App (Adsterra)</a>
-        <a href="https://bc.game/i-477hgd5fl-n/" target="_blank" class="btn btn-green" onclick="startVerification()">3. Registrarse en BC.Game</a>
+        <!-- 1. BYBIT -->
+        <a href="https://www.bybit.com/sign-up?ref=BBJWAX4" target="_blank" class="btn btn-gold" onclick="startVerification()">
+            💰 1. Registro ByBit (VIP)
+        </a>
+        
+        <!-- 2. MONETAG (TU SMARTLINK INTELIGENTE) -->
+        <!-- Este enlace detecta automáticamente el país del usuario -->
+        <a href="https://otieu.com/4/10301606" target="_blank" class="btn btn-monetag" onclick="startVerification()">
+            ⚡ 2. Ver Contenido (Rápido)
+        </a>
+        
+        <!-- 3. BC GAME -->
+        <a href="https://bc.game/i-477hgd5fl-n/" target="_blank" class="btn btn-green" onclick="startVerification()">
+            🎲 3. Bono Casino
+        </a>
 
         <!-- Botón de Confirmación Manual -->
         <button id="btn-check" class="btn btn-confirm" onclick="showCode()">
-            ✅ YA ME REGISTRÉ / DESCARGUÉ
+            ✅ YA COMPLETÉ LA TAREA
         </button>
 
         <div class="verify-box">
             <p id="status-text">Elige una opción arriba 👆</p>
-            <div id="final-code" class="hidden-code">HIVE-777</div>
+            <div id="final-code" class="hidden-code" onclick="copyCode()">HIVE-777</div>
             
-            <!-- Botón para volver al Bot -->
             <a href="https://t.me/TheHiveReal_bot" class="btn btn-telegram" id="back-to-bot">
-                🔙 Volver al Bot y Pegar Código
+                🔙 VOLVER AL BOT
             </a>
+            
+            <p class="instruction-text" id="copy-hint" style="display:none">Toca el código para copiarlo.</p>
         </div>
     </div>
 
     <script>
         function startVerification() {
-            // 1. Cambia el estado
-            document.getElementById('status-text').innerText = "⏳ Esperando confirmación de registro...";
+            // Animación de espera
+            document.getElementById('status-text').innerText = "⏳ Verificando acción...";
             document.getElementById('status-text').style.color = "#f1c40f";
             
-            // 2. Muestra el botón de confirmación después de 5 segundos
-            // (Damos tiempo para que vayan a la otra web)
+            // Aparece botón rojo a los 5 segundos
             setTimeout(function() {
                 document.getElementById('btn-check').style.display = 'block';
-                document.getElementById('btn-check').innerText = "✅ YA COMPLETÉ EL REGISTRO";
             }, 5000);
         }
 
         function showCode() {
-            // 3. Cuando el usuario confirma manualmente
+            // Confirmación manual
             document.getElementById('btn-check').style.display = 'none';
-            document.getElementById('status-text').innerText = "✅ VERIFICADO. TU CÓDIGO:";
+            document.getElementById('status-text').innerText = "✅ CÓDIGO ACTIVADO:";
             document.getElementById('status-text').style.color = "#2ecc71";
             
-            // Muestra el código y el botón de volver
             document.getElementById('final-code').style.display = 'block';
             document.getElementById('back-to-bot').style.display = 'block';
+            document.getElementById('copy-hint').style.display = 'block';
+        }
+
+        function copyCode() {
+            const code = document.getElementById('final-code').innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                alert("Código copiado. ¡Vuelve al bot!");
+            });
         }
     </script>
 
