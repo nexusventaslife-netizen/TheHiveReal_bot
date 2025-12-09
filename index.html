@@ -26,8 +26,8 @@
             box-shadow: 0 0 50px rgba(241, 196, 15, 0.1); 
             border: 1px solid #333; 
         }
-        h1 { color: #f1c40f; margin-bottom: 10px; font-size: 24px; text-transform: uppercase; letter-spacing: 2px; }
-        p { color: #bdc3c7; margin-bottom: 25px; font-size: 14px; line-height: 1.5; }
+        h1 { color: #f1c40f; margin-bottom: 10px; font-size: 24px; text-transform: uppercase; }
+        p { color: #bdc3c7; margin-bottom: 25px; font-size: 14px; }
         
         .btn { 
             display: block; 
@@ -42,98 +42,79 @@
             text-decoration: none; 
             transition: 0.3s; 
             box-sizing: border-box; 
-            position: relative;
         }
         
-        /* Estilos de botones */
+        /* Colores */
         .btn-gold { background: #f1c40f; color: #000; }
-        .btn-gold:hover { background: #d4ac0d; box-shadow: 0 0 15px #f1c40f; }
-        
         .btn-blue { background: #3498db; color: white; }
-        .btn-blue:hover { background: #2980b9; box-shadow: 0 0 15px #3498db; }
-
         .btn-green { background: #2ecc71; color: white; }
-        .btn-green:hover { background: #27ae60; box-shadow: 0 0 15px #2ecc71; }
+        .btn-confirm { background: #e74c3c; color: white; display: none; margin-top: 20px; animation: pulse 2s infinite; }
         
-        .verify-box { 
-            margin-top: 30px; 
-            padding: 20px; 
-            background: #222; 
-            border-radius: 10px; 
-            border: 1px dashed #444; 
-        }
-        
-        .hidden-code { 
-            font-size: 24px; 
-            letter-spacing: 3px; 
-            color: #f1c40f; 
-            font-weight: bold; 
-            display: none; 
-            margin-top: 15px; 
-            background: #000; 
-            padding: 15px; 
-            border-radius: 5px; 
-            border: 1px solid #f1c40f;
-        }
-        
-        .loader { 
-            border: 3px solid #333; 
-            border-top: 3px solid #f1c40f; 
-            border-radius: 50%; 
-            width: 30px; 
-            height: 30px; 
-            animation: spin 1s linear infinite; 
-            display: none; 
-            margin: 15px auto; 
-        }
-        
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); } 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); } }
+
+        .verify-box { margin-top: 30px; padding: 20px; background: #222; border-radius: 10px; border: 1px dashed #444; }
+        .hidden-code { font-size: 28px; letter-spacing: 3px; color: #2ecc71; font-weight: bold; display: none; margin-top: 15px; background: #000; padding: 15px; border-radius: 5px; border: 1px solid #2ecc71; }
         .instruction-text { font-size: 12px; color: #777; margin-top: 10px; }
+        
+        /* Botón para volver a Telegram */
+        .btn-telegram {
+            display: none;
+            background-color: #0088cc;
+            color: white;
+            margin-top: 15px;
+        }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h1>🔒 VERIFICACIÓN</h1>
-        <p>Para desbloquear tu acceso, completa una tarea:</p>
+        <h1>⚠️ ACCIÓN REQUERIDA</h1>
+        <p>Para recibir tu código, debes <b>COMPLETAR</b> el registro o descarga.</p>
 
-        <!-- 1. ENLACE BYBIT (CONVERTIDO A URL DE REGISTRO) -->
-        <a href="https://www.bybit.com/sign-up?ref=BBJWAX4" target="_blank" class="btn btn-gold" onclick="startVerification()">
-            💰 1. Registro ByBit (VIP)
-        </a>
-        
-        <!-- 2. ENLACE ADSTERRA (TU LINK DIRECTO) -->
-        <a href="https://www.effectivegatecpm.com/nape4jr5mw?key=fdb64c1d24876eabf086283a7fb126f7" target="_blank" class="btn btn-blue" onclick="startVerification()">
-            ⚡ 2. Ver Anuncio Rápido
-        </a>
-        
-        <!-- 3. ENLACE BC GAME (TU LINK DE REFERIDO) -->
-        <a href="https://bc.game/i-477hgd5fl-n/" target="_blank" class="btn btn-green" onclick="startVerification()">
-            🎲 3. Bono Casino
-        </a>
+        <!-- ENLACES REALES -->
+        <a href="https://www.bybit.com/sign-up?ref=BBJWAX4" target="_blank" class="btn btn-gold" onclick="startVerification()">1. Registrarse en ByBit</a>
+        <a href="https://www.effectivegatecpm.com/nape4jr5mw?key=fdb64c1d24876eabf086283a7fb126f7" target="_blank" class="btn btn-blue" onclick="startVerification()">2. Descargar App (Adsterra)</a>
+        <a href="https://bc.game/i-477hgd5fl-n/" target="_blank" class="btn btn-green" onclick="startVerification()">3. Registrarse en BC.Game</a>
+
+        <!-- Botón de Confirmación Manual -->
+        <button id="btn-check" class="btn btn-confirm" onclick="showCode()">
+            ✅ YA ME REGISTRÉ / DESCARGUÉ
+        </button>
 
         <div class="verify-box">
-            <p id="status-text">Esperando acción...</p>
-            <div id="loader" class="loader"></div>
+            <p id="status-text">Elige una opción arriba 👆</p>
             <div id="final-code" class="hidden-code">HIVE-777</div>
-            <p class="instruction-text">Copia este código y envíalo al Bot.</p>
+            
+            <!-- Botón para volver al Bot -->
+            <a href="https://t.me/TheHiveReal_bot" class="btn btn-telegram" id="back-to-bot">
+                🔙 Volver al Bot y Pegar Código
+            </a>
         </div>
     </div>
 
     <script>
         function startVerification() {
-            // Muestra animación de carga
-            document.getElementById('status-text').innerText = "Verificando tarea...";
+            // 1. Cambia el estado
+            document.getElementById('status-text').innerText = "⏳ Esperando confirmación de registro...";
             document.getElementById('status-text').style.color = "#f1c40f";
-            document.getElementById('loader').style.display = 'block';
             
-            // Espera 5 segundos y muestra el código
+            // 2. Muestra el botón de confirmación después de 5 segundos
+            // (Damos tiempo para que vayan a la otra web)
             setTimeout(function() {
-                document.getElementById('loader').style.display = 'none';
-                document.getElementById('status-text').innerText = "✅ VERIFICADO. TU CÓDIGO:";
-                document.getElementById('status-text').style.color = "#2ecc71";
-                document.getElementById('final-code').style.display = 'block';
-            }, 5000); 
+                document.getElementById('btn-check').style.display = 'block';
+                document.getElementById('btn-check').innerText = "✅ YA COMPLETÉ EL REGISTRO";
+            }, 5000);
+        }
+
+        function showCode() {
+            // 3. Cuando el usuario confirma manualmente
+            document.getElementById('btn-check').style.display = 'none';
+            document.getElementById('status-text').innerText = "✅ VERIFICADO. TU CÓDIGO:";
+            document.getElementById('status-text').style.color = "#2ecc71";
+            
+            // Muestra el código y el botón de volver
+            document.getElementById('final-code').style.display = 'block';
+            document.getElementById('back-to-bot').style.display = 'block';
         }
     </script>
 
