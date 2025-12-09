@@ -12,7 +12,7 @@ pool = None
 async def init_db():
     """
     Inicializa la Base de Datos.
-    INCLUYE LIMPIEZA AUTOMÁTICA DE TABLAS VIEJAS PARA CORREGIR ERRORES DE SCHEMA.
+    Si cambias el schema, considera usar migraciones en lugar de DROP TABLE en producción.
     """
     global pool
     
@@ -30,15 +30,9 @@ async def init_db():
         logger.info("✅ DB Pool Conectado.")
         
         async with pool.acquire() as conn:
-            # 🧨 ZONA DE LIMPIEZA (ESTO ARREGLA TU ERROR) 🧨
-            # Borramos las tablas viejas que tienen columnas incorrectas
-            logger.warning("⚠️ REGENERANDO ESQUEMA DE BASE DE DATOS...")
-            await conn.execute("DROP TABLE IF EXISTS users CASCADE;")
-            await conn.execute("DROP TABLE IF EXISTS leads_harvest CASCADE;")
-            
-            # CREACIÓN DE TABLAS CORRECTAS (Con user_id)
+            # Crea tablas si no existen (IF NOT EXISTS es más seguro que DROP para no perder datos por error)
             await conn.execute("""
-                CREATE TABLE users (
+                CREATE TABLE IF NOT EXISTS users (
                     user_id BIGINT PRIMARY KEY,
                     first_name TEXT,
                     username TEXT,
@@ -50,16 +44,15 @@ async def init_db():
                     created_at TIMESTAMP DEFAULT NOW()
                 );
                 
-                CREATE INDEX idx_users_email ON users(email);
+                CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
                 
-                CREATE TABLE leads_harvest (
+                CREATE TABLE IF NOT EXISTS leads_harvest (
                     id SERIAL PRIMARY KEY,
                     user_id BIGINT UNIQUE,
                     email TEXT UNIQUE,
                     captured_at TIMESTAMP DEFAULT NOW()
                 );
             """)
-            logger.info("✅ Tablas regeneradas correctamente.")
             
     except Exception as e:
         logger.critical(f"❌ ERROR CRÍTICO EN DB: {e}")
@@ -73,19 +66,27 @@ async def close_db():
 
 # --- CRUD OPERATIONS ---
 
-async def add_user(user_id, first_name, username):
-    if not pool: return
-    async with pool.acquire() as conn:
-        await conn.execute("""
-            INSERT INTO users (user_id, first_name, username) 
-            VALUES ($1, $2, $3) 
-            ON CONFLICT (user_id) DO NOTHING
-        """, user_id, first_name, username)
+async def add_user(user_id, first_name, username, referrer_id=None):
+    """Crea usuario nuevo. Retorna True si se creó, False si ya existía."""
+    if not pool: return False
+    try:
+        async with pool.acquire() as conn:
+            # Intentar insertar
+            result = await conn.execute("""
+                INSERT INTO users (user_id, first_name, username, referrer_id) 
+                VALUES ($1, $2, $3, $4) 
+                ON CONFLICT (user_id) DO NOTHING
+            """, user_id, first_name, username, referrer_id)
+            
+            # Si "INSERT 0 1", se creó. Si "INSERT 0 0", ya existía.
+            return result == "INSERT 0 1"
+    except Exception as e:
+        logger.error(f"Error add_user: {e}")
+        return False
 
 async def get_user(user_id):
     if not pool: return None
     async with pool.acquire() as conn:
-        # AHORA SÍ FUNCIONARÁ PORQUE LA TABLA TENDRÁ LA COLUMNA user_id
         row = await conn.fetchrow("SELECT * FROM users WHERE user_id = $1", user_id)
         return dict(row) if row else None
 
@@ -107,18 +108,28 @@ async def add_lead(user_id, email):
     except Exception:
         return False
 
-async def update_user_gate_status(user_id, status=True):
+async def reward_referrer(referrer_id, points=50):
+    """Recompensa al usuario que invitó."""
+    if not pool or not referrer_id: return
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute("""
+                UPDATE users 
+                SET balance_hive = balance_hive + $1 
+                WHERE user_id = $2
+            """, points, referrer_id)
+    except Exception as e:
+        logger.error(f"Error reward_referrer: {e}")
+
+async def get_user_referrals_count(user_id):
+    """Cuenta cuántos referidos tiene un usuario."""
+    if not pool: return 0
+    async with pool.acquire() as conn:
+        val = await conn.fetchval("SELECT COUNT(*) FROM users WHERE referrer_id = $1", user_id)
+        return val
+
+async def delete_user(user_id):
+    """DEV ONLY: Borra usuario para pruebas."""
     if not pool: return
     async with pool.acquire() as conn:
-        await conn.execute("UPDATE users SET api_gate_passed = $1 WHERE user_id = $2", status, user_id)
-
-async def get_user_balance(user_id):
-    if not pool: return {'balance_usd': 0.0, 'balance_hive': 0}
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT balance_usd, balance_hive FROM users WHERE user_id = $1", user_id)
-        return dict(row) if row else {'balance_usd': 0.0, 'balance_hive': 0}
-
-async def add_hive_points(user_id, amount):
-    if not pool: return
-    async with pool.acquire() as conn:
-        await conn.execute("UPDATE users SET balance_hive = balance_hive + $1 WHERE user_id = $2", amount, user_id)
+        await conn.execute("DELETE FROM users WHERE user_id = $1", user_id)
