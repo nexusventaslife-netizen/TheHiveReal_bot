@@ -5,51 +5,66 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Verificación de Seguridad - TheHive</title>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #1a1a1a; color: white; text-align: center; padding: 20px; }
-        .container { max-width: 400px; margin: 0 auto; background: #2d2d2d; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        h1 { color: #f1c40f; }
-        p { color: #bdc3c7; margin-bottom: 25px; }
-        .btn { display: block; width: 100%; padding: 15px; margin: 10px 0; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; text-decoration: none; transition: 0.3s; }
-        .btn-gold { background: #f1c40f; color: #1a1a1a; } /* Crypto/Casino */
-        .btn-blue { background: #3498db; color: white; } /* Adsterra */
-        .btn-green { background: #2ecc71; color: white; } /* Ouo.io */
-        .btn:hover { opacity: 0.9; transform: scale(1.02); }
-        .verify-box { margin-top: 30px; padding: 15px; border: 1px dashed #7f8c8d; border-radius: 8px; }
-        .code { font-size: 24px; letter-spacing: 5px; color: #e74c3c; font-weight: bold; display: none; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #121212; color: white; text-align: center; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .container { width: 100%; max-width: 400px; background: #1e1e1e; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.7); border: 1px solid #333; }
+        h1 { color: #f1c40f; margin-bottom: 10px; font-size: 24px; }
+        p { color: #bdc3c7; margin-bottom: 25px; font-size: 15px; line-height: 1.5; }
+        
+        .btn { display: flex; align-items: center; justify-content: center; width: 100%; padding: 18px; margin: 15px 0; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; text-decoration: none; transition: 0.3s; box-sizing: border-box; }
+        
+        /* Botón ByBit (Dorado) */
+        .btn-gold { background: linear-gradient(135deg, #f1c40f, #f39c12); color: #1a1a1a; box-shadow: 0 4px 15px rgba(241, 196, 15, 0.3); }
+        
+        /* Botón Adsterra (Azul) */
+        .btn-blue { background: linear-gradient(135deg, #3498db, #2980b9); color: white; box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3); }
+        
+        .btn:hover { transform: translateY(-3px); filter: brightness(1.1); }
+        
+        .verify-box { margin-top: 30px; padding: 20px; background: #252525; border-radius: 10px; border: 1px dashed #555; }
+        .code { font-size: 28px; letter-spacing: 3px; color: #2ecc71; font-weight: bold; display: none; margin-top: 10px; background: #000; padding: 10px; border-radius: 5px; }
+        
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #f1c40f; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: none; margin: 10px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
     <script>
         function showCode() {
-            // Este truco muestra un código después de 15 segundos
+            // Muestra mensaje de carga
+            document.getElementById('instruction').innerText = "⏳ Verificando acción...";
+            document.getElementById('loader').style.display = 'block';
+
+            // Espera 10 segundos y muestra el código
             setTimeout(function() {
+                document.getElementById('loader').style.display = 'none';
                 document.getElementById('hiddenCode').style.display = 'block';
-                document.getElementById('instruction').innerText = "✅ ¡Verificado! Copia este código y envíalo al bot:";
-            }, 10000); // 10 segundos de espera
+                document.getElementById('instruction').innerHTML = "✅ <b>¡Verificado!</b><br>Envía este código al bot:";
+            }, 10000); 
         }
     </script>
 </head>
 <body>
     <div class="container">
         <h1>🔒 Security Gate</h1>
-        <p>Para activar tu minería, completa una acción rápida:</p>
+        <p>Para activar tu minería y proteger la red, completa <b>UNA</b> de las siguientes tareas:</p>
 
-        <!-- ENLACE 1: HIGH TICKET (Regístrate como afiliado en Binance/Stake/1xBet y pon tu link aquí) -->
-        <a href="https://TU_LINK_DE_BINANCE_O_CASINO" class="btn btn-gold" onclick="showCode()" target="_blank">
-            💰 Opción 1: Crear Cuenta Crypto (Recomendado)
+        <!-- ENLACE 1: BYBIT (TU LINK REAL) -->
+        <a href="https://www.bybit.com/invite?ref=BBJWAX4" class="btn btn-gold" onclick="showCode()" target="_blank">
+            💰 Opción 1: Bono Crypto (Recomendado)
         </a>
 
-        <!-- ENLACE 2: ADSTERRA (Tu Direct Link) -->
-        <a href="TU_LINK_DE_ADSTERRA" class="btn btn-blue" onclick="showCode()" target="_blank">
+        <!-- ENLACE 2: ADSTERRA (Cuando tengas el link, cámbialo aquí. Ahora va a Google) -->
+        <a href="https://www.google.com" class="btn btn-blue" onclick="showCode()" target="_blank">
             🚀 Opción 2: Acceso Rápido (Ver Anuncio)
         </a>
 
         <div class="verify-box">
             <p id="instruction">Esperando verificación...</p>
-            <!-- Este código es falso pero sirve para que el usuario crea que hay validación -->
+            <div id="loader" class="loader"></div>
+            <!-- CÓDIGO DE ACCESO -->
             <div id="hiddenCode" class="code">HIVE-777</div>
         </div>
         
-        <p style="font-size: 12px; color: #7f8c8d; margin-top: 20px;">
-            Al hacer clic, espera 10 segundos y aparecerá tu código de acceso.
+        <p style="font-size: 11px; color: #666; margin-top: 20px;">
+            HIVE SECURITY SYSTEM v2.0
         </p>
     </div>
 </body>
