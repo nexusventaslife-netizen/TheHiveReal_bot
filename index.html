@@ -45,15 +45,13 @@
             position: relative;
         }
         
-        /* Botón ByBit (Dorado) */
+        /* Estilos de botones */
         .btn-gold { background: #f1c40f; color: #000; }
         .btn-gold:hover { background: #d4ac0d; box-shadow: 0 0 15px #f1c40f; }
         
-        /* Botón Adsterra (Azul) */
         .btn-blue { background: #3498db; color: white; }
         .btn-blue:hover { background: #2980b9; box-shadow: 0 0 15px #3498db; }
 
-        /* Botón BC.Game (Verde) */
         .btn-green { background: #2ecc71; color: white; }
         .btn-green:hover { background: #27ae60; box-shadow: 0 0 15px #2ecc71; }
         
@@ -90,7 +88,6 @@
         }
         
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
         .instruction-text { font-size: 12px; color: #777; margin-top: 10px; }
     </style>
 </head>
@@ -98,24 +95,19 @@
 
     <div class="container">
         <h1>🔒 VERIFICACIÓN</h1>
-        <p>Completa una tarea para recibir tu código de acceso HIVE:</p>
+        <p>Para desbloquear tu acceso, completa una tarea:</p>
 
-        <!-- 
-           ✅ ENLACES CONFIGURADOS CON TUS CÓDIGOS
-           Al hacer clic, se abre nueva pestaña y comienza el contador.
-        -->
-
-        <!-- Botón 1: ByBit (Tu código: BBJWAX4) -->
+        <!-- 1. ENLACE BYBIT (CONVERTIDO A URL DE REGISTRO) -->
         <a href="https://www.bybit.com/sign-up?ref=BBJWAX4" target="_blank" class="btn btn-gold" onclick="startVerification()">
-            💰 1. Registro ByBit (Bonus VIP)
+            💰 1. Registro ByBit (VIP)
         </a>
         
-        <!-- Botón 2: Adsterra (Tu enlace directo) -->
+        <!-- 2. ENLACE ADSTERRA (TU LINK DIRECTO) -->
         <a href="https://www.effectivegatecpm.com/nape4jr5mw?key=fdb64c1d24876eabf086283a7fb126f7" target="_blank" class="btn btn-blue" onclick="startVerification()">
             ⚡ 2. Ver Anuncio Rápido
         </a>
         
-        <!-- Botón 3: BC Game (Tu enlace de afiliado) -->
+        <!-- 3. ENLACE BC GAME (TU LINK DE REFERIDO) -->
         <a href="https://bc.game/i-477hgd5fl-n/" target="_blank" class="btn btn-green" onclick="startVerification()">
             🎲 3. Bono Casino
         </a>
@@ -130,18 +122,18 @@
 
     <script>
         function startVerification() {
-            // Muestra animación de carga al hacer clic
+            // Muestra animación de carga
             document.getElementById('status-text').innerText = "Verificando tarea...";
             document.getElementById('status-text').style.color = "#f1c40f";
             document.getElementById('loader').style.display = 'block';
             
-            // Simula espera de 8 segundos (para asegurar que ven el anuncio) y muestra el código
+            // Espera 5 segundos y muestra el código
             setTimeout(function() {
                 document.getElementById('loader').style.display = 'none';
-                document.getElementById('status-text').innerText = "✅ TAREA COMPLETADA. TU CÓDIGO:";
+                document.getElementById('status-text').innerText = "✅ VERIFICADO. TU CÓDIGO:";
                 document.getElementById('status-text').style.color = "#2ecc71";
                 document.getElementById('final-code').style.display = 'block';
-            }, 8000); 
+            }, 5000); 
         }
     </script>
 
