@@ -1,127 +1,55 @@
 import os
-import re
 import logging
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Response, status
+from fastapi import FastAPI, Request
 from telegram import Update
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
-import uvicorn
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-# Imports
-from database import init_db, close_db
-from bot_logic import (
-    start, 
-    process_email_input, 
-    check_gate_verify_callback, 
-    menu_handler, 
-    mine_tap_callback, 
-    withdraw_callback,
-    help_command
-)
+# Importamos solo las funciones que SI existen en tu nuevo bot_logic
+from bot_logic import start, help_command, code_handler
 
-# Logs
+# Configuración de Logs
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger("Hive.Main")
+logger = logging.getLogger(__name__)
 
-# --- CONFIGURACIÓN CRÍTICA ---
+# Variables de entorno
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-# Limpieza de URL: Quitamos slash final y espacios
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip().rstrip("/")
-# Token Secreto Sanitizado
-SECRET_TOKEN = re.sub(r'[^a-zA-Z0-9_-]', '', os.getenv("SECRET_TOKEN", "Secret123"))
 
-if not TOKEN or not WEBHOOK_URL:
-    logger.critical("❌ ERROR: Faltan variables TELEGRAM_TOKEN o WEBHOOK_URL.")
+# Inicializar FastAPI
+app = FastAPI()
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # --- STARTUP ---
-    logger.info("🚀 Arrancando TheHiveReal (Modo Persistente)...")
-    await init_db()
-    
-    application = Application.builder().token(TOKEN).build()
-    
-    # Registrar Handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("menu", menu_handler))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, process_email_input))
-    application.add_handler(CallbackQueryHandler(check_gate_verify_callback, pattern="^check_gate_verify$"))
-    application.add_handler(CallbackQueryHandler(mine_tap_callback, pattern="^mine_tap$"))
-    application.add_handler(CallbackQueryHandler(withdraw_callback, pattern="^withdraw$"))
-    
-    await application.initialize()
-    await application.start()
-    
-    # Configurar Webhook
-    webhook_path = "/webhook"
-    full_webhook_url = f"{WEBHOOK_URL}{webhook_path}"
-    
-    logger.info(f"🔗 Configurando Webhook en Telegram hacia: {full_webhook_url}")
-    
-    try:
-        await application.bot.set_webhook(
-            url=full_webhook_url, 
-            secret_token=SECRET_TOKEN,
-            allowed_updates=Update.ALL_TYPES,
-            drop_pending_updates=True,
-            max_connections=100
-        )
-        logger.info("✅ Webhook establecido y persistente.")
-    except Exception as e:
-        logger.error(f"❌ Falló set_webhook: {e}")
+# Inicializar Bot de Telegram
+if not TOKEN:
+    logger.error("Error: No se encontró la variable TELEGRAM_TOKEN")
+    exit(1)
 
-    app.state.telegram_app = application
-    yield
-    
-    # --- SHUTDOWN ---
-    logger.info("🛑 Apagando servicios...")
-    try:
-        # 🔥 CAMBIO IMPORTANTE: Comentamos delete_webhook
-        # Esto evita que el bot se desconecte de Telegram si Render reinicia.
-        # await application.bot.delete_webhook() 
-        
-        await application.stop()
-        await application.shutdown()
-        await close_db()
-    except Exception as e:
-        logger.error(f"Error en cierre: {e}")
+application = ApplicationBuilder().token(TOKEN).build()
 
-app = FastAPI(lifespan=lifespan)
+# --- REGISTRAR LOS HANDLERS (Las funciones del bot) ---
+# Comando /start
+application.add_handler(CommandHandler("start", start))
 
-# --- RUTAS ---
+# Comando /help
+application.add_handler(CommandHandler("help", help_command))
 
-@app.get("/")
-@app.head("/")
-async def root():
-    return {"status": "TheHiveReal Online"}
+# Mensajes de texto (Para detectar el código HIVE-777)
+# Filtramos para que NO sea un comando (como /start)
+application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), code_handler))
 
-# ✅ Endpoint para Render (Evita reinicios constantes)
-@app.get("/healthz", status_code=200)
-@app.head("/healthz", status_code=200)
-async def health_check_render():
-    return {"status": "ok"}
-
-# ✅ Ruta del Webhook
+# --- RUTA WEBHOOK (Para conectar con Telegram) ---
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
-    # Seguridad
-    token_header = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
-    if token_header != SECRET_TOKEN:
-        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
-
     try:
         data = await request.json()
-        telegram_app = request.app.state.telegram_app
-        update = Update.de_json(data, telegram_app.bot)
-        
-        # Procesar sin bloquear (Fire-and-forget)
-        await telegram_app.process_update(update)
-        
-        return Response(status_code=status.HTTP_200_OK)
+        update = Update.de_json(data, application.bot)
+        await application.initialize()
+        await application.process_update(update)
+        await application.shutdown()
+        return {"status": "ok"}
     except Exception as e:
         logger.error(f"Error procesando update: {e}")
-        return Response(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return {"status": "error", "message": str(e)}
 
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=10000)
+# Ruta simple para verificar que el servidor está vivo
+@app.get("/")
+async def index():
+    return {"status": "The Hive Bot is Running 🐝"}
