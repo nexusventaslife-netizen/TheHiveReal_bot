@@ -12,7 +12,7 @@ pool = None
 async def init_db():
     """
     Inicializa la Base de Datos.
-    INCLUYE LIMPIEZA AUTOMÁTICA DE TABLAS VIEJAS PARA CORREGIR ERRORES DE SCHEMA.
+    REGENERANDO ESQUEMA PARA SOPORTAR REFERIDOS.
     """
     global pool
     
@@ -21,22 +21,16 @@ async def init_db():
         return
 
     try:
-        # Configuración del Pool
-        pool = await asyncpg.create_pool(
-            dsn=DATABASE_URL,
-            min_size=5,
-            max_size=20
-        )
+        pool = await asyncpg.create_pool(dsn=DATABASE_URL, min_size=5, max_size=20)
         logger.info("✅ DB Pool Conectado.")
         
         async with pool.acquire() as conn:
-            # 🧨 ZONA DE LIMPIEZA (ESTO ARREGLA TU ERROR) 🧨
-            # Borramos las tablas viejas que tienen columnas incorrectas
-            logger.warning("⚠️ REGENERANDO ESQUEMA DE BASE DE DATOS...")
+            # 🧨 ZONA DE LIMPIEZA: Borramos para actualizar la estructura
+            logger.warning("⚠️ ACTUALIZANDO ESQUEMA DE BASE DE DATOS...")
             await conn.execute("DROP TABLE IF EXISTS users CASCADE;")
             await conn.execute("DROP TABLE IF EXISTS leads_harvest CASCADE;")
             
-            # CREACIÓN DE TABLAS CORRECTAS (Con user_id)
+            # NUEVA TABLA CON SOPORTE DE REFERIDOS
             await conn.execute("""
                 CREATE TABLE users (
                     user_id BIGINT PRIMARY KEY,
@@ -46,7 +40,8 @@ async def init_db():
                     balance_usd NUMERIC(10, 4) DEFAULT 0.0,
                     balance_hive BIGINT DEFAULT 0,
                     api_gate_passed BOOLEAN DEFAULT FALSE,
-                    referrer_id BIGINT,
+                    referrer_id BIGINT,             -- Quién lo invitó
+                    referrals_count INT DEFAULT 0,  -- Cuántos ha invitado
                     created_at TIMESTAMP DEFAULT NOW()
                 );
                 
@@ -59,7 +54,7 @@ async def init_db():
                     captured_at TIMESTAMP DEFAULT NOW()
                 );
             """)
-            logger.info("✅ Tablas regeneradas correctamente.")
+            logger.info("✅ Tablas regeneradas con sistema de referidos.")
             
     except Exception as e:
         logger.critical(f"❌ ERROR CRÍTICO EN DB: {e}")
@@ -69,25 +64,55 @@ async def close_db():
     global pool
     if pool:
         await pool.close()
-        logger.info("🔒 DB Pool Cerrado")
 
-# --- CRUD OPERATIONS ---
+# --- FUNCIONES DE REFERIDOS Y USUARIOS ---
 
-async def add_user(user_id, first_name, username):
-    if not pool: return
-    async with pool.acquire() as conn:
-        await conn.execute("""
-            INSERT INTO users (user_id, first_name, username) 
-            VALUES ($1, $2, $3) 
-            ON CONFLICT (user_id) DO NOTHING
-        """, user_id, first_name, username)
+async def add_user(user_id, first_name, username, referrer_id=None):
+    """
+    Crea usuario y procesa la recompensa por referido si aplica.
+    Devuelve TRUE si es un usuario nuevo, FALSE si ya existía.
+    """
+    if not pool: return False
+    
+    try:
+        async with pool.acquire() as conn:
+            # 1. Intentamos insertar el nuevo usuario
+            # Usamos RETURNING para saber si se insertó realmente
+            result = await conn.fetchval("""
+                INSERT INTO users (user_id, first_name, username, referrer_id) 
+                VALUES ($1, $2, $3, $4) 
+                ON CONFLICT (user_id) DO NOTHING
+                RETURNING user_id
+            """, user_id, first_name, username, referrer_id)
+            
+            # Si result es None, el usuario ya existía. No hacemos nada más.
+            if not result:
+                return False
+
+            # 2. Si es usuario nuevo y tiene referrer_id, recompensamos al invitador
+            if referrer_id and referrer_id != user_id:
+                logger.info(f"💰 Procesando referido: {referrer_id} invitó a {user_id}")
+                await conn.execute("""
+                    UPDATE users 
+                    SET balance_hive = balance_hive + 50,
+                        referrals_count = referrals_count + 1
+                    WHERE user_id = $1
+                """, referrer_id)
+            
+            return True
+
+    except Exception as e:
+        logger.error(f"Error añadiendo usuario: {e}")
+        return False
 
 async def get_user(user_id):
     if not pool: return None
     async with pool.acquire() as conn:
-        # AHORA SÍ FUNCIONARÁ PORQUE LA TABLA TENDRÁ LA COLUMNA user_id
         row = await conn.fetchrow("SELECT * FROM users WHERE user_id = $1", user_id)
         return dict(row) if row else None
+
+# --- OTRAS FUNCIONES ---
+# (Las mantenemos igual para que el resto del bot funcione)
 
 async def update_user_email(user_id, email):
     if not pool: return
