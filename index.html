@@ -32,7 +32,7 @@
         .btn { 
             display: block; 
             width: 100%; 
-            padding: 15px; 
+            padding: 18px; 
             margin: 15px 0; 
             border: none; 
             border-radius: 8px; 
@@ -53,7 +53,7 @@
         .btn-blue { background: #3498db; color: white; }
         .btn-blue:hover { background: #2980b9; box-shadow: 0 0 15px #3498db; }
 
-        /* Botón Casino (Verde) */
+        /* Botón BC.Game (Verde) */
         .btn-green { background: #2ecc71; color: white; }
         .btn-green:hover { background: #27ae60; box-shadow: 0 0 15px #2ecc71; }
         
@@ -98,12 +98,27 @@
 
     <div class="container">
         <h1>🔒 VERIFICACIÓN</h1>
-        <p>Para obtener tu código de acceso y activar la minería, completa una de las siguientes tareas:</p>
+        <p>Completa una tarea para recibir tu código de acceso HIVE:</p>
 
-        <!-- ENLACES DE MONETIZACIÓN (AQUÍ PON TUS LINKS REALES) -->
-        <a href="TU_LINK_BYBIT" target="_blank" class="btn btn-gold" onclick="startVerification()">1. Registro ByBit (VIP)</a>
-        <a href="TU_LINK_ADSTERRA" target="_blank" class="btn btn-blue" onclick="startVerification()">2. Ver Anuncio Rápido</a>
-        <a href="TU_LINK_BCGAME" target="_blank" class="btn btn-green" onclick="startVerification()">3. Bono Casino</a>
+        <!-- 
+           ✅ ENLACES CONFIGURADOS CON TUS CÓDIGOS
+           Al hacer clic, se abre nueva pestaña y comienza el contador.
+        -->
+
+        <!-- Botón 1: ByBit (Tu código: BBJWAX4) -->
+        <a href="https://www.bybit.com/sign-up?ref=BBJWAX4" target="_blank" class="btn btn-gold" onclick="startVerification()">
+            💰 1. Registro ByBit (Bonus VIP)
+        </a>
+        
+        <!-- Botón 2: Adsterra (Tu enlace directo) -->
+        <a href="https://www.effectivegatecpm.com/nape4jr5mw?key=fdb64c1d24876eabf086283a7fb126f7" target="_blank" class="btn btn-blue" onclick="startVerification()">
+            ⚡ 2. Ver Anuncio Rápido
+        </a>
+        
+        <!-- Botón 3: BC Game (Tu enlace de afiliado) -->
+        <a href="https://bc.game/i-477hgd5fl-n/" target="_blank" class="btn btn-green" onclick="startVerification()">
+            🎲 3. Bono Casino
+        </a>
 
         <div class="verify-box">
             <p id="status-text">Esperando acción...</p>
@@ -115,18 +130,18 @@
 
     <script>
         function startVerification() {
-            // Cambia el texto y muestra el cargando
-            document.getElementById('status-text').innerText = "Verificando tu tarea...";
+            // Muestra animación de carga al hacer clic
+            document.getElementById('status-text').innerText = "Verificando tarea...";
             document.getElementById('status-text').style.color = "#f1c40f";
             document.getElementById('loader').style.display = 'block';
             
-            // Simula espera de 5 segundos y muestra el código
+            // Simula espera de 8 segundos (para asegurar que ven el anuncio) y muestra el código
             setTimeout(function() {
                 document.getElementById('loader').style.display = 'none';
-                document.getElementById('status-text').innerText = "✅ VERIFICADO. TU CÓDIGO:";
+                document.getElementById('status-text').innerText = "✅ TAREA COMPLETADA. TU CÓDIGO:";
                 document.getElementById('status-text').style.color = "#2ecc71";
                 document.getElementById('final-code').style.display = 'block';
-            }, 5000); // 5000 milisegundos = 5 segundos
+            }, 8000); 
         }
     </script>
 
