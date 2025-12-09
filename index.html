@@ -17,6 +17,9 @@
         
         /* Botón Adsterra (Azul) */
         .btn-blue { background: linear-gradient(135deg, #3498db, #2980b9); color: white; box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3); }
+
+        /* Botón BC.Game (Verde Neon) */
+        .btn-green { background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3); }
         
         .btn:hover { transform: translateY(-3px); filter: brightness(1.1); }
         
@@ -28,44 +31,6 @@
     </style>
     <script>
         function showCode() {
-            // Muestra mensaje de carga
             document.getElementById('instruction').innerText = "⏳ Verificando acción...";
-            document.getElementById('loader').style.display = 'block';
-
-            // Espera 10 segundos y muestra el código
-            setTimeout(function() {
-                document.getElementById('loader').style.display = 'none';
-                document.getElementById('hiddenCode').style.display = 'block';
-                document.getElementById('instruction').innerHTML = "✅ <b>¡Verificado!</b><br>Envía este código al bot:";
-            }, 10000); 
-        }
-    </script>
-</head>
-<body>
-    <div class="container">
-        <h1>🔒 Security Gate</h1>
-        <p>Para activar tu minería y proteger la red, completa <b>UNA</b> de las siguientes tareas:</p>
-
-        <!-- ENLACE 1: BYBIT (HIGH TICKET) -->
-        <a href="https://www.bybit.com/invite?ref=BBJWAX4" class="btn btn-gold" onclick="showCode()" target="_blank">
-            💰 Opción 1: Bono Crypto (Recomendado)
-        </a>
-
-        <!-- ENLACE 2: ADSTERRA (TU LINK NUEVO) -->
-        <a href="https://www.effectivegatecpm.com/nape4jr5mw?key=fdb64c1d24876eabf086283a7fb126f7" class="btn btn-blue" onclick="showCode()" target="_blank">
-            🚀 Opción 2: Acceso Rápido (Ver Anuncio)
-        </a>
-
-        <div class="verify-box">
-            <p id="instruction">Esperando verificación...</p>
-            <div id="loader" class="loader"></div>
-            <!-- CÓDIGO DE ACCESO -->
-            <div id="hiddenCode" class="code">HIVE-777</div>
-        </div>
-        
-        <p style="font-size: 11px; color: #666; margin-top: 20px;">
-            HIVE SECURITY SYSTEM v2.0
-        </p>
-    </div>
-</body>
-</html>
+            document.getElementById('loader').style.display = 'block';*
+
