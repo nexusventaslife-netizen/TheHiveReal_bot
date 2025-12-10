@@ -1,12 +1,14 @@
 import os
 import logging
 import asyncio
-from fastapi import FastAPI
-# --- CORRECCIÓN AQUÍ: Agregamos 'Update' que faltaba ---
+import httpx 
+from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse, HTMLResponse
 from telegram import Update 
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+from telegram.error import Conflict
 
-# Importamos todo correctamente
+# Importamos la lógica
 from bot_logic import start, help_command, general_text_handler, invite_command, reset_command, button_handler
 import database as db
 
@@ -15,23 +17,64 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
+
+# --- CONFIGURACIÓN DE OFERTAS (IGUAL QUE ANTES) ---
+OFFERS_BY_COUNTRY = {
+    "US": "LINK_FREECASH_USA",    
+    "ES": "LINK_BYBIT_SPAIN",     
+    "MX": "LINK_BYBIT_MEXICO",    
+    "AR": "LINK_BINANCE_ARG",     
+    "DEFAULT": "https://otieu.com/4/10302294" 
+}
+
 app = FastAPI()
 bot_app = None
 
+# --- RUTAS WEB (IGUAL QUE ANTES) ---
+@app.get("/ingreso")
+async def entry_detect(request: Request):
+    client_ip = request.headers.get("x-forwarded-for") or request.client.host
+    if "," in str(client_ip): client_ip = str(client_ip).split(",")[0]
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.get(f"http://ip-api.com/json/{client_ip}", timeout=2.0)
+    except: pass
+    return RedirectResponse(url="/")
+
+@app.get("/go")
+async def redirect_tasks(request: Request):
+    client_ip = request.headers.get("x-forwarded-for") or request.client.host
+    if "," in str(client_ip): client_ip = str(client_ip).split(",")[0]
+    target_url = OFFERS_BY_COUNTRY["DEFAULT"]
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"http://ip-api.com/json/{client_ip}", timeout=2.0)
+            data = resp.json()
+            if data.get('status') == 'success':
+                country = data.get('countryCode')
+                target_url = OFFERS_BY_COUNTRY.get(country, OFFERS_BY_COUNTRY["DEFAULT"])
+    except: pass
+    return RedirectResponse(url=target_url)
+
+@app.get("/")
+async def read_index():
+    try:
+        with open("index.html", "r") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        return {"status": "Falta index.html"}
+
+# --- AQUÍ ESTÁ EL FIX ANTI-CONFLICTO ---
 @app.on_event("startup")
 async def startup_event():
     global bot_app
-    
-    # 1. DB
-    logger.info("🔌 Conectando DB...")
     await db.init_db()
     
-    # 2. BOT
     if TOKEN:
-        logger.info("🤖 Configurando Bot...")
+        # 1. Configuración del Bot
         bot_app = ApplicationBuilder().token(TOKEN).build()
         
-        # Comandos
+        # 2. Handlers
         bot_app.add_handler(CommandHandler("start", start))
         bot_app.add_handler(CommandHandler("help", help_command))
         bot_app.add_handler(CommandHandler("invitar", invite_command))
@@ -39,32 +82,41 @@ async def startup_event():
         bot_app.add_handler(CallbackQueryHandler(button_handler))
         bot_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), general_text_handler))
         
-        # INICIALIZACIÓN
         await bot_app.initialize()
         await bot_app.start()
         
-        # --- SOLUCIÓN DEL CONFLICTO ---
-        # Borramos cualquier webhook viejo o instancias fantasmas
-        logger.info("🧹 Limpiando conflictos de Telegram...")
-        await bot_app.bot.delete_webhook(drop_pending_updates=True)
-        
-        # Arrancamos el polling
-        # Ahora funcionará porque 'Update' ya está importado arriba
-        asyncio.create_task(bot_app.updater.start_polling(allowed_updates=Update.ALL_TYPES))
-        logger.info("✅ Bot escuchando (Conflictos resueltos).")
+        # 3. EL FIX DE LA MUERTE: Forzar eliminación de Webhook anterior
+        logger.info("🔪 Matando sesiones viejas de Telegram...")
+        try:
+            # Esto borra cualquier conexión zombie que haya quedado en Render
+            await bot_app.bot.delete_webhook(drop_pending_updates=True)
+            logger.info("✅ Webhooks eliminados. Iniciando Polling limpio.")
+            
+            # Iniciamos polling con manejo de errores específicos
+            asyncio.create_task(run_polling_safely())
+            
+        except Exception as e:
+            logger.error(f"Error limpiando webhooks: {e}")
     else:
-        logger.error("❌ FALTA TELEGRAM_TOKEN")
+        logger.error("❌ FALTA TOKEN")
+
+async def run_polling_safely():
+    """Función para reiniciar el polling si choca"""
+    try:
+        await bot_app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+    except Conflict:
+        logger.warning("⚠️ Conflicto detectado. Esperando 5 segundos para reintentar...")
+        await asyncio.sleep(5)
+        # Reintento agresivo
+        await bot_app.bot.delete_webhook(drop_pending_updates=True)
+        await bot_app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+    except Exception as e:
+        logger.error(f"Error fatal en polling: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    logger.info("🛑 Apagando...")
     if bot_app:
-        if bot_app.updater.running:
-            await bot_app.updater.stop()
+        if bot_app.updater.running: await bot_app.updater.stop()
         await bot_app.stop()
         await bot_app.shutdown()
     await db.close_db()
-
-@app.get("/")
-def health():
-    return {"status": "ok"}
