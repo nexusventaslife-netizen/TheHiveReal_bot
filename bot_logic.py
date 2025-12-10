@@ -10,11 +10,11 @@ logger = logging.getLogger(__name__)
 LANDING_PAGE_URL = "https://index-html-3uz5.onrender.com" 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Paso 1: Bienvenida y enlace a la web."""
+    """Paso 1: Bienvenida."""
     user = update.effective_user
     context.user_data.clear() # Limpiamos datos viejos
     
-    # Intentamos guardar usuario en DB (si no existe)
+    # Intentamos guardar usuario en DB
     await db.add_user(user.id, user.first_name, user.username)
 
     welcome_text = (
@@ -31,30 +31,31 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
 
 async def code_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Maneja Código -> Email."""
+    """
+    ESTA ES LA FUNCIÓN QUE MAIN BUSCA.
+    Maneja Código HIVE-777 y también el EMAIL.
+    """
     text = update.message.text.strip()
     user = update.effective_user
     
-    # --- PASO 3: VALIDAR EMAIL ---
+    # --- PASO 3: VALIDAR EMAIL (Si estamos esperando uno) ---
     if context.user_data.get('waiting_for_email'):
         if re.match(r"[^@]+@[^@]+\.[^@]+", text):
             # Guardamos el mail temporalmente
             context.user_data['email'] = text
             context.user_data['waiting_for_email'] = False
             
-            # --- PASO 4: PEDIR CONSENTIMIENTO (GDPR / Venta de Datos) ---
+            # --- PASO 4: PEDIR CONSENTIMIENTO ---
             terms_text = (
                 "📜 *TÉRMINOS Y CONDICIONES*\n\n"
                 f"Correo registrado: `{text}`\n\n"
-                "Para financiar este servicio gratuito, necesitamos tu permiso para:\n"
-                "✅ Enviarte ofertas comerciales.\n"
-                "✅ Compartir datos anonimizados con partners publicitarios.\n\n"
+                "Para financiar este servicio, necesitamos tu permiso para enviarte ofertas.\n"
                 "¿Aceptas continuar?"
             )
             
             keyboard = [
-                [InlineKeyboardButton("✅ ACEPTO Y CONTINUAR", callback_data="accept_terms")],
-                [InlineKeyboardButton("❌ NO ACEPTO", callback_data="deny_terms")]
+                [InlineKeyboardButton("✅ ACEPTO", callback_data="accept_terms")],
+                [InlineKeyboardButton("❌ NO", callback_data="deny_terms")]
             ]
             await update.message.reply_text(terms_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
             
@@ -67,11 +68,12 @@ async def code_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['waiting_for_email'] = True
         await update.message.reply_text(
             "✅ *CÓDIGO CORRECTO*\n\n"
-            "📧 Para vincular tu cuenta, escribe tu **Correo Electrónico** a continuación:",
+            "📧 Escribe tu **Correo Electrónico** para vincular la cuenta:",
             parse_mode="Markdown"
         )
     else:
-        pass # Ignora otros textos o manda mensaje de error
+        # Si escribe otra cosa que no es el código
+        await update.message.reply_text("❌ Código incorrecto o comando no reconocido.")
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Maneja el clic en 'ACEPTO'."""
@@ -79,18 +81,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     if query.data == "accept_terms":
-        # AQUÍ ES DONDE EL USUARIO YA VALE DINERO (Mail + Consentimiento)
         email = context.user_data.get('email', 'no-email')
         user = query.from_user
         
-        logger.info(f"💰 NUEVO LEAD: {user.id} - {email} - Aceptó Términos")
+        # Guardamos el mail en la base de datos REALMENTE
+        await db.update_email(user.id, email)
         
-        # Mensaje Final
+        logger.info(f"💰 NUEVO LEAD: {user.id} - {email}")
+        
         await query.edit_message_text(
             text=(
                 "✅ *REGISTRO COMPLETADO*\n\n"
                 "🎉 Has sido verificado correctamente.\n"
-                "Tus datos han sido procesados.\n\n"
                 "⛏️ *MINERÍA INICIADA...*"
             ),
             parse_mode="Markdown"
@@ -109,7 +111,6 @@ async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    # Lógica para borrar de DB si es necesario
     await db.delete_user(user.id)
     context.user_data.clear()
     await update.message.reply_text("🗑️ Reset completo.")
