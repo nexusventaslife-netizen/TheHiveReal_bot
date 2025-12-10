@@ -2,6 +2,8 @@ import os
 import logging
 import asyncio
 from fastapi import FastAPI
+# --- CORRECCIÓN AQUÍ: Agregamos 'Update' que faltaba ---
+from telegram import Update 
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
 # Importamos todo correctamente
@@ -47,6 +49,7 @@ async def startup_event():
         await bot_app.bot.delete_webhook(drop_pending_updates=True)
         
         # Arrancamos el polling
+        # Ahora funcionará porque 'Update' ya está importado arriba
         asyncio.create_task(bot_app.updater.start_polling(allowed_updates=Update.ALL_TYPES))
         logger.info("✅ Bot escuchando (Conflictos resueltos).")
     else:
