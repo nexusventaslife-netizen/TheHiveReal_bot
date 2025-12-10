@@ -1,147 +1,134 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hive Security Gate</title>
-    <style>
-        :root {
-            --primary: #f59e0b; /* Amarillo Hive */
-            --dark: #111827;
-            --light: #f3f4f6;
-        }
-        body {
-            font-family: 'Segoe UI', sans-serif;
-            background-color: var(--dark);
-            color: var(--light);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            text-align: center;
-        }
-        .container {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 2rem;
-            border-radius: 15px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            max-width: 90%;
-            width: 350px;
-        }
-        h1 { margin-bottom: 0.5rem; font-size: 1.5rem; }
-        p { color: #9ca3af; margin-bottom: 2rem; font-size: 0.9rem; }
-        
-        /* CÓDIGO FINAL OCULTO */
-        #code-display {
-            display: none;
-            background: rgba(0, 0, 0, 0.3);
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
-            border: 1px solid var(--primary);
-        }
-        .code {
-            font-family: monospace;
-            font-size: 1.5rem;
-            color: var(--primary);
-            letter-spacing: 2px;
-            font-weight: bold;
-        }
-        .copy-btn {
-            background: transparent;
-            border: 1px solid #4b5563;
-            color: #9ca3af;
-            padding: 5px 10px;
-            border-radius: 5px;
-            margin-top: 10px;
-            cursor: pointer;
-            font-size: 0.8rem;
-        }
+import logging
+import re
+import asyncio
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes
+import database as db
 
-        /* BOTÓN PRINCIPAL */
-        .btn-main {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-            color: white;
-            border: none;
-            padding: 12px 25px;
-            border-radius: 8px;
-            font-weight: bold;
-            font-size: 1rem;
-            cursor: pointer;
-            width: 100%;
-            transition: transform 0.2s;
-            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
-        }
-        .btn-main:active { transform: scale(0.98); }
+logger = logging.getLogger(__name__)
 
-        /* LOADING SPINNER */
-        .loader {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid var(--primary);
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto;
-            display: none;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    </style>
+# URL DE TU WEB (SMARTLINK)
+LANDING_PAGE_URL = "https://index-html-3uz5.onrender.com"
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Paso 1: Bienvenida."""
+    user = update.effective_user
+    if hasattr(db, 'add_user'):
+        await db.add_user(user.id, user.first_name, user.username)
+
+    welcome_text = (
+        f"👋 *Hola, {user.first_name}*\n\n"
+        "🔒 *SISTEMA DE SEGURIDAD*\n"
+        "Para activar la minería, necesitamos verificar que eres humano.\n\n"
+        "1️⃣ Toca el botón y obtén tu código.\n"
+        "2️⃣ Vuelve aquí y pégalo."
+    )
+
+    # Solo dejamos el botón de obtener código (quitamos los otros como pediste)
+    keyboard = [[InlineKeyboardButton("🚀 OBTENER CÓDIGO", url=LANDING_PAGE_URL)]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
+
+async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Maneja Emails y Códigos."""
+    text = update.message.text.strip()
+    user = update.effective_user
     
-    <!-- Script de Publicidad (Monetag) - Está aquí pero NO SE VE EL BOTÓN -->
-    <!-- Esto nos servirá en el futuro para Pop-ups si quieres activarlos -->
-    <script src="https://alwingulla.com/88/tag.min.js" data-zone="10302294" async data-cfasync="false"></script>
-</head>
-<body>
+    # 1. CASO: USUARIO ENVÍA UN EMAIL
+    if context.user_data.get('waiting_for_email'):
+        if re.match(r"[^@]+@[^@]+\.[^@]+", text):
+            context.user_data['email'] = text
+            context.user_data['waiting_for_email'] = False
+            
+            # Mensaje de espera para el email también
+            msg_wait = await update.message.reply_text("⏳ *Procesando datos...*", parse_mode="Markdown")
+            await asyncio.sleep(1.5) # Pequeña pausa dramática
+            await context.bot.delete_message(chat_id=user.id, message_id=msg_wait.message_id)
 
-    <div class="container">
-        <h1>🔒 Hive Security</h1>
-        <p>Verificación de seguridad requerida para acceder al bot de minería.</p>
+            terms_text = (
+                "📜 *ÚLTIMO PASO*\n\n"
+                f"Email: `{text}`\n\n"
+                "Para financiar el proyecto y minar gratis, aceptas recibir promociones de nuestros socios.\n"
+                "¿Aceptas?"
+            )
+            
+            keyboard = [
+                [InlineKeyboardButton("✅ ACEPTO Y MINAR", callback_data="accept_terms")],
+                [InlineKeyboardButton("❌ NO", callback_data="deny_terms")]
+            ]
+            await update.message.reply_text(terms_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+            return
+        else:
+            await update.message.reply_text("❌ Formato de email incorrecto.")
+            return
 
-        <!-- ÚNICO BOTÓN: VERIFICAR -->
-        <button id="verifyBtn" class="btn-main" onclick="startProcess()">
-            🛡️ VERIFICAR HUMANO
-        </button>
+    # 2. CASO: USUARIO ENVÍA EL CÓDIGO
+    if text.upper() == "HIVE-777":
+        # --- AQUÍ ESTÁ EL CAMBIO ---
+        # 1. Enviamos mensaje de espera
+        wait_msg = await update.message.reply_text("⏳ *Verificando código en la Blockchain...* Espere un momento.", parse_mode="Markdown")
         
-        <div id="loader" class="loader" style="margin-top:15px;"></div>
+        # 2. Simulamos tiempo de proceso (opcional, pero da realismo)
+        await asyncio.sleep(2) 
+        
+        # 3. Borramos el mensaje de espera (para que quede limpio)
+        try:
+            await context.bot.delete_message(chat_id=user.id, message_id=wait_msg.message_id)
+        except:
+            pass # Si falla borrar, no importa
+            
+        context.user_data['waiting_for_email'] = True
+        
+        # 4. Enviamos la confirmación
+        await update.message.reply_text(
+            "✅ *CÓDIGO CONFIRMADO*\n\n"
+            "🔓 Acceso concedido.\n"
+            "📧 Ahora escribe tu **Correo Electrónico** para vincular tu cuenta:",
+            parse_mode="Markdown"
+        )
+        return
 
-        <!-- AQUÍ APARECERÁ EL CÓDIGO -->
-        <div id="code-display">
-            <p style="margin-bottom:5px; font-size:0.8rem;">CÓDIGO GENERADO:</p>
-            <div class="code">HIVE-777</div>
-            <button class="copy-btn" onclick="copyCode()">Copiar Código</button>
-        </div>
-    </div>
+    # 3. OTROS
+    await update.message.reply_text("❌ Comando no reconocido. Usa /start.")
 
-    <script>
-        function startProcess() {
-            const btn = document.getElementById('verifyBtn');
-            const loader = document.getElementById('loader');
-            const codeDisplay = document.getElementById('code-display');
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "accept_terms":
+        email = context.user_data.get('email', 'no-email')
+        user = query.from_user
+        
+        # Guardamos en DB
+        if hasattr(db, 'update_email'):
+            await db.update_email(user.id, email)
+        
+        # Mensaje final de éxito
+        await query.edit_message_text(
+            text=(
+                "🎉 *¡BIENVENIDO A LA COLMENA!*\n\n"
+                "✅ Verificación Total: Completada\n"
+                "⛏️ **Minería en la Nube: ACTIVA**\n\n"
+                "Tu saldo empezará a subir en breve..."
+            ),
+            parse_mode="Markdown"
+        )
+        
+    elif query.data == "deny_terms":
+        await query.edit_message_text("❌ Debes aceptar para poder minar gratis.")
 
-            // 1. Efecto de carga
-            btn.style.display = 'none';
-            loader.style.display = 'block';
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Usa /start para reiniciar.")
 
-            // 2. Simulamos proceso de verificación (2 segundos)
-            setTimeout(() => {
-                loader.style.display = 'none';
-                codeDisplay.style.display = 'block';
-                
-                // INTENTO DE ABRIR PUBLICIDAD EN SEGUNDO PLANO (Pop-under)
-                // Si tienes un link de Monetag, ponlo aquí abajo en window.open
-                // Si no quieres arriesgarte a porno hoy, deja esta línea comentada
-                // window.open('https://otieu.com/4/10302294', '_blank'); 
+async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    link = f"https://t.me/{context.bot.username}?start={user.id}"
+    await update.message.reply_text(f"🔗 Tu enlace de referido:\n`{link}`", parse_mode="Markdown")
 
-            }, 2000);
-        }
-
-        function copyCode() {
-            navigator.clipboard.writeText("HIVE-777");
-            alert("¡Código copiado! Vuelve a Telegram y pégalo.");
-        }
-    </script>
-</body>
-</html>
+async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if hasattr(db, 'delete_user'):
+        await db.delete_user(user.id)
+    context.user_data.clear()
+    await update.message.reply_text("🗑️ Cuenta reiniciada.")
