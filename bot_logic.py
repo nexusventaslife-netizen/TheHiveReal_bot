@@ -1,158 +1,210 @@
 import logging
 import re
 import asyncio
-import random
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
 import database as db
 
 logger = logging.getLogger(__name__)
 
-# --- CONFIGURACIÓN ---
+# --- CONFIGURACIÓN DE ECONOMÍA ---
 HIVE_PRICE = 0.012 
+INITIAL_BONUS = 100 
+
+# --- CONFIGURACIÓN DE ENLACES ---
 RENDER_URL = "https://thehivereal-bot.onrender.com" 
 LINK_ENTRY_DETECT = f"{RENDER_URL}/ingreso"
 LINK_SMART_TASKS = f"{RENDER_URL}/go"
 
-# --- UTILIDAD: GENERADOR DE GRÁFICAS ASCII (TIPO FOTO) ---
-def generate_graph(percent):
-    """Crea una barra de progreso estilo Dashboard moderno"""
-    # Usamos caracteres de bloque para simular la gráfica de la foto
-    total_blocks = 12
-    filled = int((percent / 100) * total_blocks)
-    
-    # Estilo degradado visual (naranja/rojo como la foto)
-    bar = "▓" * filled + "░" * (total_blocks - filled)
-    return bar
+# Tus enlaces de Afiliado (CPA)
+OFFERS = {
+    'US': {'link': 'https://freecash.com/r/TU_LINK_USA', 'name': '🇺🇸 Misión VIP USA'},
+    'ES': {'link': 'https://www.bybit.com/invite?ref=LINK_ESPANA', 'name': '🇪🇸 Verificar ID España'},
+    'MX': {'link': 'https://bitso.com/?ref=LINK_MEXICO', 'name': '🇲🇽 Bono Crypto México'},
+    'AR': {'link': 'https://lemon.me/LINK_ARGENTINA', 'name': '🇦🇷 Validar Wallet Arg'},
+    'DEFAULT': {'link': 'https://otieu.com/4/10302294', 'name': '🌍 Verificación Global'} 
+}
 
+# --- FUNCIÓN DE INICIO ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if hasattr(db, 'add_user'):
         await db.add_user(user.id, user.first_name, user.username)
 
-    # PERFIL AUTOMÁTICO (Recuperamos su foto si es posible en futuro, por ahora nombre)
+    # 1. Borramos el teclado viejo feo (si existe)
+    waiting_msg = await update.message.reply_text(
+        "🔄 *Cargando Interfaz TheOneHive...*", 
+        reply_markup=ReplyKeyboardRemove(), # ESTO BORRA EL TECLADO DE ABAJO
+        parse_mode="Markdown"
+    )
+    await asyncio.sleep(1)
+    await context.bot.delete_message(chat_id=user.id, message_id=waiting_msg.message_id)
+
+    # 2. Mensaje de Bienvenida Estilo Terminal
     welcome_text = (
-        f"💠 **TheOneHive OS** `v2.4`\n"
-        f"👤 **Usuario:** {user.first_name}\n"
-        "🟢 **Estado:** Conectado\n\n"
-        "Bienvenido a la Colmena. Tu terminal de ingresos está lista.\n"
-        "Para acceder al Dashboard Financiero, necesitamos verificar tu nodo."
+        f"🖥️ **SISTEMA DE CONTROL v2.4**\n"
+        f"👤 Usuario: `{user.first_name}`\n"
+        f"🟢 Estado: Conectado\n\n"
+        "🔒 **ACCESO REQUERIDO**\n"
+        "Para ingresar al Dashboard Principal, valida tu identidad humana."
     )
     
-    keyboard = [
-        [InlineKeyboardButton("🛡️ INICIAR VERIFICACIÓN DE NODO", url=LINK_ENTRY_DETECT)],
-        [InlineKeyboardButton("ℹ️ SOBRE NOSOTROS", callback_data="about")]
-    ]
+    keyboard = [[InlineKeyboardButton("🛡️ INICIAR PROTOCOLO DE ACCESO", url=LINK_ENTRY_DETECT)]]
     await update.message.reply_text(welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
+# --- MANEJADOR DE TEXTO (Detector de Código) ---
 async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip()
+    text = update.message.text.strip().upper()
     user = update.effective_user
-
-    # CASO: CÓDIGO DE ENTRADA
-    if text.startswith("HIVE-777"):
-        parts = text.split('-')
-        country = parts[2] if len(parts) >= 3 else 'GL'
-        context.user_data['country'] = country
-        context.user_data['waiting_for_email'] = True
-        
-        await update.message.reply_text(
-            f"🌍 **Nodo Localizado: {country}**\n"
-            "Sincronizando datos...\n\n"
-            "📧 **Ingresa tu Email** para crear tu perfil de pagos:",
-            parse_mode="Markdown"
-        )
+    
+    # Si escriben comandos viejos, redirigir al Dashboard
+    if text in ["MINAR", "PERFIL", "TAREAS"]:
+        await show_dashboard(update, context)
         return
 
-    # CASO: EMAIL
+    # CASO EMAIL
     if context.user_data.get('waiting_for_email'):
         if re.match(r"[^@]+@[^@]+\.[^@]+", text):
             context.user_data['email'] = text
             context.user_data['waiting_for_email'] = False
             if hasattr(db, 'update_email'): await db.update_email(user.id, text)
+
+            msg_wait = await update.message.reply_text("⚙️ *Configurando entorno...*", parse_mode="Markdown")
+            await asyncio.sleep(1.5)
+            try: await context.bot.delete_message(chat_id=user.id, message_id=msg_wait.message_id)
+            except: pass
             
-            # Al terminar registro, vamos directo al Dashboard Pro
-            await show_dashboard(update, context, is_new=True)
+            # AL FINALIZAR REGISTRO -> VAMOS AL DASHBOARD DIRECTO
+            await show_dashboard(update, context)
+            return
         else:
-            await update.message.reply_text("❌ Email inválido.")
+            await update.message.reply_text("❌ Error de sintaxis en Email.")
+            return
+
+    # CASO CÓDIGO
+    if text.startswith("HIVE-777"):
+        parts = text.split('-')
+        country = parts[2] if len(parts) >= 3 else 'GL'
+        context.user_data['country'] = country
+        
+        await update.message.reply_text(
+            f"🌍 **Región Detectada: {country}**\n"
+            "📥 Ingresa tu **Email** para finalizar:",
+            parse_mode="Markdown"
+        )
+        context.user_data['waiting_for_email'] = True
         return
 
-    # SI ESCRIBEN "PERFIL" O "DASHBOARD"
-    if "PERFIL" in text.upper() or "DASHBOARD" in text.upper():
-        await show_dashboard(update, context)
-
-# --- EL DASHBOARD PRO (IGUAL A LA FOTO) ---
-async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE, is_new=False):
+# --- EL NUEVO DASHBOARD "DARK MODE" (Sin duplicados) ---
+async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muestra el panel principal limpio y moderno."""
     user = update.effective_user
     country = context.user_data.get('country', 'GL')
     
-    # DATOS REALES (Inicialmente en 0 para ser honestos)
-    hive_balance = 100 if is_new else 100 # Bono inicial
-    usd_val = hive_balance * HIVE_PRICE
+    # Datos Simulados (Luego vendrán de DB)
+    tokens = INITIAL_BONUS
+    usd_val = tokens * HIVE_PRICE
     
-    # Simulamos actividad semanal para la gráfica (Estética)
-    graph_activity = generate_graph(75) # 75% de actividad
-    graph_earning = generate_graph(30)  # 30% de la meta
-
+    # DISEÑO GRÁFICO CON TEXTO (Estilo Neon/Dark)
     dashboard_text = (
-        f"🎛 **PANEL DE CONTROL: {user.first_name.upper()}**\n"
-        f"ID: `{user.id}` | 📍 Región: {country}\n"
-        "──────────────────────────\n\n"
-        "📊 **MÉTRICAS DE RENDIMIENTO**\n"
-        f"Actividad: {graph_activity} `75%`\n"
-        f"Ingresos:  {graph_earning} `30%`\n\n"
-        "💰 **BILLETERA HÍBRIDA**\n"
-        f"💎 **Tokens:** `{hive_balance} HIVE`\n"
-        f"💵 **Valor:**  `${usd_val:.2f} USD`\n\n"
-        "🚀 **MISIONES ACTIVAS**\n"
-        "• Verificación de Identidad: ⏳ Pendiente\n"
-        "• Vinculación de Wallet: ⏳ Pendiente\n\n"
-        "👇 *Selecciona una acción en tu terminal:*"
+        f"⬛⬛⬛⬛ **THE ONE HIVE** ⬛⬛⬛⬛\n"
+        f"ID: `{user.id}` | 🏳️ `{country}`\n\n"
+        
+        f"📊 **MÉTRICAS EN TIEMPO REAL**\n"
+        f"➤ Rendimiento: ▮▮▮▮▮▮▮▮▯▯ 80%\n"
+        f"➤ Nivel de Cuenta: **PRINCIPIANTE**\n\n"
+        
+        f"💰 **BILLETERA HÍBRIDA**\n"
+        f"🪙 **{tokens} HIVE** (Tokens Minados)\n"
+        f"💵 **${usd_val:.2f} USD** (Saldo Retirable)\n\n"
+        
+        f"🚀 **ACCIONES RÁPIDAS**\n"
+        f"Selecciona una operación en la consola:"
     )
     
-    kb = [
-        [InlineKeyboardButton("⚡ MINAR (TAREAS)", url=LINK_SMART_TASKS)],
-        [InlineKeyboardButton("👤 MI PERFIL PRO", callback_data="my_profile"), InlineKeyboardButton("🏦 RETIRAR", callback_data="withdraw")],
-        [InlineKeyboardButton("📊 ESTADÍSTICAS", callback_data="stats")]
+    # BOTONES DE NAVEGACIÓN (Limpio, sin menú abajo)
+    keyboard = [
+        [InlineKeyboardButton("⚡ MINAR & TAREAS (Boost)", callback_data="go_tasks")],
+        [InlineKeyboardButton("👥 RED DE REFERIDOS", callback_data="invite_friends"), InlineKeyboardButton("🎒 MIS NFTs", callback_data="my_nfts")],
+        [InlineKeyboardButton("⚙️ MI PERFIL", callback_data="my_profile"), InlineKeyboardButton("🏧 RETIRAR FONDOS", callback_data="withdraw")]
     ]
     
     if update.callback_query:
-        await update.callback_query.message.reply_text(dashboard_text, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        await update.callback_query.message.edit_text(dashboard_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
     else:
-        await update.message.reply_text(dashboard_text, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        await update.message.reply_text(dashboard_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
+# --- MENÚ DE TAREAS (Estilo Neon) ---
+async def tasks_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    country = context.user_data.get('country', 'DEFAULT')
+    offer = OFFERS.get(country, OFFERS['DEFAULT'])
+    
+    text = (
+        f"⚡ **CENTRO DE MINERÍA**\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"Para aumentar tu Hashrate y ganar USD, completa los nodos activos:\n\n"
+        
+        f"🔥 **NODO PRIORITARIO (High Paying)**\n"
+        f"➤ Misión: {offer['name']}\n"
+        f"➤ Recompensa: **NFT Boost x5** + Bonos USD\n"
+        f"➤ Estado: 🟢 Disponible\n\n"
+        
+        f"⚠️ _No uses VPN o el nodo rechazará la conexión._"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton(f"🚀 INICIAR SECUENCIA DE MINADO", url=offer['link'])],
+        [InlineKeyboardButton("🔙 VOLVER AL DASHBOARD", callback_data="go_dashboard")]
+    ]
+    
+    if update.callback_query:
+        await update.callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+    else:
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+# --- PERFIL DEL USUARIO (Nuevo) ---
+async def profile_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    email = context.user_data.get('email', 'No verificado')
+    
+    text = (
+        f"⚙️ **PERFIL DE OPERADOR**\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 Nombre: {user.first_name}\n"
+        f"📧 Email: `{email}`\n"
+        f"🛡️ Estado: Verificado\n"
+        f"📅 Miembro desde: Hoy\n\n"
+        f"🔧 **Opciones de Cuenta:**"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("✏️ Cambiar Email", callback_data="change_email")],
+        [InlineKeyboardButton("🔙 VOLVER", callback_data="go_dashboard")]
+    ]
+    await update.callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+# --- MANEJADOR DE BOTONES ---
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await query.answer() # Confirma click para que no cargue infinito
     
-    if query.data == "my_profile":
-        # AQUÍ ESTÁ LA MAGIA DEL PERFIL
-        # Dejamos que el usuario sienta que lo personaliza
-        user = query.from_user
-        email = context.user_data.get('email', 'No verificado')
-        
-        profile_text = (
-            f"👤 **PERFIL DE AGENTE**\n\n"
-            f"**Nombre:** {user.first_name}\n"
-            f"**Alias:** {user.username or 'Anónimo'}\n"
-            f"**Email:** `{email}`\n"
-            f"**Rango:** Larva (Nivel 1)\n\n"
-            "🛠 **CONFIGURACIÓN**\n"
-            "Para subir de rango y ganar más, completa tu primera tarea."
-        )
-        kb = [[InlineKeyboardButton("🔙 Volver al Dashboard", callback_data="back_dashboard")]]
-        await query.edit_message_text(profile_text, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
-
-    elif query.data == "back_dashboard":
+    data = query.data
+    
+    if data == "go_tasks":
+        await tasks_menu(update, context)
+    elif data == "go_dashboard":
         await show_dashboard(update, context)
-        
-    elif query.data == "withdraw":
-        await query.message.reply_text("⚠️ **Error de Retiro:** Necesitas acumular mínimo $10.00 USD para habilitar la pasarela.", parse_mode="Markdown")
+    elif data == "my_profile":
+        await profile_menu(update, context)
+    elif data == "invite_friends":
+        link = f"https://t.me/{context.bot.username}?start={query.from_user.id}"
+        await query.message.reply_text(f"🔗 **ENLACE DE RECLUTAMIENTO:**\n`{link}`", parse_mode="Markdown")
+    elif data == "withdraw":
+        await query.message.reply_text("⚠️ **ERROR DE SALDO:**\nNecesitas mínimo $10.00 USD para retirar.\nVe a 'MINAR & TAREAS' para llegar a la meta.", parse_mode="Markdown")
+    elif data == "my_nfts":
+         await query.message.reply_text("🎒 **INVENTARIO VACÍO**\nCompleta tareas para ganar NFTs de potencia.", parse_mode="Markdown")
 
-    elif query.data == "about":
-        await query.message.reply_text("Somos TheOneHive. Minería social descentralizada.", parse_mode="Markdown")
-
-# Handlers standard
+# Comandos y Handlers Standard
 async def help_command(u, c): await u.message.reply_text("Ayuda: /start")
 async def invite_command(u, c): await u.message.reply_text("Invitar...")
 async def reset_command(u, c): 
