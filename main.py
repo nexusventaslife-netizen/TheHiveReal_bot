@@ -8,8 +8,8 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from telegram.error import Conflict
 
-# Importamos la lógica
-from bot_logic import start, help_command, general_text_handler, invite_command, reset_command, button_handler
+# Importamos la lógica (AGREGUÉ broadcast_command AQUÍ)
+from bot_logic import start, help_command, general_text_handler, invite_command, reset_command, button_handler, broadcast_command
 import database as db
 
 # Logs
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
-# --- CONFIGURACIÓN DE OFERTAS (IGUAL QUE ANTES) ---
+# --- CONFIGURACIÓN DE OFERTAS (TU CONFIGURACIÓN ORIGINAL) ---
 OFFERS_BY_COUNTRY = {
     "US": "LINK_FREECASH_USA",    
     "ES": "LINK_BYBIT_SPAIN",     
@@ -30,7 +30,7 @@ OFFERS_BY_COUNTRY = {
 app = FastAPI()
 bot_app = None
 
-# --- RUTAS WEB (IGUAL QUE ANTES) ---
+# --- RUTAS WEB (INTACTAS) ---
 @app.get("/ingreso")
 async def entry_detect(request: Request):
     client_ip = request.headers.get("x-forwarded-for") or request.client.host
@@ -64,7 +64,7 @@ async def read_index():
     except FileNotFoundError:
         return {"status": "Falta index.html"}
 
-# --- AQUÍ ESTÁ EL FIX ANTI-CONFLICTO ---
+# --- INICIO DEL BOT ---
 @app.on_event("startup")
 async def startup_event():
     global bot_app
@@ -74,18 +74,22 @@ async def startup_event():
         # 1. Configuración del Bot
         bot_app = ApplicationBuilder().token(TOKEN).build()
         
-        # 2. Handlers
+        # 2. Handlers (AQUÍ AGREGUÉ EL BROADCAST SOLAMENTE)
         bot_app.add_handler(CommandHandler("start", start))
         bot_app.add_handler(CommandHandler("help", help_command))
         bot_app.add_handler(CommandHandler("invitar", invite_command))
         bot_app.add_handler(CommandHandler("reset", reset_command))
+        
+        # NUEVA LÍNEA AGREGADA (Solo esto cambié)
+        bot_app.add_handler(CommandHandler("broadcast", broadcast_command)) 
+        
         bot_app.add_handler(CallbackQueryHandler(button_handler))
         bot_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), general_text_handler))
         
         await bot_app.initialize()
         await bot_app.start()
         
-        # 3. EL FIX DE LA MUERTE: Forzar eliminación de Webhook anterior
+        # 3. EL FIX DE LA MUERTE (INTACTO)
         logger.info("🔪 Matando sesiones viejas de Telegram...")
         try:
             # Esto borra cualquier conexión zombie que haya quedado en Render
