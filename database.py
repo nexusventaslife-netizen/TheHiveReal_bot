@@ -2,12 +2,18 @@ import json
 import os
 import logging
 from datetime import datetime
+import asyncio
 
-# --- CONFIGURACIÓN ---
-DB_FILE = "users_db.json"
+# Configuración de Logs
 logger = logging.getLogger(__name__)
 
-# Estructura de usuario por defecto
+# Nombre del archivo de base de datos
+DB_FILE = "users_db.json"
+
+# Variable en memoria para velocidad
+_db_cache = {}
+
+# Estructura de usuario por defecto (LA QUE TENÍAS ANTES)
 DEFAULT_USER = {
     "id": 0,
     "first_name": "",
@@ -21,49 +27,66 @@ DEFAULT_USER = {
     "last_active": ""
 }
 
-# --- FUNCIONES DE COMPATIBILIDAD CON TU MAIN.PY ---
-# Estas son las que faltaban y causaron el crash
+# ==========================================
+# FUNCIONES OBLIGATORIAS PARA EL MAIN.PY
+# (Sin esto, el servidor crashea)
+# ==========================================
 
 async def init_db():
-    """Inicializa la base de datos (crea el archivo si no existe)"""
+    """Inicializa la DB al arrancar el servidor"""
+    global _db_cache
     if not os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, "w") as f:
-                json.dump({}, f)
-            logger.info("✅ Base de datos creada exitosamente.")
-        except Exception as e:
-            logger.error(f"❌ Error creando DB: {e}")
+        _db_cache = {}
+        await save_db(_db_cache)
+        logger.info("🆕 Base de datos creada desde cero.")
     else:
-        logger.info("✅ Base de datos encontrada.")
+        _db_cache = await load_db()
+        logger.info(f"✅ Base de datos cargada. Usuarios: {len(_db_cache)}")
 
 async def close_db():
-    """Cierra la conexión (en JSON no es necesario, pero el main lo pide)"""
-    logger.info("🔒 Conexión a DB cerrada (Simulado).")
+    """Cierra la DB al apagar el servidor"""
+    global _db_cache
+    await save_db(_db_cache)
+    logger.info("🔒 Base de datos guardada y cerrada.")
 
-# --- FUNCIONES DE LÓGICA DE USUARIOS ---
+# ==========================================
+# FUNCIONES DE LÓGICA DE USUARIOS
+# (Las que usa tu Bot Logic)
+# ==========================================
 
 async def load_db():
+    """Lee el archivo JSON del disco"""
     if not os.path.exists(DB_FILE):
         return {}
     try:
         with open(DB_FILE, "r") as f:
-            return json.load(f)
+            content = f.read()
+            if not content: return {}
+            return json.loads(content)
     except Exception as e:
-        logger.error(f"Error cargando DB: {e}")
+        logger.error(f"❌ Error cargando DB: {e}")
         return {}
 
-async def save_db(db):
+async def save_db(data=None):
+    """Escribe los datos en el disco"""
+    global _db_cache
+    if data is None: data = _db_cache
     try:
         with open(DB_FILE, "w") as f:
-            json.dump(db, f, indent=2)
+            json.dump(data, f, indent=2)
     except Exception as e:
-        logger.error(f"Error guardando DB: {e}")
+        logger.error(f"❌ Error guardando DB: {e}")
 
 async def add_user(user_id, first_name, username, referred_by=None):
-    db = await load_db()
+    """Registra usuario y maneja referidos"""
+    global _db_cache
     uid = str(user_id)
     
-    if uid not in db:
+    # Si la caché está vacía, intentamos cargar
+    if not _db_cache:
+        _db_cache = await load_db()
+    
+    if uid not in _db_cache:
         new_user = DEFAULT_USER.copy()
         new_user.update({
             "id": user_id,
@@ -73,35 +96,45 @@ async def add_user(user_id, first_name, username, referred_by=None):
             "last_active": datetime.now().isoformat(),
             "referred_by": referred_by
         })
-        db[uid] = new_user
+        _db_cache[uid] = new_user
         
-        # Procesar referido
-        if referred_by and str(referred_by) in db:
-            if uid not in db[str(referred_by)]["referrals"]:
-                db[str(referred_by)]["referrals"].append(uid)
-                # Bonus al referidor
-                db[str(referred_by)]["tokens"] += 50
+        # Lógica de Referidos
+        if referred_by:
+            rid = str(referred_by)
+            if rid in _db_cache and rid != uid:
+                if "referrals" not in _db_cache[rid]:
+                    _db_cache[rid]["referrals"] = []
+                
+                if uid not in _db_cache[rid]["referrals"]:
+                    _db_cache[rid]["referrals"].append(uid)
+                    # Bono de 50 tokens al referidor
+                    current_tokens = _db_cache[rid].get("tokens", 0)
+                    _db_cache[rid]["tokens"] = current_tokens + 50
         
-        await save_db(db)
+        await save_db(_db_cache)
         return True
     else:
-        # Update last active
-        db[uid]["last_active"] = datetime.now().isoformat()
-        await save_db(db)
+        # Solo actualizamos última conexión
+        _db_cache[uid]["last_active"] = datetime.now().isoformat()
+        await save_db(_db_cache)
         return False
 
 async def update_email(user_id, email):
-    db = await load_db()
+    """Guarda el email"""
+    global _db_cache
     uid = str(user_id)
-    if uid in db:
-        db[uid]["email"] = email
-        await save_db(db)
+    if uid in _db_cache:
+        _db_cache[uid]["email"] = email
+        await save_db(_db_cache)
 
 async def get_user(user_id):
-    db = await load_db()
-    return db.get(str(user_id))
+    """Devuelve datos del usuario"""
+    global _db_cache
+    if not _db_cache:
+        _db_cache = await load_db()
+    return _db_cache.get(str(user_id))
 
-# Función extra para compatibilidad futura
+# Función extra de compatibilidad por si alguna versión vieja la llama
 async def add_referral(user_id, referrer_id):
-    # Esta función ya está integrada en add_user, pero la dejamos por si acaso
+    # Esta lógica ya está dentro de add_user, pero la dejamos para que no rompa nada
     pass
