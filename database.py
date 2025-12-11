@@ -1,86 +1,81 @@
-import json
 import os
+import json
+import logging
 from datetime import datetime
 
-# Archivo donde se guardan los datos (JSON local)
-DB_FILE = "hive_database.json"
+DB_FILE = "users_db.json"
 
-# Estructura inicial si el archivo no existe
-DEFAULT_DB = {
-    "users": {},
-    "stats": {"total_users": 0, "total_paid": 0.0}
+logger = logging.getLogger(__name__)
+
+# Estructura básica
+DEFAULT_USER = {
+    "id": 0,
+    "first_name": "",
+    "username": "",
+    "email": None,
+    "tokens": 100,
+    "joined_at": "",
+    "referrals": [],
+    "referred_by": None,
+    "wallet": {"btc": 0.0, "usd": 0.0},
+    "last_active": ""
 }
 
-def load_db():
-    """Carga la base de datos"""
+async def load_db():
     if not os.path.exists(DB_FILE):
-        return DEFAULT_DB
+        return {}
     try:
-        with open(DB_FILE, 'r') as f:
+        with open(DB_FILE, "r") as f:
             return json.load(f)
-    except:
-        return DEFAULT_DB
+    except Exception as e:
+        logger.error(f"Error loading DB: {e}")
+        return {}
 
-def save_db(data):
-    """Guarda los cambios"""
-    with open(DB_FILE, 'w') as f:
-        json.dump(data, f, indent=2)
+async def save_db(db):
+    try:
+        with open(DB_FILE, "w") as f:
+            json.dump(db, f, indent=2)
+    except Exception as e:
+        logger.error(f"Error saving DB: {e}")
 
-async def add_user(user_id, first_name, username):
-    """Registra un usuario nuevo si no existe"""
-    db = load_db()
+async def add_user(user_id, first_name, username, referred_by=None):
+    db = await load_db()
     uid = str(user_id)
     
-    if uid not in db["users"]:
-        db["users"][uid] = {
+    if uid not in db:
+        new_user = DEFAULT_USER.copy()
+        new_user.update({
             "id": user_id,
-            "name": first_name,
+            "first_name": first_name,
             "username": username,
-            "email": None,
-            "country": "GL",
             "joined_at": datetime.now().isoformat(),
-            "balance_hive": 100, # Bono inicial
-            "balance_usd": 0.0,
-            "referrals": [],     # Lista de gente invitada
-            "referred_by": None  # Quién lo invitó
-        }
-        db["stats"]["total_users"] += 1
-        save_db(db)
-        return True # Nuevo usuario
-    return False # Usuario ya existía
+            "last_active": datetime.now().isoformat(),
+            "referred_by": referred_by
+        })
+        db[uid] = new_user
+        
+        # Procesar referido
+        if referred_by and str(referred_by) in db:
+            if uid not in db[str(referred_by)]["referrals"]:
+                db[str(referred_by)]["referrals"].append(uid)
+                # Bonus al referidor
+                db[str(referred_by)]["tokens"] += 50
+        
+        await save_db(db)
+        return True
+    else:
+        # Update last active
+        db[uid]["last_active"] = datetime.now().isoformat()
+        await save_db(db)
+        return False
 
 async def update_email(user_id, email):
-    """Guarda el email del usuario"""
-    db = load_db()
+    db = await load_db()
     uid = str(user_id)
-    if uid in db["users"]:
-        db["users"][uid]["email"] = email
-        save_db(db)
+    if uid in db:
+        db[uid]["email"] = email
+        await save_db(db)
 
 async def get_user(user_id):
-    """Devuelve los datos de un usuario"""
-    db = load_db()
-    return db["users"].get(str(user_id))
-
-async def add_referral(new_user_id, referrer_id):
-    """Conecta a un usuario nuevo con su jefe de colmena"""
-    db = load_db()
-    new_uid = str(new_user_id)
-    ref_uid = str(referrer_id)
-    
-    # Validaciones básicas
-    if new_uid in db["users"] and ref_uid in db["users"]:
-        # Evitar auto-referido
-        if new_uid == ref_uid: return 
-        
-        # Asignar padre
-        if db["users"][new_uid]["referred_by"] is None:
-            db["users"][new_uid]["referred_by"] = ref_uid
-            
-            # Asignar hijo al padre
-            if new_uid not in db["users"][ref_uid]["referrals"]:
-                db["users"][ref_uid]["referrals"].append(new_uid)
-                # Dar bono al padre (ej: 50 HIVE puntos)
-                db["users"][ref_uid]["balance_hive"] += 50
-                
-            save_db(db)
+    db = await load_db()
+    return db.get(str(user_id))
