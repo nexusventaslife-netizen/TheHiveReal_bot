@@ -1,76 +1,86 @@
+import json
 import os
-import logging
-import asyncpg
+from datetime import datetime
 
-# Configuración de Logs
-logger = logging.getLogger("Hive.DB")
+# Archivo donde se guardan los datos (JSON local)
+DB_FILE = "hive_database.json"
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-pool = None
+# Estructura inicial si el archivo no existe
+DEFAULT_DB = {
+    "users": {},
+    "stats": {"total_users": 0, "total_paid": 0.0}
+}
 
-async def init_db():
-    """Inicia la conexión y crea las tablas."""
-    global pool
-    if not DATABASE_URL:
-        logger.error("❌ ERROR: No hay DATABASE_URL en las variables de entorno.")
-        return
-
+def load_db():
+    """Carga la base de datos"""
+    if not os.path.exists(DB_FILE):
+        return DEFAULT_DB
     try:
-        pool = await asyncpg.create_pool(dsn=DATABASE_URL, min_size=5, max_size=20)
-        logger.info("✅ Base de Datos Conectada.")
-        
-        async with pool.acquire() as conn:
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    user_id BIGINT PRIMARY KEY,
-                    first_name TEXT,
-                    username TEXT,
-                    email TEXT,
-                    balance_usd NUMERIC(10, 4) DEFAULT 0.0,
-                    balance_hive BIGINT DEFAULT 0,
-                    api_gate_passed BOOLEAN DEFAULT FALSE,
-                    referrer_id BIGINT,
-                    referrals_count INT DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT NOW()
-                );
-            """)
-    except Exception as e:
-        logger.critical(f"❌ ERROR CRÍTICO DB: {e}")
+        with open(DB_FILE, 'r') as f:
+            return json.load(f)
+    except:
+        return DEFAULT_DB
 
-async def close_db():
-    global pool
-    if pool:
-        await pool.close()
-        logger.info("💤 Base de Datos Cerrada.")
+def save_db(data):
+    """Guarda los cambios"""
+    with open(DB_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
 
-async def add_user(user_id, first_name, username, referrer_id=None):
-    if not pool: return False
-    try:
-        async with pool.acquire() as conn:
-            await conn.execute("""
-                INSERT INTO users (user_id, first_name, username, referrer_id) 
-                VALUES ($1, $2, $3, $4) 
-                ON CONFLICT (user_id) DO NOTHING
-            """, user_id, first_name, username, referrer_id)
-            return True
-    except Exception as e:
-        logger.error(f"Error add_user: {e}")
-        return False
+async def add_user(user_id, first_name, username):
+    """Registra un usuario nuevo si no existe"""
+    db = load_db()
+    uid = str(user_id)
+    
+    if uid not in db["users"]:
+        db["users"][uid] = {
+            "id": user_id,
+            "name": first_name,
+            "username": username,
+            "email": None,
+            "country": "GL",
+            "joined_at": datetime.now().isoformat(),
+            "balance_hive": 100, # Bono inicial
+            "balance_usd": 0.0,
+            "referrals": [],     # Lista de gente invitada
+            "referred_by": None  # Quién lo invitó
+        }
+        db["stats"]["total_users"] += 1
+        save_db(db)
+        return True # Nuevo usuario
+    return False # Usuario ya existía
 
 async def update_email(user_id, email):
-    if not pool: return False
-    try:
-        async with pool.acquire() as conn:
-            await conn.execute("UPDATE users SET email = $1 WHERE user_id = $2", email, user_id)
-            return True
-    except Exception as e:
-        logger.error(f"Error update_email: {e}")
-        return False
+    """Guarda el email del usuario"""
+    db = load_db()
+    uid = str(user_id)
+    if uid in db["users"]:
+        db["users"][uid]["email"] = email
+        save_db(db)
 
-async def delete_user(user_id):
-    if not pool: return
-    try:
-        async with pool.acquire() as conn:
-            await conn.execute("DELETE FROM users WHERE user_id = $1", user_id)
-    except Exception:
-        pass
+async def get_user(user_id):
+    """Devuelve los datos de un usuario"""
+    db = load_db()
+    return db["users"].get(str(user_id))
+
+async def add_referral(new_user_id, referrer_id):
+    """Conecta a un usuario nuevo con su jefe de colmena"""
+    db = load_db()
+    new_uid = str(new_user_id)
+    ref_uid = str(referrer_id)
+    
+    # Validaciones básicas
+    if new_uid in db["users"] and ref_uid in db["users"]:
+        # Evitar auto-referido
+        if new_uid == ref_uid: return 
+        
+        # Asignar padre
+        if db["users"][new_uid]["referred_by"] is None:
+            db["users"][new_uid]["referred_by"] = ref_uid
+            
+            # Asignar hijo al padre
+            if new_uid not in db["users"][ref_uid]["referrals"]:
+                db["users"][ref_uid]["referrals"].append(new_uid)
+                # Dar bono al padre (ej: 50 HIVE puntos)
+                db["users"][ref_uid]["balance_hive"] += 50
+                
+            save_db(db)
