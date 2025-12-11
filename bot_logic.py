@@ -11,18 +11,18 @@ logger = logging.getLogger(__name__)
 # --- CONFIGURACIÓN ---
 HIVE_PRICE = 0.012 
 INITIAL_BONUS = 100 
-ADMIN_ID = 123456789 
+ADMIN_ID = 123456789  # <--- TU ID
 
-# --- LINKS MAESTROS ---
+# --- LINKS MAESTROS (Render URL para Webhook) ---
 RENDER_URL = "https://thehivereal-bot.onrender.com" 
 LINK_ENTRY_DETECT = f"{RENDER_URL}/ingreso"
 
 # --- ☢️ ARSENAL GLOBAL (V7.0 ECOSYSTEM) ---
 LINKS = {
-    # 💎 JACKPOT & DIVIDENDOS (TUS NUEVOS LINKS)
-    'BETFURY': "https://t.me/misterFury_bot/app?startapp=tgReLUser7012661", # Minería BFG
-    'FREEBITCOIN': "https://freebitco.in/?r=55837744", # Interés Compuesto
-    'COINTIPLY': "https://cointiply.com/r/jR1L6y", # Faucet Hourly
+    # 💎 JACKPOT & DIVIDENDOS (TUS LINKS REALES)
+    'BETFURY': "https://t.me/misterFury_bot/app?startapp=tgReLUser7012661", 
+    'FREEBITCOIN': "https://freebitco.in/?r=55837744", 
+    'COINTIPLY': "https://cointiply.com/r/jR1L6y", 
     
     # ☁️ MINERÍA PASIVA
     'PACKETSTREAM': "https://packetstream.io/?psr=7hMP",
@@ -31,7 +31,7 @@ LINKS = {
     'TRAFFMONETIZER': "https://traffmonetizer.com/?aff=2034896",
     
     # 📱 TRABAJO & JUEGOS
-    'COINPAYU': "https://www.coinpayu.com/?r=TU_CODIGO", # <--- Pega tu link si lo tienes
+    'COINPAYU': "https://www.coinpayu.com/?r=TU_CODIGO", # Poner tu link real
     'GAMEHAG': "https://gamehag.com/r/NWUD9QNR",
     'PAIDWORK': "https://www.paidwork.com/?r=nexus.ventas.life",
     
@@ -60,10 +60,10 @@ OFFERS = {
     'DEFAULT': {'link': LINKS['BETFURY'], 'name': '🌍 Global: Mine BFG Tokens'} 
 }
 
-# --- TEXTOS ---
+# --- TEXTOS MULTILENGUAJE ---
 TEXTS = {
     'es': {
-        'welcome': "🐝 **THE ONE HIVE** `v7.0`\n👤 Agente: `{name}`\n\n💎 **NUEVO PROTOCOLO:**\nActiva el Interés Compuesto y Minería de Dividendos.\n\n👇 Inicia validación:",
+        'welcome': "🐝 **THE ONE HIVE** `v7.0`\n👤 Agente: `{name}`\n\n💎 **PROTOCOLO ACTIVO:**\nInterés Compuesto y Minería de Dividendos.\n\n👇 Inicia validación:",
         'btn_start': "🛡️ CONECTAR NODO",
         'dashboard_title': "⬛⬛⬛ **PANEL DE MANDO** ⬛⬛⬛",
         'metrics': "📊 **TU COLMENA**",
@@ -71,16 +71,16 @@ TEXTS = {
         'balance_hive': "🪙 **{tokens} HIVE**",
         'balance_usd': "💵 **${usd:.2f} USD** (Pendiente)",
         'menu_fintech': "🏦 BÓVEDA $50+ (VIP)",
-        'menu_jackpot': "💎 JACKPOT DIARIO (FREE)", # NUEVO HOOK
+        'menu_jackpot': "💎 JACKPOT DIARIO (FREE)",
         'menu_work': "📱 TRABAJO & JUEGOS",
         'menu_passive': "☁️ MINERÍA AUTO (x4)",
         'menu_team': "👥 MI EQUIPO",
         'menu_withdraw': "🏧 RETIRAR",
         'menu_profile': "⚙️ PERFIL",
-        'jackpot_title': "💎 **PROTOCOLOS DE RENDIMIENTO (FREE)**\n━━━━━━━━━━\nNo son casinos, son máquinas de interés compuesto. Gana gratis cada hora.\n\n1️⃣ **FreeBitco.in (El Banco)**\n🔗 [Activar Interés 4.08%]({link_fb})\n_Reclama BTC cada hora. Gana interés diario por tu saldo._\n\n2️⃣ **BetFury (Dividendos)**\n🔗 [Minar Token BFG]({link_bf})\n_Juega para obtener BFG y recibe pagos diarios en USDT de las ganancias de la casa._\n\n3️⃣ **Cointiply (Lluvia)**\n🔗 [Chat de Lluvia BTC]({link_ct})",
+        'jackpot_title': "💎 **PROTOCOLOS DE RENDIMIENTO (FREE)**\n━━━━━━━━━━\nGana gratis cada hora y genera interés compuesto.\n\n1️⃣ **FreeBitco.in (El Banco)**\n🔗 [Activar Interés 4.08%]({link_fb})\n_Reclama BTC cada hora. Gana interés diario._\n\n2️⃣ **BetFury (Dividendos)**\n🔗 [Minar Token BFG]({link_bf})\n_Juega para obtener BFG y recibe pagos diarios._\n\n3️⃣ **Cointiply (Lluvia)**\n🔗 [Chat de Lluvia BTC]({link_ct})",
         'work_title': "📱 **TRABAJO DIGITAL**\n━━━━━━━━━━\n1️⃣ **Paidwork:** [App Móvil]({link_p})\n2️⃣ **Gamehag:** [Jugar PC]({link_g})\n3️⃣ **CoinPayU:** [Ver Anuncios]({link_c})\n4️⃣ **SproutGigs:** [Micro-Tareas]({link_s})",
         'passive_title': "☁️ **MINERÍA SILENCIOSA (x4)**\n━━━━━━━━━━\nInstala las 4 apps para maximizar ganancias:\n\n1️⃣ **PacketStream:** [Instalar]({link_ps})\n2️⃣ **Traffmonetizer:** [Instalar]({link_t})\n3️⃣ **Honeygain:** [Instalar]({link_h})\n4️⃣ **Pawns.app:** [Instalar]({link_pa})",
-        'fintech_title': "🏦 **BÓVEDA FINANCIERA**\n━━━━━━━━━━\n1️⃣ **Revolut:** [Bono]({link_r})\n2️⃣ **Nexo:** [Bono BTC]({link_n})\n3️⃣ **YouHodler:** [Yield]({link_y})\n4️⃣ **Plus500:** [Trading]({link_plus})\n5️⃣ **Wise:** [Cuenta]({link_w})",
+        'fintech_title': "🏦 **BÓVEDA FINANCIERA**\n━━━━━━━━━━\n1️⃣ **Revolut:** [Bono Tarjeta]({link_r})\n2️⃣ **Nexo:** [Bono BTC]({link_n})\n3️⃣ **YouHodler:** [Yield]({link_y})\n4️⃣ **Plus500:** [Trading]({link_plus})\n5️⃣ **Wise:** [Cuenta Global]({link_w})",
         'btn_back': "🔙 VOLVER",
         'withdraw_lock': "⚠️ **BLOQUEADO**\nAcumula $10.00 USD."
     },
@@ -99,7 +99,7 @@ TEXTS = {
         'menu_team': "👥 MY TEAM",
         'menu_withdraw': "🏧 WITHDRAW",
         'menu_profile': "⚙️ PROFILE",
-        'jackpot_title': "💎 **YIELD PROTOCOLS (FREE)**\n━━━━━━━━━━\nEarn compound interest daily.\n\n1️⃣ **FreeBitco.in (Bank)**\n🔗 [Enable 4.08% APY]({link_fb})\n_Free roll every hour + daily interest._\n\n2️⃣ **BetFury (Dividends)**\n🔗 [Mine BFG Token]({link_bf})\n_Play to mine BFG. Hold BFG to get daily USDT dividends._\n\n3️⃣ **Cointiply**\n🔗 [Rain Pool]({link_ct})",
+        'jackpot_title': "💎 **YIELD PROTOCOLS (FREE)**\n━━━━━━━━━━\n1️⃣ **FreeBitco.in**\n🔗 [Enable 4.08% APY]({link_fb})\n\n2️⃣ **BetFury**\n🔗 [Mine BFG Token]({link_bf})\n\n3️⃣ **Cointiply**\n🔗 [Rain Pool]({link_ct})",
         'work_title': "📱 **DIGITAL WORK**\n━━━━━━━━━━\n1️⃣ **Paidwork:** [App]({link_p})\n2️⃣ **Gamehag:** [Play]({link_g})\n3️⃣ **CoinPayU:** [Ads]({link_c})\n4️⃣ **SproutGigs:** [Tasks]({link_s})",
         'passive_title': "☁️ **SILENT MINING**\n━━━━━━━━━━\n1️⃣ **PacketStream:** [Install]({link_ps})\n2️⃣ **Traffmonetizer:** [Install]({link_t})\n3️⃣ **Honeygain:** [Install]({link_h})\n4️⃣ **Pawns.app:** [Install]({link_pa})",
         'fintech_title': "🏦 **FINANCIAL VAULT**\n━━━━━━━━━━\n1️⃣ **Revolut:** [Bonus]({link_r})\n2️⃣ **Nexo:** [Bonus]({link_n})\n3️⃣ **YouHodler:** [Yield]({link_y})\n4️⃣ **Plus500:** [Trading]({link_plus})\n5️⃣ **Wise:** [Account]({link_w})",
@@ -121,7 +121,7 @@ TEXTS = {
         'menu_team': "👥 MINHA EQUIPE",
         'menu_withdraw': "🏧 SACAR",
         'menu_profile': "⚙️ PERFIL",
-        'jackpot_title': "💎 **PROTOCOLOS DE RENDIMENTO**\n━━━━━━━━━━\nGanhe juros compostos.\n\n1️⃣ **FreeBitco.in (Banco)**\n🔗 [Ativar 4.08% Juros]({link_fb})\n_Roll grátis toda hora._\n\n2️⃣ **BetFury (Dividendos)**\n🔗 [Minera BFG]({link_bf})\n_Jogue para ganhar dividendos diários em USDT._\n\n3️⃣ **Cointiply**\n🔗 [Chuva BTC]({link_ct})",
+        'jackpot_title': "💎 **PROTOCOLOS DE RENDIMENTO**\n━━━━━━━━━━\n1️⃣ **FreeBitco.in**\n🔗 [Ativar 4.08% Juros]({link_fb})\n\n2️⃣ **BetFury**\n🔗 [Minera BFG]({link_bf})\n\n3️⃣ **Cointiply**\n🔗 [Chuva BTC]({link_ct})",
         'work_title': "📱 **TRABALHO DIGITAL**\n━━━━━━━━━━\n1️⃣ **Paidwork:** [App]({link_p})\n2️⃣ **Gamehag:** [Jogar]({link_g})\n3️⃣ **CoinPayU:** [Anúncios]({link_c})\n4️⃣ **SproutGigs:** [Tarefas]({link_s})",
         'passive_title': "☁️ **MINERAÇÃO SILENCIOSA**\n━━━━━━━━━━\n1️⃣ **PacketStream:** [Instalar]({link_ps})\n2️⃣ **Traffmonetizer:** [Instalar]({link_t})\n3️⃣ **Honeygain:** [Instalar]({link_h})\n4️⃣ **Pawns.app:** [Instalar]({link_pa})",
         'fintech_title': "🏦 **COFRE FINANCEIRO**\n━━━━━━━━━━\n1️⃣ **Revolut:** [Bônus]({link_r})\n2️⃣ **Nexo:** [Bônus]({link_n})\n3️⃣ **YouHodler:** [Yield]({link_y})\n4️⃣ **Plus500:** [Trading]({link_plus})\n5️⃣ **Wise:** [Conta]({link_w})",
@@ -140,7 +140,15 @@ def get_text(lang_code, key):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     lang = user.language_code
-    if hasattr(db, 'add_user'): await db.add_user(user.id, user.first_name, user.username)
+    
+    # Referido handling
+    args = context.args
+    referrer_id = None
+    if args and str(args[0]) != str(user.id):
+        referrer_id = args[0]
+        
+    if hasattr(db, 'add_user'): 
+        await db.add_user(user.id, user.first_name, user.username, referrer_id)
 
     msg = await update.message.reply_text("🔄 ...", reply_markup=ReplyKeyboardRemove())
     await asyncio.sleep(0.5)
@@ -175,7 +183,10 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     lang = user.language_code
     country = context.user_data.get('country', 'GL')
-    tokens = context.user_data.get('tokens', INITIAL_BONUS)
+    
+    # Obtener datos reales de DB
+    user_data = await db.get_user(user.id)
+    tokens = user_data.get('tokens', INITIAL_BONUS) if user_data else INITIAL_BONUS
     usd = tokens * HIVE_PRICE
     
     txt = (
@@ -190,7 +201,7 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     kb = [
         [InlineKeyboardButton(get_text(lang, 'menu_fintech'), callback_data="fintech_vault")], 
-        [InlineKeyboardButton(get_text(lang, 'menu_jackpot'), callback_data="jackpot_zone")], # NUEVO MENU
+        [InlineKeyboardButton(get_text(lang, 'menu_jackpot'), callback_data="jackpot_zone")], 
         [InlineKeyboardButton(get_text(lang, 'menu_work'), callback_data="work_zone"), InlineKeyboardButton(get_text(lang, 'menu_passive'), callback_data="passive_income")], 
         [InlineKeyboardButton(get_text(lang, 'menu_team'), callback_data="invite_friends"), InlineKeyboardButton(get_text(lang, 'menu_withdraw'), callback_data="withdraw")],
         [InlineKeyboardButton(get_text(lang, 'menu_profile'), callback_data="my_profile")]
@@ -245,9 +256,15 @@ async def passive_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    link = f"https://t.me/{context.bot.username}?start={query.from_user.id}"
-    txt = f"👥 **TEAM**\n🔗 `{link}`" 
-    kb = [[InlineKeyboardButton("Share", url=f"https://t.me/share/url?url={link}"), InlineKeyboardButton("🔙", callback_data="go_dashboard")]]
+    user_id = query.from_user.id
+    
+    # Obtener datos de DB para mostrar referidos reales
+    user_data = await db.get_user(user_id)
+    ref_count = len(user_data.get('referrals', [])) if user_data else 0
+    
+    link = f"https://t.me/{context.bot.username}?start={user_id}"
+    txt = f"👥 **EQUIPO**\n\n👑 Referidos: {ref_count}\n🔗 `{link}`" 
+    kb = [[InlineKeyboardButton("📤 Compartir", url=f"https://t.me/share/url?url={link}"), InlineKeyboardButton("🔙", callback_data="go_dashboard")]]
     await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -256,7 +273,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     
     if data == "go_dashboard": await show_dashboard(update, context)
-    elif data == "jackpot_zone": await jackpot_menu(update, context) # NUEVO
+    elif data == "jackpot_zone": await jackpot_menu(update, context) 
     elif data == "work_zone": await work_menu(update, context) 
     elif data == "passive_income": await passive_menu(update, context)
     elif data == "fintech_vault": await fintech_vault_menu(update, context)
@@ -273,6 +290,7 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = " ".join(context.args)
     if message: await update.message.reply_text(f"📢 **BROADCAST:**\n\n{message}", parse_mode="Markdown")
 
+# Commands
 async def help_command(u, c): await u.message.reply_text("Help: /start")
 async def invite_command(u, c): await u.message.reply_text("Invite...")
 async def reset_command(u, c): 
