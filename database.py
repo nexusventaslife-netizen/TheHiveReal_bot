@@ -1,13 +1,13 @@
-import os
 import json
+import os
 import logging
 from datetime import datetime
 
+# --- CONFIGURACIÓN ---
 DB_FILE = "users_db.json"
-
 logger = logging.getLogger(__name__)
 
-# Estructura básica
+# Estructura de usuario por defecto
 DEFAULT_USER = {
     "id": 0,
     "first_name": "",
@@ -21,6 +21,27 @@ DEFAULT_USER = {
     "last_active": ""
 }
 
+# --- FUNCIONES DE COMPATIBILIDAD CON TU MAIN.PY ---
+# Estas son las que faltaban y causaron el crash
+
+async def init_db():
+    """Inicializa la base de datos (crea el archivo si no existe)"""
+    if not os.path.exists(DB_FILE):
+        try:
+            with open(DB_FILE, "w") as f:
+                json.dump({}, f)
+            logger.info("✅ Base de datos creada exitosamente.")
+        except Exception as e:
+            logger.error(f"❌ Error creando DB: {e}")
+    else:
+        logger.info("✅ Base de datos encontrada.")
+
+async def close_db():
+    """Cierra la conexión (en JSON no es necesario, pero el main lo pide)"""
+    logger.info("🔒 Conexión a DB cerrada (Simulado).")
+
+# --- FUNCIONES DE LÓGICA DE USUARIOS ---
+
 async def load_db():
     if not os.path.exists(DB_FILE):
         return {}
@@ -28,7 +49,7 @@ async def load_db():
         with open(DB_FILE, "r") as f:
             return json.load(f)
     except Exception as e:
-        logger.error(f"Error loading DB: {e}")
+        logger.error(f"Error cargando DB: {e}")
         return {}
 
 async def save_db(db):
@@ -36,7 +57,7 @@ async def save_db(db):
         with open(DB_FILE, "w") as f:
             json.dump(db, f, indent=2)
     except Exception as e:
-        logger.error(f"Error saving DB: {e}")
+        logger.error(f"Error guardando DB: {e}")
 
 async def add_user(user_id, first_name, username, referred_by=None):
     db = await load_db()
@@ -79,3 +100,8 @@ async def update_email(user_id, email):
 async def get_user(user_id):
     db = await load_db()
     return db.get(str(user_id))
+
+# Función extra para compatibilidad futura
+async def add_referral(user_id, referrer_id):
+    # Esta función ya está integrada en add_user, pero la dejamos por si acaso
+    pass
