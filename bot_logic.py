@@ -11,13 +11,13 @@ logger = logging.getLogger(__name__)
 # --- CONFIGURACIÓN ---
 HIVE_PRICE = 0.012 
 INITIAL_BONUS = 100 
-ADMIN_ID = 123456789  # <--- TU ID
+ADMIN_ID = 123456789 
 
-# --- LINKS MAESTROS (Render URL para Webhook) ---
+# --- LINKS MAESTROS ---
 RENDER_URL = "https://thehivereal-bot.onrender.com" 
 LINK_ENTRY_DETECT = f"{RENDER_URL}/ingreso"
 
-# --- ☢️ ARSENAL GLOBAL (V7.5 RELEASE - FULL AFFILIATE) ---
+# --- ☢️ ARSENAL GLOBAL (LINKS REALES) ---
 LINKS = {
     # 💎 JACKPOT & DIVIDENDOS
     'BETFURY': "https://t.me/misterFury_bot/app?startapp=tgReLUser7012661", 
@@ -53,76 +53,99 @@ LINKS = {
     'BYBIT': "Https://www.bybit.com/invite?ref=BBJWAX4"
 }
 
-# --- TEXTOS MULTILENGUAJE ---
+# --- TEXTOS CON DISEÑO PROFESIONAL (ESTÉTICA FINTECH) ---
 TEXTS = {
     'es': {
-        'welcome': "🐝 **THE ONE HIVE** `v7.5`\n👤 Agente: `{name}`\n\n📜 **TÉRMINOS:** Al continuar, aceptas recibir notificaciones comerciales, ofertas de terceros y actualizaciones del sistema en tu email y Telegram.\n\n💎 **PROTOCOLO ACTIVO:**\nAds, CPA y Minería Pasiva.\n\n👇 Inicia validación:",
-        'btn_start': "🛡️ ACEPTAR Y CONECTAR",
-        'dashboard_title': "⬛⬛⬛ **PANEL DE MANDO** ⬛⬛⬛",
-        'metrics': "📊 **TU COLMENA**",
-        'wallet': "💰 **TESORERÍA**",
-        'balance_hive': "🪙 **{tokens} HIVE**",
-        'rank': "🎖 Rango: **{rank}**",
-        'balance_usd': "💵 **${usd:.2f} USD** (Estimado)",
-        'menu_fintech': "🏦 BÓVEDA $50+ (VIP)",
-        'menu_jackpot': "💎 JACKPOT DIARIO",
-        'menu_work': "📱 TRABAJO & ADS",
-        'menu_passive': "☁️ MINERÍA AUTO (x4)",
-        'menu_team': "👥 MI EQUIPO",
-        'menu_withdraw': "🏧 RETIRAR",
-        'menu_profile': "⚙️ PERFIL",
-        'fintech_title': "🏦 **BÓVEDA FINANCIERA (VIP)**\n━━━━━━━━━━\nLas ofertas que más pagan. Regístrate y valida identidad.\n\n1️⃣ **Revolut:** [Bono Tarjeta]({link_r})\n2️⃣ **Nexo:** [Interés Crypto]({link_n})\n3️⃣ **YouHodler:** [Yield Farming]({link_y})\n4️⃣ **Plus500:** [Trading CFD]({link_plus})\n5️⃣ **Wise:** [Cuenta Global]({link_w})\n6️⃣ **Bybit:** [Exchange TOP]({link_by})",
-        'jackpot_title': "💎 **ZONA DE SUERTE & CRIPTO**\n━━━━━━━━━━\n1️⃣ **FreeBitco.in**\n🔗 [Activar Interés 4.08%]({link_fb})\n\n2️⃣ **BetFury**\n🔗 [Minar Dividendos BFG]({link_bf})\n\n3️⃣ **Cointiply**\n🔗 [Faucet BTC & Chat]({link_ct})",
-        'work_title': "📱 **TRABAJO DIGITAL & ADS**\n━━━━━━━━━━\n1️⃣ **Paidwork:** [App Móvil]({link_p})\n2️⃣ **Gamehag:** [Jugar y Ganar]({link_g})\n3️⃣ **CoinPayU:** [Ver Anuncios]({link_c})\n4️⃣ **SproutGigs:** [Micro-Tareas]({link_s})",
-        'passive_title': "☁️ **MINERÍA SILENCIOSA (x4)**\n━━━━━━━━━━\nInstala las 4 apps y gana en automático:\n\n1️⃣ **PacketStream:** [Instalar]({link_ps})\n2️⃣ **Traffmonetizer:** [Instalar]({link_t})\n3️⃣ **Honeygain:** [Instalar]({link_h})\n4️⃣ **Pawns.app:** [Instalar]({link_pa})",
-        'btn_back': "🔙 VOLVER",
-        'withdraw_lock': "⚠️ **BLOQUEADO**\nAcumula $10.00 USD para desbloquear retiros."
+        'welcome': "💠 **SISTEMA HIVE INICIADO**\n\n🆔 **Usuario:** `{name}`\n🔒 **Estado:** Verificado\n📡 **Nodo:** Conectado\n\n📜 *Nota Legal: Al acceder, el usuario acepta la recepción de ofertas comerciales y actualizaciones del ecosistema.*\n\n👇 **ACCESO AL TERMINAL:**",
+        'btn_start': "⚡ ACCEDER AL SISTEMA",
+        'dashboard_header': "🎛️ **PANEL DE CONTROL PRINCIPAL**",
+        'dashboard_body': """
+┌───────────────────────┐
+│ 💰 **BALANCE TOTAL**     │
+│ `{tokens} HIVE`             │
+│ `≈ ${usd:.2f} USD`            │
+└───────────────────────┘
+📊 **ESTADÍSTICAS DEL NODO**
+├ 📡 Estatus: En Línea
+├ ⚡ Potencia: 100%
+└ 🌍 Región: {country}
+""",
+        'menu_fintech': "🏦 BÓVEDA FINTECH ($50+)",
+        'menu_jackpot': "💎 CRIPTO & DIVIDENDOS",
+        'menu_work': "⚡ TAREAS DE ALTO VALOR",
+        'menu_passive': "☁️ NODO DE MINERÍA (x4)",
+        'menu_team': "👥 GESTIÓN DE EQUIPO",
+        'menu_withdraw': "🏧 RETIROS / WALLET",
+        'menu_profile': "⚙️ AJUSTES",
+        
+        'fintech_title': "🏦 **BÓVEDA FINANCIERA**\n━━━━━━━━━━━━━━━━━━\n*Plataformas certificadas de alto rendimiento.*\n\n💠 **Revolut:** [Solicitar Tarjeta]({link_r})\n💠 **Nexo:** [Interés Compuesto]({link_n})\n💠 **YouHodler:** [Yield Farming]({link_y})\n💠 **Plus500:** [Trading Pro]({link_plus})\n💠 **Wise:** [Cuenta Global]({link_w})\n💠 **Bybit:** [Exchange Tier-1]({link_by})",
+        
+        'jackpot_title': "💎 **CRIPTO & DIVIDENDOS**\n━━━━━━━━━━━━━━━━━━\n*Generación de activos digitales sin inversión.*\n\n1️⃣ **FreeBitco.in** (El Banco BTC)\n🔗 [Activar Interés 4.08%]({link_fb})\n\n2️⃣ **BetFury** (Dividendos Reales)\n🔗 [Minar Token BFG]({link_bf})\n\n3️⃣ **Cointiply** (Faucet Premium)\n🔗 [Reclamar BTC]({link_ct})",
+        
+        'work_title': "⚡ **TAREAS DE ALTO VALOR**\n━━━━━━━━━━━━━━━━━━\n*Monetización activa por tiempo invertido.*\n\n🔹 **Paidwork:** [App Oficial]({link_p})\n🔹 **Gamehag:** [Jugar & Ganar]({link_g})\n🔹 **CoinPayU:** [Anuncios PTC]({link_c})\n🔹 **SproutGigs:** [Micro-Tasks]({link_s})",
+        
+        'passive_title': "☁️ **NODO DE MINERÍA (x4)**\n━━━━━━━━━━━━━━━━━━\n*Ingresos pasivos por ancho de banda compartido.*\n\n🟢 **Nodo 1:** [PacketStream]({link_ps})\n🟢 **Nodo 2:** [Traffmonetizer]({link_t})\n🟢 **Nodo 3:** [Honeygain]({link_h})\n🟢 **Nodo 4:** [Pawns.app]({link_pa})",
+        
+        'btn_back': "🔙 MENÚ PRINCIPAL",
+        'withdraw_lock': "🔒 **RETIRO BLOQUEADO**\n\n⚠️ **Requisito:** El saldo mínimo de transferencia es de $10.00 USD.\n\n_Continúe operando los nodos para alcanzar la meta._"
     },
     'en': {
-        'welcome': "🐝 **THE ONE HIVE** `v7.5`\n👤 Agent: `{name}`\n\n📜 **TERMS:** By continuing, you agree to receive commercial notifications and third-party offers.\n\n👇 Start validation:",
-        'btn_start': "🛡️ ACCEPT & CONNECT",
-        'dashboard_title': "⬛⬛⬛ **COMMAND CENTER** ⬛⬛⬛",
-        'metrics': "📊 **YOUR HIVE**",
-        'wallet': "💰 **TREASURY**",
-        'balance_hive': "🪙 **{tokens} HIVE**",
-        'rank': "🎖 Rank: **{rank}**",
-        'balance_usd': "💵 **${usd:.2f} USD** (Est)",
-        'menu_fintech': "🏦 VAULT $50+ (VIP)",
-        'menu_jackpot': "💎 DAILY JACKPOT",
-        'menu_work': "📱 WORK & ADS",
-        'menu_passive': "☁️ AUTO MINING (x4)",
-        'menu_team': "👥 MY TEAM",
-        'menu_withdraw': "🏧 WITHDRAW",
-        'menu_profile': "⚙️ PROFILE",
-        'fintech_title': "🏦 **FINANCIAL VAULT (VIP)**\n━━━━━━━━━━\n1️⃣ **Revolut:** [Bonus]({link_r})\n2️⃣ **Nexo:** [Bonus]({link_n})\n3️⃣ **YouHodler:** [Yield]({link_y})\n4️⃣ **Plus500:** [Trading]({link_plus})\n5️⃣ **Wise:** [Account]({link_w})\n6️⃣ **Bybit:** [Exchange]({link_by})",
-        'jackpot_title': "💎 **LUCK & CRYPTO ZONE**\n━━━━━━━━━━\n1️⃣ **FreeBitco.in**\n🔗 [Enable 4.08% APY]({link_fb})\n\n2️⃣ **BetFury**\n🔗 [Mine BFG]({link_bf})\n\n3️⃣ **Cointiply**\n🔗 [Rain Pool]({link_ct})",
-        'work_title': "📱 **DIGITAL WORK**\n━━━━━━━━━━\n1️⃣ **Paidwork:** [App]({link_p})\n2️⃣ **Gamehag:** [Play]({link_g})\n3️⃣ **CoinPayU:** [Ads]({link_c})\n4️⃣ **SproutGigs:** [Tasks]({link_s})",
-        'passive_title': "☁️ **SILENT MINING**\n━━━━━━━━━━\n1️⃣ **PacketStream:** [Install]({link_ps})\n2️⃣ **Traffmonetizer:** [Install]({link_t})\n3️⃣ **Honeygain:** [Install]({link_h})\n4️⃣ **Pawns.app:** [Install]({link_pa})",
-        'btn_back': "🔙 BACK",
-        'withdraw_lock': "⚠️ **LOCKED**\nReach $10.00 USD."
+        'welcome': "💠 **HIVE SYSTEM INITIATED**\n\n🆔 **User:** `{name}`\n🔒 **Status:** Verified\n📡 **Node:** Connected\n\n👇 **TERMINAL ACCESS:**",
+        'btn_start': "⚡ ACCESS SYSTEM",
+        'dashboard_header': "🎛️ **MAIN CONTROL CONSOLE**",
+        'dashboard_body': """
+┌───────────────────────┐
+│ 💰 **TOTAL BALANCE**     │
+│ `{tokens} HIVE`             │
+│ `≈ ${usd:.2f} USD`            │
+└───────────────────────┘
+📊 **NODE STATISTICS**
+├ 📡 Status: Online
+├ ⚡ Power: 100%
+└ 🌍 Region: {country}
+""",
+        'menu_fintech': "🏦 FINTECH VAULT ($50+)",
+        'menu_jackpot': "💎 CRYPTO & YIELD",
+        'menu_work': "⚡ HIGH VALUE TASKS",
+        'menu_passive': "☁️ CLOUD MINING (x4)",
+        'menu_team': "👥 TEAM MANAGEMENT",
+        'menu_withdraw': "🏧 WITHDRAW / WALLET",
+        'menu_profile': "⚙️ SETTINGS",
+        'fintech_title': "🏦 **FINANCIAL VAULT**\n━━━━━━━━━━━━━━━━━━\n1️⃣ **Revolut:** [Bonus]({link_r})\n2️⃣ **Nexo:** [Interest]({link_n})\n3️⃣ **YouHodler:** [Yield]({link_y})\n4️⃣ **Plus500:** [Trading]({link_plus})\n5️⃣ **Wise:** [Account]({link_w})\n6️⃣ **Bybit:** [Exchange]({link_by})",
+        'jackpot_title': "💎 **CRYPTO & YIELD**\n━━━━━━━━━━━━━━━━━━\n1️⃣ **FreeBitco.in**\n🔗 [Enable 4.08% APY]({link_fb})\n\n2️⃣ **BetFury**\n🔗 [Mine BFG]({link_bf})\n\n3️⃣ **Cointiply**\n🔗 [Claim BTC]({link_ct})",
+        'work_title': "⚡ **HIGH VALUE TASKS**\n━━━━━━━━━━━━━━━━━━\n🔹 **Paidwork:** [App]({link_p})\n🔹 **Gamehag:** [Play]({link_g})\n🔹 **CoinPayU:** [Ads]({link_c})\n🔹 **SproutGigs:** [Tasks]({link_s})",
+        'passive_title': "☁️ **CLOUD MINING**\n━━━━━━━━━━━━━━━━━━\n🟢 **Node 1:** [PacketStream]({link_ps})\n🟢 **Node 2:** [Traffmonetizer]({link_t})\n🟢 **Node 3:** [Honeygain]({link_h})\n🟢 **Node 4:** [Pawns.app]({link_pa})",
+        'btn_back': "🔙 MAIN MENU",
+        'withdraw_lock': "🔒 **WITHDRAWAL LOCKED**\nRequirement: Reach $10.00 USD."
     },
     'pt': {
-        'welcome': "🐝 **THE ONE HIVE** `v7.5`\n👤 Agente: `{name}`\n\n👇 Iniciar validação:",
-        'btn_start': "🛡️ CONECTAR NÓ",
-        'dashboard_title': "⬛⬛⬛ **PAINEL DE COMANDO** ⬛⬛⬛",
-        'metrics': "📊 **SUA COLMEIA**",
-        'wallet': "💰 **TESOURARIA**",
-        'balance_hive': "🪙 **{tokens} HIVE**",
-        'rank': "🎖 Rank: **{rank}**",
-        'balance_usd': "💵 **${usd:.2f} USD** (Est)",
-        'menu_fintech': "🏦 COFRE $50+ (VIP)",
-        'menu_jackpot': "💎 JACKPOT DIÁRIO",
-        'menu_work': "📱 TRABALHO & ADS",
-        'menu_passive': "☁️ MINERAÇÃO AUTO (x4)",
-        'menu_team': "👥 MINHA EQUIPE",
-        'menu_withdraw': "🏧 SACAR",
-        'menu_profile': "⚙️ PERFIL",
-        'fintech_title': "🏦 **COFRE FINANCEIRO**\n━━━━━━━━━━\n1️⃣ **Revolut:** [Bônus]({link_r})\n2️⃣ **Nexo:** [Bônus]({link_n})\n3️⃣ **YouHodler:** [Yield]({link_y})\n4️⃣ **Plus500:** [Trading]({link_plus})\n5️⃣ **Wise:** [Conta]({link_w})\n6️⃣ **Bybit:** [Bônus]({link_by})",
-        'jackpot_title': "💎 **SORTE & CRIPTO**\n━━━━━━━━━━\n1️⃣ **FreeBitco.in**\n🔗 [Juros]({link_fb})\n\n2️⃣ **BetFury**\n🔗 [Minera BFG]({link_bf})\n\n3️⃣ **Cointiply**\n🔗 [Chuva BTC]({link_ct})",
-        'work_title': "📱 **TRABALHO DIGITAL**\n━━━━━━━━━━\n1️⃣ **Paidwork:** [App]({link_p})\n2️⃣ **Gamehag:** [Jogar]({link_g})\n3️⃣ **CoinPayU:** [Anúncios]({link_c})\n4️⃣ **SproutGigs:** [Tarefas]({link_s})",
-        'passive_title': "☁️ **MINERAÇÃO SILENCIOSA**\n━━━━━━━━━━\n1️⃣ **PacketStream:** [Instalar]({link_ps})\n2️⃣ **Traffmonetizer:** [Instalar]({link_t})\n3️⃣ **Honeygain:** [Instalar]({link_h})\n4️⃣ **Pawns.app:** [Instalar]({link_pa})",
-        'btn_back': "🔙 VOLTAR",
-        'withdraw_lock': "⚠️ **BLOQUEADO**\nAcumule $10.00 USD."
+        'welcome': "💠 **SISTEMA HIVE INICIADO**\n\n🆔 **Usuário:** `{name}`\n🔒 **Status:** Verificado\n\n👇 **ACESSAR TERMINAL:**",
+        'btn_start': "⚡ ACESSAR SISTEMA",
+        'dashboard_header': "🎛️ **CONSOLE PRINCIPAL**",
+        'dashboard_body': """
+┌───────────────────────┐
+│ 💰 **SALDO TOTAL**       │
+│ `{tokens} HIVE`             │
+│ `≈ ${usd:.2f} USD`            │
+└───────────────────────┘
+📊 **ESTATÍSTICAS**
+├ 📡 Status: Online
+├ ⚡ Potência: 100%
+└ 🌍 Região: {country}
+""",
+        'menu_fintech': "🏦 COFRE FINTECH",
+        'menu_jackpot': "💎 CRIPTO & DIVIDENDOS",
+        'menu_work': "⚡ TAREFAS PRO",
+        'menu_passive': "☁️ NODO DE MINERAÇÃO",
+        'menu_team': "👥 EQUIPE",
+        'menu_withdraw': "🏧 SAQUE",
+        'menu_profile': "⚙️ CONFIGURAÇÃO",
+        'fintech_title': "🏦 **COFRE FINANCEIRO**\n━━━━━━━━━━━━━━━━━━\n1️⃣ **Revolut:** [Bônus]({link_r})\n2️⃣ **Nexo:** [Bônus]({link_n})\n3️⃣ **YouHodler:** [Yield]({link_y})\n4️⃣ **Plus500:** [Trading]({link_plus})\n5️⃣ **Wise:** [Conta]({link_w})\n6️⃣ **Bybit:** [Bônus]({link_by})",
+        'jackpot_title': "💎 **CRIPTO & DIVIDENDOS**\n━━━━━━━━━━━━━━━━━━\n1️⃣ **FreeBitco.in**\n🔗 [Juros]({link_fb})\n\n2️⃣ **BetFury**\n🔗 [Minera BFG]({link_bf})\n\n3️⃣ **Cointiply**\n🔗 [BTC]({link_ct})",
+        'work_title': "⚡ **TAREFAS PRO**\n━━━━━━━━━━━━━━━━━━\n🔹 **Paidwork:** [App]({link_p})\n🔹 **Gamehag:** [Jogar]({link_g})\n🔹 **CoinPayU:** [Anúncios]({link_c})\n🔹 **SproutGigs:** [Tarefas]({link_s})",
+        'passive_title': "☁️ **MINERAÇÃO EM NUVEM**\n━━━━━━━━━━━━━━━━━━\n🟢 **Nodo 1:** [PacketStream]({link_ps})\n🟢 **Nodo 2:** [Traffmonetizer]({link_t})\n🟢 **Nodo 3:** [Honeygain]({link_h})\n🟢 **Nodo 4:** [Pawns.app]({link_pa})",
+        'btn_back': "🔙 MENU PRINCIPAL",
+        'withdraw_lock': "🔒 **SAQUE BLOQUEADO**\nMeta: $10.00 USD."
     }
 }
 
@@ -150,6 +173,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try: await context.bot.delete_message(chat_id=user.id, message_id=msg.message_id)
     except: pass
 
+    # BIENVENIDA MÁS LIMPIA Y PROFESIONAL
     txt = get_text(lang, 'welcome').format(name=user.first_name)
     kb = [[InlineKeyboardButton(get_text(lang, 'btn_start'), url=LINK_ENTRY_DETECT)]]
     await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
@@ -166,12 +190,12 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             if hasattr(db, 'update_email'): await db.update_email(user.id, text)
             await show_dashboard(update, context)
             return
-        else: await update.message.reply_text("❌ Error. Email required.")
+        else: await update.message.reply_text("❌ Error. Email requerido.")
     
     if text.startswith("HIVE-777"):
         parts = text.split('-')
         context.user_data['country'] = parts[2] if len(parts) >= 3 else 'GL'
-        await update.message.reply_text(f"🌍 **Conexión Segura**\n\n📥 **PASO FINAL:** Ingresa tu correo electrónico para activar tu cuenta y recibir novedades.", parse_mode="Markdown")
+        await update.message.reply_text(f"🔒 **ENLACE SEGURO ESTABLECIDO**\n\n📥 **VERIFICACIÓN DE USUARIO:**\nPor favor, ingrese su correo electrónico para sincronizar su perfil y activar las alertas de ingresos.", parse_mode="Markdown")
         context.user_data['waiting_for_email'] = True
 
 async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -181,19 +205,13 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_data = await db.get_user(user.id)
     tokens = user_data.get('tokens', INITIAL_BONUS) if user_data else INITIAL_BONUS
-    rank = user_data.get('rank', 'Larva 🐛') 
     usd = tokens * HIVE_PRICE
     
-    txt = (
-        f"{get_text(lang, 'dashboard_title')}\n"
-        f"🆔 `{user.id}` | 📍 `{country}`\n"
-        f"{get_text(lang, 'rank').format(rank=rank)}\n\n"
-        f"{get_text(lang, 'metrics')}\n"
-        f"➤ ▮▮▮▮▮▮▮▮▯▯ 80%\n\n"
-        f"{get_text(lang, 'wallet')}\n"
-        f"{get_text(lang, 'balance_hive').format(tokens=tokens)}\n"
-        f"{get_text(lang, 'balance_usd').format(usd=usd)}\n"
-    )
+    # DISEÑO DE DASHBOARD TIPO "APP" CON BLOQUE DE CÓDIGO
+    header = get_text(lang, 'dashboard_header')
+    body = get_text(lang, 'dashboard_body').format(tokens=tokens, usd=usd, country=country)
+    
+    txt = f"{header}\n{body}"
     
     kb = [
         [InlineKeyboardButton(get_text(lang, 'menu_fintech'), callback_data="fintech_vault")], 
@@ -242,8 +260,8 @@ async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data = await db.get_user(user_id)
     ref_count = len(user_data.get('referrals', [])) if user_data else 0
     link = f"https://t.me/{context.bot.username}?start={user_id}"
-    txt = f"👥 **EQUIPO**\n\n👑 Referidos: {ref_count}\n🔗 `{link}`" 
-    kb = [[InlineKeyboardButton("📤 Compartir", url=f"https://t.me/share/url?url={link}"), InlineKeyboardButton("🔙", callback_data="go_dashboard")]]
+    txt = f"👥 **GESTIÓN DE EQUIPO**\n\n👑 **Referidos Activos:** `{ref_count}`\n🔗 **Enlace de Nodo:**\n`{link}`" 
+    kb = [[InlineKeyboardButton("📤 Compartir Enlace", url=f"https://t.me/share/url?url={link}"), InlineKeyboardButton("🔙 Volver", callback_data="go_dashboard")]]
     await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -257,20 +275,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "fintech_vault": await fintech_vault_menu(update, context)
     elif data == "invite_friends": await team_menu(update, context)
     elif data == "my_profile":
-        kb = [[InlineKeyboardButton("🔙", callback_data="go_dashboard")]]
-        await query.message.edit_text(f"👤 {query.from_user.first_name}", reply_markup=InlineKeyboardMarkup(kb))
+        kb = [[InlineKeyboardButton("🔙 Volver", callback_data="go_dashboard")]]
+        await query.message.edit_text(f"👤 **PERFIL DE USUARIO**\n\nNombre: {query.from_user.first_name}\nID: `{query.from_user.id}`", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
     elif data == "withdraw": 
-        await query.answer("⚠️ Locked", show_alert=True)
+        await query.answer("⚠️ Acceso Restringido", show_alert=True)
         await query.message.reply_text(get_text(query.from_user.language_code, 'withdraw_lock'), parse_mode="Markdown")
 
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return 
     message = " ".join(context.args)
-    if message: await update.message.reply_text(f"📢 **BROADCAST:**\n\n{message}", parse_mode="Markdown")
+    if message: await update.message.reply_text(f"📢 **COMUNICADO OFICIAL:**\n\n{message}", parse_mode="Markdown")
 
 # Commands
 async def help_command(u, c): await u.message.reply_text("Help: /start")
 async def invite_command(u, c): await u.message.reply_text("Invite...")
 async def reset_command(u, c): 
     c.user_data.clear()
-    await u.message.reply_text("Reset done.")
+    await u.message.reply_text("Sistema Reiniciado.")
