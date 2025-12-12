@@ -10,13 +10,13 @@ logger = logging.getLogger(__name__)
 # --- CONFIGURACIÓN DE SISTEMA ---
 HIVE_PRICE = 0.012 
 INITIAL_BONUS = 100 
-ADMIN_ID = 123456789  # <--- COLOCA TU ID REAL
+ADMIN_ID = 123456789 
 
 # --- ENLACES DE SISTEMA ---
 RENDER_URL = "https://thehivereal-bot.onrender.com" 
 LINK_ENTRY_DETECT = f"{RENDER_URL}/ingreso"
 
-# --- ☢️ ARSENAL MAESTRO (19 VÍAS DE INGRESO VERIFICADAS) ---
+# --- ☢️ ARSENAL MAESTRO (LISTA COMPLETA: 26 PLATAFORMAS) ---
 LINKS = {
     # 🎰 CASINO & JACKPOTS
     'BCGAME': "https://bc.game/i-477hgd5fl-n/",
@@ -24,7 +24,7 @@ LINKS = {
     'FREEBITCOIN': "https://freebitco.in/?r=55837744", 
     'COINTIPLY': "https://cointiply.com/r/jR1L6y", 
     
-    # 📈 FINTECH & TRADING (HIGH TICKET)
+    # 📈 FINTECH & TRADING
     'BYBIT': "https://www.bybit.com/invite?ref=BBJWAX4",
     'PLUS500': "https://www.plus500.com/en-uy/refer-friend",
     'NEXO': "https://nexo.com/ref/rbkekqnarx?src=android-link",
@@ -33,23 +33,29 @@ LINKS = {
     'YOUHODLER': "https://app.youhodler.com/sign-up?ref=SXSSSNB1",
     'AIRTM': "https://app.airtm.com/ivt/jos3vkujiyj",
     
-    # ☁️ MINERÍA PASIVA
+    # ☁️ MINERÍA PASIVA (INTERNET SHARING)
     'HONEYGAIN': "https://join.honeygain.com/ALEJOE9F32",
-    'PACKETSTREAM': "https://packetstream.io/?psr=7hMP",
+    'PACKETSTREAM': "https://packetstream.io/?psr=7hQT",
     'PAWNS': "https://pawns.app/?r=18399810",
     'TRAFFMONETIZER': "https://traffmonetizer.com/?aff=2034896",
     
-    # 📱 TRABAJO & ANUNCIOS
+    # 📱 TRABAJO, TAREAS & ENCUESTAS
     'PAIDWORK': "https://www.paidwork.com/?r=nexus.ventas.life",
     'GAMEHAG': "https://gamehag.com/r/NWUD9QNR",
     'COINPAYU': "https://www.coinpayu.com/?r=TheSkywalker",
     'SPROUTGIGS': "https://sproutgigs.com/?a=83fb1bf9",
+    'GOTRANSCRIPT': "https://gotranscript.com/r/7667434",
+    'KOLOTIBABLO': "http://getcaptchajob.com/30nrmt1xpj",
+    'EVERVE': "https://everve.net/ref/1950045/",
+    'TIMEBUCKS': "https://timebucks.com/?refID=227501472",
+    'SWAGBUCKS': "https://www.swagbucks.com/p/register?rb=226213635&rp=1",
+    'TESTBIRDS': "https://nest.testbirds.com/home/tester?t=9ef7ff82-ca89-4e4a-a288-02b4938ff381",
     
     # 🔄 OFERTAS CPA
     'FREECASH': "https://freecash.com/r/XYN98"
 }
 
-# --- TEXTOS: INTERFAZ "HIVE TERMINAL" (PROFESIONAL) ---
+# --- TEXTOS: INTERFAZ "HIVE TERMINAL" (EXTENDIDA) ---
 TEXTS = {
     'es': {
         'welcome': (
@@ -76,88 +82,85 @@ TEXTS = {
 ├ 🌍 Región: {country}
 └ ⚡ Nivel: Usuario Verificado
 """,
-        # NOMBRES DE MENÚS SERIOS
+        # NOMBRES DE MENÚS
         'menu_fintech': "🏦 BÓVEDA FINTECH (VIP)",
-        'menu_jackpot': "💎 CRIPTO & DIVIDENDOS",
-        'menu_work': "💼 TAREAS & ADS",
-        'menu_passive': "☁️ MINERÍA EN NUBE",
+        'menu_jackpot': "💎 CRIPTO & JUEGOS",
+        'menu_work': "💼 TAREAS & FREELANCE",
+        'menu_passive': "☁️ MINERÍA PASIVA",
         'menu_team': "👥 GESTIÓN DE EQUIPO",
         'menu_withdraw': "🏧 RETIRAR FONDOS",
         'menu_profile': "⚙️ CONFIGURACIÓN",
         
-        # CONTENIDO DE MENÚS (CON TODOS LOS LINKS)
+        # DESCRIPCIONES COMPLETAS DE SECCIONES (PARA QUE NO FALTE NADA VISUALMENTE)
         'fintech_title': (
-            "🏦 **BÓVEDA FINANCIERA (HIGH TICKET)**\n"
+            "🏦 **BÓVEDA FINANCIERA (HIGH YIELD)**\n"
             "▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n"
-            "Acceso a bonos institucionales y trading.\n\n"
-            "1️⃣ **BYBIT:** [Exchange Pro + Bonos]({link_by})\n"
-            "2️⃣ **PLUS500:** [Trading de CFDs]({link_plus})\n"
-            "3️⃣ **NEXO:** [Interés en Cripto]({link_n})\n"
-            "4️⃣ **REVOLUT:** [Banca Digital]({link_r})\n"
-            "5️⃣ **WISE:** [Transferencias Globales]({link_w})\n"
-            "6️⃣ **YOUHODLER:** [Préstamos & APY]({link_y})\n"
-            "7️⃣ **AIRTM:** [Dólar Digital]({link_a})"
+            "Acceso exclusivo a bonos bancarios y trading.\n\n"
+            "1. **BYBIT:** Exchange Top Tier.\n"
+            "2. **REVOLUT:** Banca Digital Global.\n"
+            "3. **NEXO:** Interés Compuesto en Cripto.\n"
+            "4. **YOUHODLER:** Yield Farming.\n"
+            "5. **PLUS500:** Trading de CFDs.\n"
+            "6. **WISE:** Transferencias Internacionales.\n"
+            "7. **AIRTM:** Dólar Digital sin restricciones.\n"
+            "8. **FREECASH:** Ofertas CPA de alto pago.\n\n"
+            "👇 **SELECCIONE PLATAFORMA:**"
         ),
-        
         'jackpot_title': (
             "💎 **CRIPTOACTIVOS & AZAR**\n"
             "▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n"
-            "Generación de activos mediante probabilidad y staking.\n\n"
-            "🎲 **BC.GAME:** [Casino & Lotería]({link_bc})\n"
-            "🎰 **BETFURY:** [Dividendos BFG]({link_bf})\n"
-            "🏦 **FREEBITCOIN:** [Interés Compuesto]({link_fb})\n"
-            "🌧 **COINTIPLY:** [Pools de Bitcoin]({link_ct})"
+            "Generación de activos mediante probabilidad.\n\n"
+            "1. **FREEBITCOIN:** La Faucet #1 del mundo.\n"
+            "2. **BETFURY:** Dividendos y Staking BFG.\n"
+            "3. **BC.GAME:** Casino y Lotería Cripto.\n"
+            "4. **COINTIPLY:** Chat Rain y Offerwall.\n\n"
+            "👇 **SELECCIONE PROTOCOLO:**"
         ),
-        
         'work_title': (
-            "💼 **MÓDULO DE TAREAS ACTIVAS**\n"
+            "💼 **MÓDULO DE TRABAJO DIGITAL**\n"
             "▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n"
-            "Monetización directa por ejecución de tareas.\n\n"
-            "📱 **PAIDWORK:** [Tareas App]({link_p})\n"
-            "🎮 **GAMEHAG:** [Jugar por Gemas]({link_g})\n"
-            "👁 **COINPAYU:** [Visualizar Ads]({link_c})\n"
-            "⚡ **SPROUTGIGS:** [Micro-Trabajos]({link_s})\n"
-            "🔄 **FREECASH:** [Ofertas CPA]({link_f})"
+            "Monetización activa por tareas y tiempo.\n\n"
+            "1. **PAIDWORK:** Tareas variadas en App.\n"
+            "2. **COINPAYU:** Pago por ver anuncios (BTC).\n"
+            "3. **SWAGBUCKS:** Encuestas pagadas.\n"
+            "4. **TIMEBUCKS:** Tareas sociales.\n"
+            "5. **SPROUTGIGS:** Micro-trabajos freelance.\n"
+            "6. **GOTRANSCRIPT:** Transcripción de audio.\n"
+            "7. **GAMEHAG:** Juega y gana premios.\n"
+            "8. **EVERVE:** Intercambio social (Likes/Subs).\n"
+            "9. **KOLOTIBABLO:** Resolución de Captchas.\n"
+            "10. **TESTBIRDS:** Testing de Apps y Webs.\n\n"
+            "👇 **SELECCIONE FUENTE DE INGRESOS:**"
         ),
-        
         'passive_title': (
-            "☁️ **NODO DE MINERÍA PASIVA**\n"
+            "☁️ **MINERÍA PASIVA (NODOS)**\n"
             "▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n"
-            "Ingresos automáticos por ancho de banda.\n\n"
-            "📡 **HONEYGAIN:** [Conectar Nodo]({link_h})\n"
-            "📡 **PACKETSTREAM:** [Conectar Nodo]({link_ps})\n"
-            "📡 **PAWNS.APP:** [Conectar Nodo]({link_pa})\n"
-            "📡 **TRAFFMONETIZER:** [Conectar Nodo]({link_t})"
+            "Instale las apps y gane en segundo plano.\n\n"
+            "1. **HONEYGAIN:** Comparte internet.\n"
+            "2. **PACKETSTREAM:** Nodo residencial.\n"
+            "3. **PAWNS.APP:** IP Sharing + Encuestas.\n"
+            "4. **TRAFFMONETIZER:** Tráfico monetizado.\n\n"
+            "👇 **ACTIVE SUS NODOS:**"
         ),
         
         'btn_back': "🔙 VOLVER AL PANEL",
         'withdraw_lock': "🔒 **TRANSACCIÓN DENEGADA**\n\n⚠️ **Error:** Saldo insuficiente.\n💰 **Requerido:** $10.00 USD.\n\n_El sistema desbloqueará esta función automáticamente al alcanzar la meta._"
     },
-    'en': { # Configuración en inglés mantenida con el mismo estilo profesional
+    'en': { 
         'welcome': "💠 **HIVE FINANCIAL TERMINAL**\n───────────────────────\n🆔 **User:** `{name}`\n📡 **Status:** Secure\n\n👇 **SYSTEM ACCESS:**",
         'btn_start': "⚡ CONNECT NODE",
         'dashboard_header': "🎛️ **MAIN CONTROL PANEL**",
         'dashboard_body': "┌───────────────────────┐\n│ 💳 **ESTIMATED BALANCE** │\n│ `{tokens} HIVE`             │\n│ `≈ ${usd:.2f} USD`            │\n└───────────────────────┘",
-        'menu_fintech': "🏦 FINTECH VAULT", 'menu_jackpot': "💎 CRYPTO & LUCK", 'menu_work': "💼 TASKS & ADS", 'menu_passive': "☁️ CLOUD MINING", 'menu_team': "👥 TEAM", 'menu_withdraw': "🏧 WITHDRAW", 'menu_profile': "⚙️ SETTINGS",
-        'fintech_title': "🏦 **FINANCIAL VAULT**\n1️⃣ **BYBIT:** [Exchange]({link_by})\n2️⃣ **PLUS500:** [Trading]({link_plus})\n3️⃣ **NEXO:** [Interest]({link_n})\n4️⃣ **REVOLUT:** [Bank]({link_r})\n5️⃣ **WISE:** [Transfer]({link_w})\n6️⃣ **YOUHODLER:** [Yield]({link_y})\n7️⃣ **AIRTM:** [Wallet]({link_a})",
-        'jackpot_title': "💎 **CRYPTO ASSETS**\n🎲 **BC.GAME:** [Casino]({link_bc})\n🎰 **BETFURY:** [Dividends]({link_bf})\n🏦 **FREEBITCOIN:** [Interest]({link_fb})\n🌧 **COINTIPLY:** [Pools]({link_ct})",
-        'work_title': "💼 **ACTIVE TASKS**\n📱 **PAIDWORK:** [App]({link_p})\n🎮 **GAMEHAG:** [Play]({link_g})\n👁 **COINPAYU:** [Ads]({link_c})\n⚡ **SPROUTGIGS:** [Tasks]({link_s})\n🔄 **FREECASH:** [CPA]({link_f})",
-        'passive_title': "☁️ **PASSIVE MINING**\n📡 **HONEYGAIN:** [Connect]({link_h})\n📡 **PACKETSTREAM:** [Connect]({link_ps})\n📡 **PAWNS:** [Connect]({link_pa})\n📡 **TRAFFMONETIZER:** [Connect]({link_t})",
-        'btn_back': "🔙 BACK",
-        'withdraw_lock': "🔒 **DENIED**\nRequired: $10.00 USD."
+        'menu_fintech': "🏦 FINTECH VAULT", 'menu_jackpot': "💎 CRYPTO & LUCK", 'menu_work': "💼 TASKS & FREELANCE", 'menu_passive': "☁️ CLOUD MINING", 'menu_team': "👥 TEAM", 'menu_withdraw': "🏧 WITHDRAW", 'menu_profile': "⚙️ SETTINGS",
+        'fintech_title': "🏦 **FINANCIAL VAULT**\nSelect platform:", 'jackpot_title': "💎 **CRYPTO ASSETS**\nSelect protocol:", 'work_title': "💼 **ACTIVE TASKS**\nSelect source:", 'passive_title': "☁️ **PASSIVE MINING**\nActivate nodes:", 'btn_back': "🔙 BACK", 'withdraw_lock': "🔒 **DENIED**"
     },
-    'pt': { # Portugués profesional
+    'pt': { 
         'welcome': "💠 **TERMINAL FINANCEIRO HIVE**\n───────────────────────\n🆔 **Usuário:** `{name}`\n📡 **Status:** Seguro\n\n👇 **ACESSAR SISTEMA:**",
         'btn_start': "⚡ CONECTAR NÓ",
         'dashboard_header': "🎛️ **PAINEL DE CONTROLE**",
         'dashboard_body': "┌───────────────────────┐\n│ 💳 **SALDO ESTIMADO**    │\n│ `{tokens} HIVE`             │\n│ `≈ ${usd:.2f} USD`            │\n└───────────────────────┘",
-        'menu_fintech': "🏦 COFRE FINTECH", 'menu_jackpot': "💎 CRIPTO & SORTE", 'menu_work': "💼 TAREFAS", 'menu_passive': "☁️ MINERAÇÃO", 'menu_team': "👥 EQUIPE", 'menu_withdraw': "🏧 SACAR", 'menu_profile': "⚙️ AJUSTES",
-        'fintech_title': "🏦 **COFRE FINANCEIRO**\n1️⃣ **BYBIT:** [Exchange]({link_by})\n2️⃣ **PLUS500:** [Trading]({link_plus})\n3️⃣ **NEXO:** [Juros]({link_n})\n4️⃣ **REVOLUT:** [Banco]({link_r})\n5️⃣ **WISE:** [Conta]({link_w})\n6️⃣ **YOUHODLER:** [Yield]({link_y})\n7️⃣ **AIRTM:** [Carteira]({link_a})",
-        'jackpot_title': "💎 **CRIPTO ATIVOS**\n🎲 **BC.GAME:** [Casino]({link_bc})\n🎰 **BETFURY:** [Dividendos]({link_bf})\n🏦 **FREEBITCOIN:** [Juros]({link_fb})\n🌧 **COINTIPLY:** [BTC]({link_ct})",
-        'work_title': "💼 **TAREFAS ATIVAS**\n📱 **PAIDWORK:** [App]({link_p})\n🎮 **GAMEHAG:** [Jogar]({link_g})\n👁 **COINPAYU:** [Anúncios]({link_c})\n⚡ **SPROUTGIGS:** [Tarefas]({link_s})\n🔄 **FREECASH:** [CPA]({link_f})",
-        'passive_title': "☁️ **MINERAÇÃO PASSIVA**\n📡 **HONEYGAIN:** [Conectar]({link_h})\n📡 **PACKETSTREAM:** [Conectar]({link_ps})\n📡 **PAWNS:** [Conectar]({link_pa})\n📡 **TRAFFMONETIZER:** [Conectar]({link_t})",
-        'btn_back': "🔙 VOLTAR",
-        'withdraw_lock': "🔒 **BLOQUEADO**\nMeta: $10.00 USD."
+        'menu_fintech': "🏦 COFRE FINTECH", 'menu_jackpot': "💎 CRIPTO & SORTE", 'menu_work': "💼 TAREFAS & FREELANCE", 'menu_passive': "☁️ MINERAÇÃO", 'menu_team': "👥 EQUIPE", 'menu_withdraw': "🏧 SACAR", 'menu_profile': "⚙️ AJUSTES",
+        'fintech_title': "🏦 **COFRE FINANCEIRO**\nSelecione:", 'jackpot_title': "💎 **CRIPTO ATIVOS**\nSelecione:", 'work_title': "💼 **TAREFAS ATIVAS**\nSelecione:", 'passive_title': "☁️ **MINERAÇÃO PASSIVA**\nAtivar:", 'btn_back': "🔙 VOLTAR", 'withdraw_lock': "🔒 **BLOQUEADO**"
     }
 }
 
@@ -199,7 +202,6 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         if re.match(r"[^@]+@[^@]+\.[^@]+", text):
             context.user_data['email'] = text
             context.user_data['waiting_for_email'] = False
-            # REGISTRO DE LEAD
             if hasattr(db, 'update_email'): await db.update_email(user.id, text)
             await show_dashboard(update, context)
             return
@@ -232,7 +234,7 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = [
         [InlineKeyboardButton(get_text(lang, 'menu_fintech'), callback_data="fintech_vault")], 
         [InlineKeyboardButton(get_text(lang, 'menu_jackpot'), callback_data="jackpot_zone")], 
-        [InlineKeyboardButton(get_text(lang, 'menu_work'), callback_data="work_zone")], # TAREAS
+        [InlineKeyboardButton(get_text(lang, 'menu_work'), callback_data="work_zone")], 
         [InlineKeyboardButton(get_text(lang, 'menu_passive'), callback_data="passive_income")], 
         [InlineKeyboardButton(get_text(lang, 'menu_team'), callback_data="invite_friends"), InlineKeyboardButton(get_text(lang, 'menu_withdraw'), callback_data="withdraw")],
         [InlineKeyboardButton(get_text(lang, 'menu_profile'), callback_data="my_profile")]
@@ -244,60 +246,62 @@ async def jackpot_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     lang = query.from_user.language_code
-    # AQUÍ ESTÁN TODOS LOS CASINOS
-    txt = get_text(lang, 'jackpot_title').format(
-        link_bc=LINKS['BCGAME'], 
-        link_bf=LINKS['BETFURY'], 
-        link_fb=LINKS['FREEBITCOIN'], 
-        link_ct=LINKS['COINTIPLY']
-    )
-    kb = [[InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]]
-    await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown", disable_web_page_preview=True)
+    txt = get_text(lang, 'jackpot_title')
+    
+    kb = [
+        [InlineKeyboardButton("🎲 FREEBITCOIN", url=LINKS['FREEBITCOIN']), InlineKeyboardButton("🎰 BETFURY", url=LINKS['BETFURY'])],
+        [InlineKeyboardButton("💰 BC.GAME", url=LINKS['BCGAME']), InlineKeyboardButton("🌧 COINTIPLY", url=LINKS['COINTIPLY'])],
+        [InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]
+    ]
+    await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def work_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     lang = query.from_user.language_code
-    # AQUÍ ESTÁN TODAS LAS TAREAS
-    txt = get_text(lang, 'work_title').format(
-        link_p=LINKS['PAIDWORK'], 
-        link_g=LINKS['GAMEHAG'], 
-        link_c=LINKS['COINPAYU'], 
-        link_s=LINKS['SPROUTGIGS'],
-        link_f=LINKS['FREECASH']
-    )
-    kb = [[InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]]
-    await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown", disable_web_page_preview=True)
+    txt = get_text(lang, 'work_title')
+    
+    # 10 PLATAFORMAS DE TRABAJO (2 COLUMNAS)
+    kb = [
+        [InlineKeyboardButton("📱 PAIDWORK", url=LINKS['PAIDWORK']), InlineKeyboardButton("🖥️ COINPAYU", url=LINKS['COINPAYU'])],
+        [InlineKeyboardButton("⭐ SWAGBUCKS", url=LINKS['SWAGBUCKS']), InlineKeyboardButton("⏱ TIMEBUCKS", url=LINKS['TIMEBUCKS'])],
+        [InlineKeyboardButton("⚡ SPROUTGIGS", url=LINKS['SPROUTGIGS']), InlineKeyboardButton("📝 GOTRANSCRIPT", url=LINKS['GOTRANSCRIPT'])],
+        [InlineKeyboardButton("🎮 GAMEHAG", url=LINKS['GAMEHAG']), InlineKeyboardButton("🔄 EVERVE", url=LINKS['EVERVE'])],
+        [InlineKeyboardButton("⌨️ KOLOTIBABLO", url=LINKS['KOLOTIBABLO']), InlineKeyboardButton("🐦 TESTBIRDS", url=LINKS['TESTBIRDS'])],
+        [InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]
+    ]
+    await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def fintech_vault_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     lang = query.from_user.language_code
-    # AQUÍ ESTÁN TODAS LAS FINTECH
-    txt = get_text(lang, 'fintech_title').format(
-        link_by=LINKS['BYBIT'],
-        link_plus=LINKS['PLUS500'],
-        link_n=LINKS['NEXO'], 
-        link_r=LINKS['REVOLUT'], 
-        link_w=LINKS['WISE'], 
-        link_y=LINKS['YOUHODLER'],
-        link_a=LINKS['AIRTM']
-    )
-    kb = [[InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]]
-    await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown", disable_web_page_preview=True)
+    txt = get_text(lang, 'fintech_title')
+    
+    # 8 PLATAFORMAS FINTECH
+    kb = [
+        [InlineKeyboardButton("📈 BYBIT", url=LINKS['BYBIT']), InlineKeyboardButton("💳 REVOLUT", url=LINKS['REVOLUT'])],
+        [InlineKeyboardButton("🏦 NEXO", url=LINKS['NEXO']), InlineKeyboardButton("💰 YOUHODLER", url=LINKS['YOUHODLER'])],
+        [InlineKeyboardButton("📊 PLUS500", url=LINKS['PLUS500']), InlineKeyboardButton("🌍 WISE", url=LINKS['WISE'])],
+        [InlineKeyboardButton("💲 AIRTM", url=LINKS['AIRTM']), InlineKeyboardButton("💵 FREECASH", url=LINKS['FREECASH'])],
+        [InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]
+    ]
+    await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def passive_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     lang = query.from_user.language_code
-    # AQUÍ ESTÁN TODAS LAS MINERAS
-    txt = get_text(lang, 'passive_title').format(
-        link_ps=LINKS['PACKETSTREAM'], 
-        link_t=LINKS['TRAFFMONETIZER'], 
-        link_h=LINKS['HONEYGAIN'], 
-        link_pa=LINKS['PAWNS']
-    )
-    kb = [[InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]]
-    await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown", disable_web_page_preview=True)
+    txt = get_text(lang, 'passive_title')
+    
+    # 4 PLATAFORMAS DE MINERÍA
+    kb = [
+        [InlineKeyboardButton("🐝 HONEYGAIN", url=LINKS['HONEYGAIN'])],
+        [InlineKeyboardButton("📦 PACKETSTREAM", url=LINKS['PACKETSTREAM'])],
+        [InlineKeyboardButton("♟️ PAWNS.APP", url=LINKS['PAWNS'])],
+        [InlineKeyboardButton("📶 TRAFFMONETIZER", url=LINKS['TRAFFMONETIZER'])],
+        [InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]
+    ]
+    await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -305,7 +309,7 @@ async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data = await db.get_user(user_id)
     ref_count = len(user_data.get('referrals', [])) if user_data else 0
     link = f"https://t.me/{context.bot.username}?start={user_id}"
-    txt = f"👥 **GESTIÓN DE EQUIPO**\n\n👑 **Referidos:** `{ref_count}`\n🔗 **Enlace de Nodo:**\n`{link}`" 
+    txt = f"👥 **GESTIÓN DE EQUIPO**\n\n👑 **Referidos Activos:** `{ref_count}`\n🔗 **Enlace de Nodo:**\n`{link}`" 
     kb = [[InlineKeyboardButton("📤 Compartir Enlace", url=f"https://t.me/share/url?url={link}"), InlineKeyboardButton(get_text(query.from_user.language_code, 'btn_back'), callback_data="go_dashboard")]]
     await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
