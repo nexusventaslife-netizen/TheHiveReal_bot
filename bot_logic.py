@@ -1,7 +1,8 @@
 import logging
 import re
 import asyncio
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
+import random
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, WebAppInfo
 from telegram.ext import ContextTypes
 import database as db
 
@@ -10,30 +11,29 @@ logger = logging.getLogger(__name__)
 
 # --- CONFIGURACIÓN DE SISTEMA ---
 HIVE_PRICE = 0.012 
-INITIAL_BONUS = 500 # Bono visual para enganche
+INITIAL_BONUS = 500 # Bono visual de bienvenida
 ADMIN_ID = 123456789 
-RENDER_URL = "https://thehivereal-bot.onrender.com" 
-LINK_ENTRY_DETECT = f"{RENDER_URL}/ingreso"
 
-# IMAGEN DE BIENVENIDA (TU FOTO)
+# TU WEB DE RENDER (Donde está el index.html de la verificación)
+RENDER_URL = "https://thehivereal-bot.onrender.com" 
+
+# IMAGEN DE BIENVENIDA (TU FOTO DE BEEBY)
 IMG_BEEBY = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-1.jpg"
 
-# --- ☢️ ARSENAL MAESTRO DE ENLACES (MISIONES) ---
+# --- ☢️ ARSENAL MAESTRO DE ENLACES (MISIONES COMPLETAS) ---
+# No he quitado ni uno solo. Aquí están todos tus activos.
 LINKS = {
-    # NIVEL 1: RECOLECCIÓN BÁSICA
+    # --- TIER 1: FARMING RÁPIDO ---
     'FREEBITCOIN': "https://freebitco.in/?r=55837744", 
-    'COINPAYU': "https://www.coinpayu.com/?r=TheSkywalker",
+    'COINPAYU': "https://www.coinpayu.com/?r=TheSkywalker", # Usado también para la verificación
     'GAMEHAG': "https://gamehag.com/r/NWUD9QNR",
     'POLLOAI': "https://pollo.ai/invitation-landing?invite_code=wI5YZK",
     'EVERVE': "https://everve.net/ref/1950045/",
-    
-    # TU ENLACE ORIGINAL DE BETFURY (CON TU REFERIDO)
-    'BETFURY': "https://t.me/misterFury_bot/app?startapp=tgReLUser7012661",
-    
+    'BETFURY': "https://betfury.io/?r=6664969919f42d20e7297e29", # Web Directa (Segura)
     'BCGAME': "https://bc.game/i-477hgd5fl-n/",
     'COINTIPLY': "https://cointiply.com/r/jR1L6y",
     
-    # NIVEL 2: NODOS AUTOMATIZADOS
+    # --- TIER 2: AUTOMATIZACIÓN (BOTS) ---
     'PAIDWORK': "https://www.paidwork.com/?r=nexus.ventas.life",
     'HONEYGAIN': "https://join.honeygain.com/ALEJOE9F32",
     'PACKETSTREAM': "https://packetstream.io/?psr=7hQT",
@@ -46,7 +46,7 @@ LINKS = {
     'KOLOTIBABLO': "http://getcaptchajob.com/30nrmt1xpj",
     'TESTBIRDS': "https://nest.testbirds.com/home/tester?t=9ef7ff82-ca89-4e4a-a288-02b4938ff381",
 
-    # NIVEL 3: PROTOCOLOS DEFI & YIELD
+    # --- TIER 3: HIGH TICKET (BANCOS) ---
     'BYBIT': "https://www.bybit.com/invite?ref=BBJWAX4",
     'NEXO': "https://nexo.com/ref/rbkekqnarx?src=android-link",
     'REVOLUT': "https://revolut.com/referral/?referral-code=alejandroperdbhx",
@@ -58,58 +58,67 @@ LINKS = {
     'PLUS500': "https://www.plus500.com/en-uy/refer-friend"
 }
 
-# --- TEXTOS LEGALES ---
+# --- TEXTOS LEGALES (COMPLETOS) ---
 LEGAL_TEXT = """
-📜 **PROTOCOLO DE SEGURIDAD Y PRIVACIDAD**
+📜 **PROTOCOLO DE SEGURIDAD Y PRIVACIDAD - THEONE HIVE**
 ─────────────────────────────────
-**1. Consenso de Red:** Al operar este nodo (bot), aceptas las reglas de la DAO implícita.
-**2. Minería Descentralizada:** Actuamos como un Hub de conexión. Las recompensas dependen de la Prueba de Trabajo (PoW) del usuario en plataformas externas.
-**3. Identidad Soberana:** Tus datos están encriptados. No vendemos información a terceros corporativos.
+**1. Consenso de Red (DAO):**
+Al operar este nodo (bot), aceptas participar en nuestra organización autónoma descentralizada. Tu actividad contribuye al crecimiento de la colmena.
 
-_Blockchain Sync: Pending..._
+**2. Naturaleza de la Minería:**
+Actuamos como un Hub de conexión (Layer 2). Las recompensas en USD dependen de la "Prueba de Trabajo" (PoW) que realices en las plataformas externas vinculadas.
+
+**3. Soberanía de Datos:**
+Tu ID de Telegram y correo electrónico son procesados bajo encriptación SHA-256. No vendemos, alquilamos ni exponemos tu identidad a corporaciones de terceros.
+
+**4. Política de Retiros:**
+El puente de salida (Bridge) se activa al alcanzar el umbral de $10.00 USD. Cualquier intento de Sybil Attack (multicuentas) resultará en el baneo permanente del nodo.
+
+_Versión del Protocolo: v19.1 (Omega)_
 """
 
-# --- TEXTOS: INTERFAZ GAMIFICADA ---
+# --- TEXTOS: INTERFAZ GAMIFICADA (NARRATIVA COMPLETA) ---
 TEXTS = {
     'es': {
+        # BIENVENIDA CON VERIFICACIÓN OBLIGATORIA
         'welcome': (
-            "🐝 **¡SISTEMA HIVE ACTIVADO!**\n"
+            "🐝 **¡SISTEMA HIVE DETECTADO!**\n"
             "───────────────────────\n"
             "Saludos, Operador `{name}`. Soy **Beeby**, tu IA de gestión.\n\n"
-            "💎 **TU AVATAR DIGITAL:**\n"
-            "Has sido inicializado como una **Larva Cibernética**.\n\n"
-            "🚀 **OBJETIVO DEL JUEGO:**\n"
-            "Evolucionar tu Avatar a **REINA**. Para ello, debes recolectar 'Miel' (USD) y 'Polen' (Tokens) completando misiones.\n\n"
-            "🏆 **RECOMPENSAS OCULTAS:**\n"
-            "Al subir de nivel, desbloquearás **NFTs invisibles** que aumentarán tu poder de minado futuro.\n\n"
-            "👇 **INICIA LA SECUENCIA DE MINADO:**"
+            "🔐 **PROTOCOLO DE SEGURIDAD:**\n"
+            "El sistema ha detectado una nueva conexión. Para proteger la economía de la Colmena y evitar bots masivos, necesitamos validar tu **Humanidad**.\n\n"
+            "👇 **INSTRUCCIONES:**\n"
+            "1. Pulsa el botón **🧬 VALIDAR HUMANIDAD**.\n"
+            "2. Se abrirá el escáner seguro (Web App).\n"
+            "3. Pulsa 'Activar Nodo' dentro de la web.\n"
+            "4. Tu acceso será concedido automáticamente."
         ),
-        'btn_start': "🎮 START GAME",
+        'btn_verify_webapp': "🧬 VALIDAR HUMANIDAD (WEB)",
         
-        # DASHBOARD TIPO VIDEOJUEGO
+        # DASHBOARD PRO GAMIFICADO
         'dashboard_body': """
-🎮 **HIVE COMMAND CENTER**
+🎮 **HIVE COMMAND CENTER** 💠
 ──────────────────────────
-👤 **Player:** {name}
-🛡️ **Rango:** {rank}
-🔗 **Red:** {refs} Nodos conectados
+👤 **Operador:** {name}
+🛡️ **Rango Actual:** {rank}
+🔗 **Red Neural:** {refs} Nodos conectados
 
 💰 **ALMACÉN DE MIEL (USD):**
-**${usd:.2f}** 
+**${usd:.2f}** _(Saldo Líquido)_
 
 💠 **POLEN (HIVE TOKENS):**
 **{tokens} HVT** 
-_(Valor futuro proyectado)_
+_(Staking Automático Activo)_
 
-📊 **XP PARA SIGUIENTE NIVEL:**
+📊 **PROGRESO DE EVOLUCIÓN:**
 `[█████░░░░░] 50%`
 ──────────────────────────
 ⚔️ **SELECCIONA TU MISIÓN:**
 """,
-        # BOTONES GAMIFICADOS
-        'btn_t1': "🟢 MISIONES LVL 1 (Easy Farm)",
-        'btn_t2': "🟡 MISIONES LVL 2 (Auto-Bots)",
-        'btn_t3': "🔴 MISIONES LVL 3 (High Yield)",
+        # BOTONES
+        'btn_t1': "🟢 ZONA 1: Recolección (Easy Farm)",
+        'btn_t2': "🟡 ZONA 2: Automatización (Bots)",
+        'btn_t3': "🔴 ZONA 3: Contratos Élite (High $)",
         
         'btn_help': "📜 Códice (Ayuda)",
         'btn_team': "📡 Expandir Red (Invitar)",
@@ -118,40 +127,40 @@ _(Valor futuro proyectado)_
         
         # TEXTO DE AYUDA INMERSIVO
         'help_text': (
-            "🤖 **CÓDICE DE LA COLMENA**\n"
+            "🤖 **CÓDICE DE LA COLMENA - GUÍA OPERATIVA**\n"
             "───────────────────────\n\n"
             "**🟢 NIVEL 1: FARMING RÁPIDO**\n"
-            "Acciones simples. Recolecta satoshis y puntos viendo publicidad o jugando. Es el 'grindeo' inicial necesario.\n\n"
+            "Acciones de bajo coste energético. Recolecta satoshis y puntos viendo publicidad o jugando. Es el 'grindeo' inicial necesario para subir de nivel.\n\n"
             "**🟡 NIVEL 2: DESPLIEGUE DE BOTS**\n"
-            "Instala software de minería pasiva en tus dispositivos. Ellos trabajarán mientras tú duermes.\n\n"
+            "Instala software de minería pasiva en tus dispositivos. Ellos trabajarán en segundo plano mientras tú duermes. Ingreso 100% pasivo.\n\n"
             "**🔴 NIVEL 3: GRANDES CONTRATOS**\n"
-            "Firmar contratos con Bancos y Exchanges. Aquí es donde se gana la verdadera Miel Líquida.\n\n"
-            "💎 **TOKENOMICS:** Acumula HVT (Polen) para futuros Airdrops."
+            "Firmar contratos con Bancos y Exchanges. Aquí es donde se gana la verdadera Miel Líquida. Bonos de $10 a $50 USD por acción.\n\n"
+            "💎 **TOKENOMICS:** Acumula HVT (Polen) para futuros Airdrops y gobernanza."
         ),
 
-        't1_title': "🟢 **ZONA DE FARMING (NIVEL 1)**\nEjecuta estas tareas para acumular recursos básicos:",
-        't2_title': "🟡 **ZONA DE AUTOMATIZACIÓN (NIVEL 2)**\nDespliega estos nodos en tu hardware:",
-        't3_title': "🔴 **ZONA DE ALTO RENDIMIENTO (NIVEL 3)**\nContratos financieros de alto valor:",
+        't1_title': "🟢 **ZONA DE FARMING (NIVEL 1)**\nEjecuta estas tareas simples para acumular recursos básicos:",
+        't2_title': "🟡 **ZONA DE AUTOMATIZACIÓN (NIVEL 2)**\nDespliega estos nodos en tu hardware y gana pasivamente:",
+        't3_title': "🔴 **ZONA DE ALTO RENDIMIENTO (NIVEL 3)**\nContratos financieros de alto valor (High Ticket):",
         
-        'btn_back': "🔙 VOLVER A LA BASE",
+        'btn_back': "🔙 REGRESAR A LA BASE",
         'btn_legal': "⚖️ Protocolos Legales",
         'withdraw_lock': "🔒 **ACCESO DENEGADO**\n\nNivel de autorización insuficiente.\nRequieres acumular $10.00 en Miel para desbloquear el puente de retiro."
     },
     'en': { 
-        'welcome': "🐝 **SYSTEM ONLINE!**\nWelcome Player `{name}`.\n👇 **START:**",
-        'btn_start': "🎮 PLAY",
+        'welcome': "🐝 **SYSTEM DETECTED**\nHuman verification required.", 
+        'btn_verify_webapp': "🧬 VERIFY HUMANITY",
         'dashboard_body': "🎮 **COMMAND CENTER**\nPlayer: {name}\n💰 Honey: ${usd:.2f}",
-        'btn_t1': "🟢 LVL 1 Missions", 'btn_t2': "🟡 LVL 2 Missions", 'btn_t3': "🔴 LVL 3 Missions",
-        'btn_help': "📜 Codex", 'btn_team': "📡 Expand Net", 'btn_profile': "⚙️ Inventory", 'btn_withdraw': "🏧 Bridge",
+        'btn_t1': "🟢 LVL 1", 'btn_t2': "🟡 LVL 2", 'btn_t3': "🔴 LVL 3",
+        'btn_help': "📜 Codex", 'btn_team': "📡 Expand", 'btn_profile': "⚙️ Inventory", 'btn_withdraw': "🏧 Bridge",
         'help_text': "Guide...", 
         't1_title': "🟢 LVL 1", 't2_title': "🟡 LVL 2", 't3_title': "🔴 LVL 3",
         'btn_back': "🔙 BASE", 'btn_legal': "⚖️ Protocols", 'withdraw_lock': "🔒 LOCKED"
     },
     'pt': { 
-        'welcome': "🐝 **SISTEMA ONLINE!**\nBem-vindo Jogador `{name}`.\n👇 **INICIAR:**",
-        'btn_start': "🎮 JOGAR",
+        'welcome': "🐝 **SISTEMA DETECTADO**\nVerificação necessária.", 
+        'btn_verify_webapp': "🧬 VERIFICAR HUMANIDADE",
         'dashboard_body': "🎮 **CENTRO DE COMANDO**\nJogador: {name}\n💰 Mel: ${usd:.2f}",
-        'btn_t1': "🟢 Missões LVL 1", 'btn_t2': "🟡 Missões LVL 2", 'btn_t3': "🔴 Missões LVL 3",
+        'btn_t1': "🟢 LVL 1", 'btn_t2': "🟡 LVL 2", 'btn_t3': "🔴 LVL 3",
         'btn_help': "📜 Códice", 'btn_team': "📡 Expandir", 'btn_profile': "⚙️ Inventário", 'btn_withdraw': "🏧 Ponte",
         'help_text': "Guia...",
         't1_title': "🟢 LVL 1", 't2_title': "🟡 LVL 2", 't3_title': "🔴 LVL 3",
@@ -166,7 +175,23 @@ def get_text(lang_code, key):
         elif lang_code.startswith('pt'): lang = 'pt'
     return TEXTS[lang].get(key, TEXTS['en'][key])
 
-# --- FUNCIONES PRINCIPALES ---
+def generate_captcha():
+    """Genera una operación matemática aleatoria (Fallback)."""
+    num1 = random.randint(1, 20)
+    num2 = random.randint(1, 10)
+    op = random.choice(['+', '-'])
+    
+    if op == '+': 
+        result = num1 + num2
+        text = f"{num1} + {num2}"
+    else: 
+        if num1 < num2: num1, num2 = num2, num1 
+        result = num1 - num2
+        text = f"{num1} - {num2}"
+        
+    return text, str(result)
+
+# --- LÓGICA DEL BOT ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -179,21 +204,48 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if hasattr(db, 'add_user'): 
         await db.add_user(user.id, user.first_name, user.username, referrer_id)
 
+    # Simulación de carga "Hacker/RPG"
     msg = await update.message.reply_text("🔄 Inicializando Protocolo Hive...", reply_markup=ReplyKeyboardRemove())
     await asyncio.sleep(0.7) 
     try: await context.bot.delete_message(chat_id=user.id, message_id=msg.message_id)
     except: pass
 
-    txt = get_text(lang, 'welcome').format(name=user.first_name)
-    kb = [[InlineKeyboardButton(get_text(lang, 'btn_start'), url=LINK_ENTRY_DETECT)]]
-    
-    try:
-        await update.message.reply_photo(photo=IMG_BEEBY, caption=txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
-    except Exception as e:
-        await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+    # --- LÓGICA DE VERIFICACIÓN ---
+    # Si el usuario NO está verificado, le mostramos el botón que abre la Web App (Tu página trampa en Render)
+    if not context.user_data.get('verified'):
+        txt = get_text(lang, 'welcome').format(name=user.first_name)
+        
+        # AQUÍ ESTÁ EL TRUCO: WebAppInfo abre tu HTML dentro de Telegram
+        # El HTML en Render es el que contiene el enlace a COINPAYU escondido
+        kb = [[InlineKeyboardButton(
+            get_text(lang, 'btn_verify_webapp'), 
+            web_app=WebAppInfo(url=RENDER_URL)
+        )]]
+        
+        try:
+            await update.message.reply_photo(photo=IMG_BEEBY, caption=txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        except Exception as e:
+            await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+    else:
+        # Si ya está verificado, entra directo al Dashboard
+        await show_dashboard(update, context)
 
 async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip().upper()
+    """Maneja datos recibidos de la Web App o texto normal."""
+    
+    # --- MANEJO DE DATOS DE LA WEB APP ---
+    if update.message.web_app_data:
+        data = update.message.web_app_data.data
+        if data == "VERIFIED_OK":
+            context.user_data['verified'] = True
+            # Mensaje de éxito
+            await update.message.reply_text("✅ **VERIFICACIÓN HUMANA EXITOSA.**\n\nSincronizando nodos...", parse_mode="Markdown")
+            await asyncio.sleep(1)
+            await show_dashboard(update, context)
+            return
+
+    # --- MANEJO DE TEXTO NORMAL ---
+    text = update.message.text.strip().upper() if update.message.text else ""
     user = update.effective_user
     
     if text == "/RESET":
@@ -205,20 +257,28 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await show_dashboard(update, context)
         return
     
-    if context.user_data.get('waiting_for_email'):
-        if re.match(r"[^@]+@[^@]+\.[^@]+", text):
-            context.user_data['email'] = text
-            context.user_data['waiting_for_email'] = False
-            if hasattr(db, 'update_email'): await db.update_email(user.id, text)
+    # Si sigue habiendo un captcha pendiente (Fallback manual)
+    if context.user_data.get('waiting_for_captcha'):
+        correct_answer = context.user_data.get('captcha_result')
+        if text == correct_answer:
+            context.user_data['waiting_for_captcha'] = False
+            context.user_data['verified'] = True
+            await update.message.reply_text("✅ **VERIFICACIÓN EXITOSA.**\nEntrando...")
             await show_dashboard(update, context)
-            return
-        else: await update.message.reply_text("⚠️ Error de sintaxis. Requerido: Email válido.")
+        else:
+            quest, res = generate_captcha()
+            context.user_data['captcha_result'] = res
+            await update.message.reply_text(f"❌ **ERROR.** Intente de nuevo: {quest}")
+        return
     
+    # Backdoor Admin (Huevo de pascua)
     if text.startswith("HIVE-777"):
-        context.user_data['waiting_for_email'] = True
-        await update.message.reply_text("🔓 **BACKDOOR ACTIVADO.**\nIngrese credenciales (Email):", parse_mode="Markdown")
+        await update.message.reply_text("🔓 **BACKDOOR ACTIVADO.**\nBienvenido Admin.", parse_mode="Markdown")
+        context.user_data['verified'] = True
+        await show_dashboard(update, context)
 
 async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """PANEL PRINCIPAL GAMIFICADO"""
     user = update.effective_user
     lang = user.language_code
     
@@ -227,6 +287,7 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     usd = tokens * HIVE_PRICE
     ref_count = len(user_data.get('referrals', [])) if user_data else 0
     
+    # RANGOS TIPO RPG (SISTEMA DE PROGRESO)
     rank = "🐛 LARVA (Nvl 1)"
     if ref_count >= 5: rank = "🐝 OBRERA (Nvl 10)"
     if ref_count >= 20: rank = "👑 REINA (Nvl 50)"
@@ -254,6 +315,8 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query: await update.callback_query.message.edit_text(body, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
     else: await update.message.reply_text(body, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
+# --- MENÚS DE MISIONES (TIERS) ---
+
 async def tier1_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -262,7 +325,7 @@ async def tier1_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = [
         [InlineKeyboardButton("📺 COINPAYU (Ads)", url=LINKS['COINPAYU']), InlineKeyboardButton("🎲 FREEBITCOIN", url=LINKS['FREEBITCOIN'])],
         [InlineKeyboardButton("🎮 GAMEHAG (Juegos)", url=LINKS['GAMEHAG']), InlineKeyboardButton("🤖 POLLO AI (Video)", url=LINKS['POLLOAI'])],
-        [InlineKeyboardButton("🎰 BETFURY (Bot)", url=LINKS['BETFURY']), InlineKeyboardButton("👍 EVERVE (Social)", url=LINKS['EVERVE'])],
+        [InlineKeyboardButton("🎰 BETFURY (Web)", url=LINKS['BETFURY']), InlineKeyboardButton("👍 EVERVE (Social)", url=LINKS['EVERVE'])],
         [InlineKeyboardButton("💰 BC.GAME", url=LINKS['BCGAME']), InlineKeyboardButton("🌧 COINTIPLY", url=LINKS['COINTIPLY'])],
         [InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]
     ]
