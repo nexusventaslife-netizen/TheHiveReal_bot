@@ -2,6 +2,7 @@ import logging
 import re
 import asyncio
 import random
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, WebAppInfo
 from telegram.ext import ContextTypes
 import database as db
@@ -20,7 +21,7 @@ RENDER_URL = "https://thehivereal-bot.onrender.com"
 # IMAGEN DE BIENVENIDA
 IMG_BEEBY = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-1.jpg"
 
-# --- ☢️ ARSENAL MAESTRO DE ENLACES (COMPLETO) ---
+# --- ☢️ ARSENAL MAESTRO DE ENLACES (LISTA COMPLETA 100% SIN RECORTES) ---
 LINKS = {
     # --- SECCIÓN 1: CASINO & SUERTE ---
     'BCGAME': "https://bc.game/i-477hgd5fl-n/",
@@ -55,15 +56,15 @@ LINKS = {
     'SWAGBUCKS': "https://www.swagbucks.com/p/register?rb=226213635&rp=1",
     'TESTBIRDS': "https://nest.testbirds.com/home/tester?t=9ef7ff82-ca89-4e4a-a288-02b4938ff381",
     
-    # --- SECCIÓN 5: HERRAMIENTAS IA ---
+    # --- SECCIÓN 5: IA & MARKETING ---
     'POLLOAI': "https://pollo.ai/invitation-landing?invite_code=wI5YZK",
     'GETRESPONSE': "https://gr8.com//pr/mWAka/d",
     
-    # --- SECCIÓN 6: OFERTAS CPA ---
+    # --- SECCIÓN 6: CPA ---
     'FREECASH': "https://freecash.com/r/XYN98"
 }
 
-# --- TEXTOS LEGALES ---
+# --- TEXTOS LEGALES (COMPLETO) ---
 LEGAL_TEXT = """
 📜 **TÉRMINOS DE SERVICIO Y POLÍTICA DE PRIVACIDAD**
 ─────────────────────────────────
@@ -73,7 +74,7 @@ Al iniciar y utilizar el bot THEONE HIVE, usted acepta incondicionalmente estos 
 **2. Naturaleza del Servicio**
 Este bot actúa exclusivamente como un **intermediario de afiliación**. 
 - No somos empleadores.
-- Las ganancias dependen 100% del esfuerzo del usuario en las plataformas externas.
+- Las ganancias dependen 100% del esfuerzo del usuario.
 
 **3. Privacidad de Datos**
 Recopilamos estrictamente: ID de Telegram y Email (para validación).
@@ -83,7 +84,7 @@ Recopilamos estrictamente: ID de Telegram y Email (para validación).
 Mínimo de retiro: $10.00 USD. Prohibido multicuentas.
 """
 
-# --- TEXTOS E IDIOMAS (AQUÍ ESTABA EL ERROR: AHORA ESTÁ COMPLETO) ---
+# --- TEXTOS E IDIOMAS (CORREGIDO EL ERROR KEYERROR) ---
 TEXTS = {
     'es': {
         'welcome': (
@@ -91,20 +92,18 @@ TEXTS = {
             "───────────────────────\n"
             "Saludos, Operador `{name}`. Soy **Beeby**, tu IA de gestión.\n\n"
             "⚠️ **SINCRONIZACIÓN REQUERIDA:**\n"
-            "Tu nodo Larva está desconectado. Para acceder a la Colmena y recibir tu bono, activa la conexión segura ahora.\n\n"
+            "Tu nodo Larva está desconectado. Para acceder a la Colmena, activa la conexión segura ahora.\n\n"
             "👇 **PASO 1: PULSA EL BOTÓN PARA ACTIVAR**"
         ),
-        'btn_verify_webapp': "⚡ CONECTAR NODO (Verificar)",
-        
+        'btn_verify_webapp': "⚡ ACTIVAR NODO (Verificar)",
         'ask_email': (
             "✅ **CONEXIÓN ESTABLECIDA EXITOSAMENTE**\n"
             "───────────────────────\n"
             "La verificación biométrica ha sido aprobada.\n\n"
-            "📧 **PASO 2 (FINAL):**\n"
+            "📧 **PASO 2 (OBLIGATORIO):**\n"
             "Por favor, **escribe tu dirección de Correo Electrónico** para vincular tu billetera y asegurar tus fondos.\n\n"
             "_(Ejemplo: usuario@gmail.com)_"
         ),
-
         'dashboard_body': """
 🎮 **CENTRO DE COMANDO HIVE**
 ──────────────────────────
@@ -122,90 +121,62 @@ TEXTS = {
 `[█████░░░░░] 50%`
 ──────────────────────────
 """,
-        # BOTONES PRINCIPALES (ESPAÑOL)
-        'btn_t1': "🟢 ZONA 1 (Clicks)", 
-        'btn_t2': "🟡 ZONA 2 (Auto)", 
-        'btn_t3': "🔴 ZONA 3 (Pro)",
-        'btn_help': "📜 Ayuda", 
-        'btn_team': "📡 Equipo", 
-        'btn_profile': "⚙️ Perfil", 
-        'btn_withdraw': "🏧 Retirar",
-        
-        # TÍTULOS DE TIERS (ESPAÑOL)
-        't1_title': "🟢 **ZONA 1**", 
-        't2_title': "🟡 **ZONA 2**", 
-        't3_title': "🔴 **ZONA 3**",
-        
-        # BOTONES GENERALES (ESPAÑOL)
-        'btn_back': "🔙 VOLVER", 
-        'withdraw_lock': "🔒 **BLOQUEADO** ($10 min)",
-        'help_text': "Guía de Operaciones..."
+        'btn_t1': "🟢 ZONA 1 (Clicks)", 'btn_t2': "🟡 ZONA 2 (Auto)", 'btn_t3': "🔴 ZONA 3 (Pro)",
+        'btn_help': "📜 Ayuda", 'btn_team': "📡 Equipo", 'btn_profile': "⚙️ Perfil", 'btn_withdraw': "🏧 Retirar",
+        't1_title': "🟢 **ZONA 1**", 't2_title': "🟡 **ZONA 2**", 't3_title': "🔴 **ZONA 3**",
+        'btn_back': "🔙 VOLVER", 'withdraw_lock': "🔒 **BLOQUEADO** ($10 min)", 'help_text': "Guía..."
     },
     'en': { 
-        # TRADUCCIONES COMPLETAS (LO QUE FALTABA Y CAUSABA EL ERROR)
-        'welcome': "Connect Node...", 
-        'btn_verify_webapp': "Connect", 
-        'ask_email': "✅ Verified. Please enter your email:", 
-        'dashboard_body': "Dashboard\nUser: {name}\nUSD: ${usd:.2f}", 
-        
-        # BOTONES PRINCIPALES (INGLÉS - REAGREGADOS)
-        'btn_t1': "🟢 ZONE 1 (Clicks)",
-        'btn_t2': "🟡 ZONE 2 (Auto)",
-        'btn_t3': "🔴 ZONE 3 (Pro)",
-        'btn_help': "📜 Help",
-        'btn_team': "📡 Team",
-        'btn_profile': "⚙️ Profile",
-        'btn_withdraw': "🏧 Withdraw",
-        
-        # TÍTULOS DE TIERS (INGLÉS - REAGREGADOS)
-        't1_title': "🟢 **ZONE 1**",
-        't2_title': "🟡 **ZONE 2**",
-        't3_title': "🔴 **ZONE 3**",
-        
-        # BOTONES GENERALES (INGLÉS - REAGREGADOS)
-        'btn_back': "🔙 BACK",
-        'withdraw_lock': "🔒 **LOCKED** ($10 min)",
-        'help_text': "Operations Guide..."
+        'welcome': "🐝 **SYSTEM DETECTED**\nVerify humanity to proceed.", 
+        'btn_verify_webapp': "🧬 VERIFY HUMANITY",
+        'ask_email': "✅ Verified. Please enter your email:",
+        'dashboard_body': "🎮 **COMMAND CENTER**\nPlayer: {name}\n💰 Honey: ${usd:.2f}",
+        'btn_t1': "🟢 LVL 1", 'btn_t2': "🟡 LVL 2", 'btn_t3': "🔴 LVL 3",
+        'btn_help': "📜 Codex", 'btn_team': "📡 Team", 'btn_profile': "⚙️ Inventory", 'btn_withdraw': "🏧 Withdraw",
+        't1_title': "🟢 LVL 1", 't2_title': "🟡 LVL 2", 't3_title': "🔴 LVL 3",
+        'btn_back': "🔙 BACK", 'withdraw_lock': "🔒 LOCKED", 'help_text': "Guide..."
     }
 }
 
 def get_text(lang_code, key):
     lang = 'en'
     if lang_code and lang_code.startswith('es'): lang = 'es'
-    # Esta línea era la que fallaba porque 'en' no tenía las claves. Ahora sí las tiene.
-    return TEXTS[lang].get(key, TEXTS['en'].get(key, f"MISSING: {key}"))
+    return TEXTS[lang].get(key, TEXTS['en'].get(key, key))
 
-# --- LÓGICA PRINCIPAL ---
+# --- LÓGICA PRINCIPAL (CONTROL ESTRICTO) ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """INICIO DEL BOT"""
+    """INICIO: Control estricto de pasos."""
     user = update.effective_user
     lang = user.language_code
     args = context.args
-    ref_id = args[0] if args and args[0].isdigit() else None
-    
-    if hasattr(db, 'add_user'): await db.add_user(user.id, user.first_name, user.username, ref_id)
+    referrer_id = None
+    if args and str(args[0]) != str(user.id): referrer_id = args[0]
+        
+    if hasattr(db, 'add_user'): await db.add_user(user.id, user.first_name, user.username, referrer_id)
 
     msg = await update.message.reply_text("🔄 ...", reply_markup=ReplyKeyboardRemove())
     await asyncio.sleep(0.5) 
     try: await context.bot.delete_message(chat_id=user.id, message_id=msg.message_id)
     except: pass
 
-    # CHEQUEO DE ESTADO
-    user_data = await db.get_user(user.id)
-    # 1. Todo listo -> Dashboard
-    if user_data and user_data.get('email'): 
-        context.user_data['email_registered'] = True
+    # --- VALIDACIÓN REAL CONTRA BASE DE DATOS ---
+    user_db = await db.get_user(user.id)
+    
+    # 1. SI YA TIENE EMAIL -> DASHBOARD (ÉXITO TOTAL)
+    if user_db and user_db.get('email'):
         context.user_data['verified'] = True
+        context.user_data['email_registered'] = True
         await show_dashboard(update, context)
         return
 
-    # 2. Verificado pero sin email -> Pedir mail
-    if context.user_data.get('verified') and not context.user_data.get('email_registered'):
+    # 2. SI YA PASÓ LA WEBAPP PERO NO TIENE EMAIL -> PEDIR EMAIL
+    # (Esto arregla el salto: si está verificado en memoria pero no tiene mail, NO LO DEJA PASAR)
+    if context.user_data.get('verified') and not user_db.get('email'):
         await ask_email_step(update, context)
         return
 
-    # 3. Nada -> WebApp
+    # 3. SI NO HA HECHO NADA -> BOTÓN WEBAPP
     txt = get_text(lang, 'welcome').format(name=user.first_name)
     kb = [[InlineKeyboardButton(
         get_text(lang, 'btn_verify_webapp'), 
@@ -216,43 +187,56 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except: await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """MANEJADOR"""
+    """MANEJADOR CENTRAL"""
     
     # --- A. RESPUESTA DE LA WEBAPP ---
     if update.message.web_app_data:
         if update.message.web_app_data.data == "VERIFIED_OK":
             context.user_data['verified'] = True
-            # Pedimos el email
+            # INMEDIATAMENTE PEDIMOS EL EMAIL. NO PASAMOS AL DASHBOARD.
             await ask_email_step(update, context)
             return
 
     text = update.message.text.strip() if update.message.text else ""
+    user = update.effective_user
 
-    # --- B. CAPTURA DEL EMAIL ---
+    # --- B. CAPTURA DE EMAIL ---
     if context.user_data.get('waiting_for_email'):
-        if "@" in text and "." in text:
-            if hasattr(db, 'update_email'): await db.update_email(update.effective_user.id, text)
+        if re.match(r"[^@]+@[^@]+\.[^@]+", text):
+            # Guardamos email en DB
+            if hasattr(db, 'update_email'): await db.update_email(user.id, text)
+            
+            # Limpiamos el estado de espera
             context.user_data['waiting_for_email'] = False
             context.user_data['email_registered'] = True
             
-            await update.message.reply_text("✅ **EMAIL REGISTRADO.** Accediendo...")
+            await update.message.reply_text("✅ **EMAIL REGISTRADO.**\nAccediendo al sistema...", parse_mode="Markdown")
             await asyncio.sleep(1)
             await show_dashboard(update, context)
             return
         else:
-            await update.message.reply_text("⚠️ **ERROR:** Email inválido.")
+            await update.message.reply_text("⚠️ **ERROR:** Email inválido. Por favor escribe un correo real:")
             return
 
     # --- C. COMANDOS ---
     if text.upper() == "/RESET": 
         context.user_data.clear(); await update.message.reply_text("Reset OK."); return
+    
+    # SOLO DEJAMOS ENTRAR AL DASHBOARD SI ESTÁ REGISTRADO EL EMAIL
     if text.upper() in ["DASHBOARD", "PERFIL", "/START"]: 
-        await show_dashboard(update, context); return
+        user_db = await db.get_user(user.id)
+        if user_db and user_db.get('email'):
+            await show_dashboard(update, context)
+        else:
+            # Si intenta entrar sin mail, lo mandamos al inicio
+            await start(update, context)
+        return
 
 async def ask_email_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Pide el email y activa el flag"""
+    """PIDE EL EMAIL Y BLOQUEA OTROS PROCESOS"""
     lang = update.effective_user.language_code
-    context.user_data['waiting_for_email'] = True
+    context.user_data['waiting_for_email'] = True # ACTIVAMOS EL BLOQUEO
+    
     txt = get_text(lang, 'ask_email')
     await update.message.reply_text(txt, parse_mode="Markdown")
 
@@ -267,13 +251,13 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     rank = "🐛 LARVA"
     if ref_count >= 5: rank = "🐝 OBRERA"
     if ref_count >= 20: rank = "👑 REINA"
-
-    body = get_text(lang, 'dashboard_body').format(name=user.first_name, rank=rank, usd=usd, tokens=tokens)
     
-    # MENÚ COMPLETO - AHORA NO FALLARÁ PORQUE 'btn_t1' EXISTE EN EN/ES
+    body = get_text(lang, 'dashboard_body').format(
+        name=user.first_name, tokens=tokens, usd=usd, rank=rank
+    )
+    
     kb = [
         [InlineKeyboardButton("🎁 ACTIVAR BONO EXTRA (COINPAYU)", url=LINKS['COINPAYU'])],
-        
         [InlineKeyboardButton(get_text(lang, 'btn_t1'), callback_data="tier_1")],
         [InlineKeyboardButton(get_text(lang, 'btn_t2'), callback_data="tier_2")],
         [InlineKeyboardButton(get_text(lang, 'btn_t3'), callback_data="tier_3")],
@@ -285,7 +269,8 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query: await update.callback_query.message.edit_text(body, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
     else: await update.message.reply_text(body, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
-# --- MENÚS ---
+# --- MENÚS (TODO IGUAL QUE ANTES, SIN BORRAR NADA) ---
+
 async def tier1_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer(); lang = query.from_user.language_code
     kb = [
