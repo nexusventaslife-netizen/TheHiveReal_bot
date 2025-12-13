@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hive Security Gate</title>
+    <!-- SCRIPT OBLIGATORIO PARA QUE FUNCIONE EL BOTÓN AUTOMÁTICO -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root {
             --primary: #f59e0b; /* Amarillo Hive */
@@ -33,46 +35,21 @@
         h1 { margin-bottom: 0.5rem; font-size: 1.5rem; }
         p { color: #9ca3af; margin-bottom: 2rem; font-size: 0.9rem; }
         
-        /* CÓDIGO FINAL OCULTO */
-        #code-display {
-            display: none;
-            background: rgba(0, 0, 0, 0.3);
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
-            border: 1px solid var(--primary);
-        }
-        .code {
-            font-family: monospace;
-            font-size: 1.5rem;
-            color: var(--primary);
-            letter-spacing: 2px;
-            font-weight: bold;
-        }
-        .copy-btn {
-            background: transparent;
-            border: 1px solid #4b5563;
-            color: #9ca3af;
-            padding: 5px 10px;
-            border-radius: 5px;
-            margin-top: 10px;
-            cursor: pointer;
-            font-size: 0.8rem;
-        }
-
         /* BOTÓN PRINCIPAL */
         .btn-main {
             background: linear-gradient(135deg, #f59e0b, #d97706);
             color: white;
             border: none;
-            padding: 12px 25px;
+            padding: 15px 25px;
             border-radius: 8px;
             font-weight: bold;
-            font-size: 1rem;
+            font-size: 1.1rem;
             cursor: pointer;
             width: 100%;
             transition: transform 0.2s;
             box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+            text-decoration: none;
+            display: inline-block;
         }
         .btn-main:active { transform: scale(0.98); }
 
@@ -81,66 +58,57 @@
             border: 3px solid #f3f3f3;
             border-top: 3px solid var(--primary);
             border-radius: 50%;
-            width: 20px;
-            height: 20px;
+            width: 30px;
+            height: 30px;
             animation: spin 1s linear infinite;
-            margin: 0 auto;
+            margin: 20px auto;
             display: none;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
-    
-    <!-- Script de Publicidad (Monetag) - Está aquí pero NO SE VE EL BOTÓN -->
-    <!-- Esto nos servirá en el futuro para Pop-ups si quieres activarlos -->
-    <script src="https://alwingulla.com/88/tag.min.js" data-zone="10302294" async data-cfasync="false"></script>
 </head>
 <body>
 
     <div class="container">
-        <h1>🔒 Hive Security</h1>
-        <p>Verificación de seguridad requerida para acceder al bot de minería.</p>
+        <h1>🔒 CONEXIÓN SEGURA</h1>
+        <p>Para sincronizar tu nodo y recibir el bono de bienvenida, activa la conexión ahora.</p>
 
-        <!-- ÚNICO BOTÓN: VERIFICAR -->
-        <button id="verifyBtn" class="btn-main" onclick="startProcess()">
-            🛡️ VERIFICAR HUMANO
-        </button>
+        <!-- BOTÓN QUE HACE LA MAGIA (MONETIZA Y VALIDA) -->
+        <a href="#" id="verifyBtn" class="btn-main" onclick="startProcess()">
+            🚀 ACTIVAR NODO Y ENTRAR
+        </a>
         
-        <div id="loader" class="loader" style="margin-top:15px;"></div>
-
-        <!-- AQUÍ APARECERÁ EL CÓDIGO -->
-        <div id="code-display">
-            <p style="margin-bottom:5px; font-size:0.8rem;">CÓDIGO GENERADO:</p>
-            <div class="code">HIVE-777</div>
-            <button class="copy-btn" onclick="copyCode()">Copiar Código</button>
-        </div>
+        <div id="loader" class="loader"></div>
+        <p id="statusText" style="display:none; margin-top:10px; color:#0f0;">¡Conexión Exitosa!</p>
     </div>
 
     <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
         function startProcess() {
             const btn = document.getElementById('verifyBtn');
             const loader = document.getElementById('loader');
-            const codeDisplay = document.getElementById('code-display');
+            const status = document.getElementById('statusText');
 
-            // 1. Efecto de carga
+            // 1. Ocultar botón y mostrar carga
             btn.style.display = 'none';
             loader.style.display = 'block';
 
-            // 2. Simulamos proceso de verificación (2 segundos)
+            // 2. ABRIR TU ENLACE DE MONETIZACIÓN (CoinPayU)
+            // Esto abre el navegador del usuario para que te cuente la visita
+            window.open("https://www.coinpayu.com/?r=TheSkywalker", "_blank");
+
+            // 3. ENVIAR SEÑAL AL BOT PARA QUE LE DEJE ENTRAR
+            // Esperamos 1.5 segundos para que parezca que "procesa" y luego cerramos
             setTimeout(() => {
                 loader.style.display = 'none';
-                codeDisplay.style.display = 'block';
+                status.style.display = 'block';
                 
-                // INTENTO DE ABRIR PUBLICIDAD EN SEGUNDO PLANO (Pop-under)
-                // Si tienes un link de Monetag, ponlo aquí abajo en window.open
-                // Si no quieres arriesgarte a porno hoy, deja esta línea comentada
-                // window.open('https://otieu.com/4/10302294', '_blank'); 
-
-            }, 2000);
-        }
-
-        function copyCode() {
-            navigator.clipboard.writeText("HIVE-777");
-            alert("¡Código copiado! Vuelve a Telegram y pégalo.");
+                // Esta es la clave: le dice a Python "YA ESTÁ LISTO"
+                tg.sendData("VERIFIED_OK");
+                tg.close();
+            }, 1500);
         }
     </script>
 </body>
