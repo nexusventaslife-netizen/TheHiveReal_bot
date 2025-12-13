@@ -10,19 +10,17 @@ logger = logging.getLogger(__name__)
 
 # --- CONFIGURACIÓN DE SISTEMA ---
 HIVE_PRICE = 0.012 
-INITIAL_BONUS = 100 
+INITIAL_BONUS = 500 # Aumentamos el bono visual para enganchar
 ADMIN_ID = 123456789 
-
-# --- ENLACES DE SISTEMA ---
 RENDER_URL = "https://thehivereal-bot.onrender.com" 
 LINK_ENTRY_DETECT = f"{RENDER_URL}/ingreso"
 
-# --- TU FOTO DE BEEBY (ACTUALIZADA) ---
-IMG_BEEBY = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
+# IMAGEN DE BIENVENIDA (TU FOTO)
+IMG_BEEBY = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-1.jpg"
 
-# --- ☢️ ARSENAL MAESTRO DE ENLACES (ORGANIZADO POR TIERS) ---
+# --- ☢️ ARSENAL MAESTRO DE ENLACES (MISIONES) ---
 LINKS = {
-    # --- TIER 1: TAREAS RÁPIDAS (CLICKS & JUEGOS) ---
+    # NIVEL 1: RECOLECCIÓN BÁSICA
     'FREEBITCOIN': "https://freebitco.in/?r=55837744", 
     'COINPAYU': "https://www.coinpayu.com/?r=TheSkywalker",
     'GAMEHAG': "https://gamehag.com/r/NWUD9QNR",
@@ -32,7 +30,7 @@ LINKS = {
     'BCGAME': "https://bc.game/i-477hgd5fl-n/",
     'COINTIPLY': "https://cointiply.com/r/jR1L6y",
     
-    # --- TIER 2: TAREAS MEDIAS (APPS & ENCUESTAS) ---
+    # NIVEL 2: NODOS AUTOMATIZADOS
     'PAIDWORK': "https://www.paidwork.com/?r=nexus.ventas.life",
     'HONEYGAIN': "https://join.honeygain.com/ALEJOE9F32",
     'PACKETSTREAM': "https://packetstream.io/?psr=7hQT",
@@ -45,7 +43,7 @@ LINKS = {
     'KOLOTIBABLO': "http://getcaptchajob.com/30nrmt1xpj",
     'TESTBIRDS': "https://nest.testbirds.com/home/tester?t=9ef7ff82-ca89-4e4a-a288-02b4938ff381",
 
-    # --- TIER 3: TAREAS PREMIUM (HIGH TICKET & FINTECH) ---
+    # NIVEL 3: PROTOCOLOS DEFI & YIELD
     'BYBIT': "https://www.bybit.com/invite?ref=BBJWAX4",
     'NEXO': "https://nexo.com/ref/rbkekqnarx?src=android-link",
     'REVOLUT': "https://revolut.com/referral/?referral-code=alejandroperdbhx",
@@ -57,104 +55,104 @@ LINKS = {
     'PLUS500': "https://www.plus500.com/en-uy/refer-friend"
 }
 
-# --- TEXTOS LEGALES ---
+# --- TEXTOS LEGALES (MANTENIDOS) ---
 LEGAL_TEXT = """
-📜 **TÉRMINOS DE SERVICIO Y POLÍTICA DE PRIVACIDAD**
+📜 **PROTOCOLO DE SEGURIDAD Y PRIVACIDAD**
 ─────────────────────────────────
-**1. Aceptación del Servicio**
-Al utilizar THEONE HIVE, aceptas estos términos.
+**1. Consenso de Red:** Al operar este nodo (bot), aceptas las reglas de la DAO implícita.
+**2. Minería Descentralizada:** Actuamos como un Hub de conexión. Las recompensas dependen de la Prueba de Trabajo (PoW) del usuario en plataformas externas.
+**3. Identidad Soberana:** Tus datos están encriptados. No vendemos información a terceros corporativos.
 
-**2. Sistema de Niveles (Tiers)**
-El bot organiza tareas de terceros en niveles de dificultad. No garantizamos el pago de dichas plataformas externas.
-
-**3. Privacidad**
-Tus datos (ID Telegram, Email) son privados y solo para uso interno.
-
-_Última actualización: Diciembre 2025_
+_Blockchain Sync: Pending..._
 """
 
-# --- TEXTOS: INTERFAZ & NARRATIVA ---
+# --- TEXTOS: INTERFAZ GAMIFICADA ---
 TEXTS = {
     'es': {
         'welcome': (
-            "🐝 **¡BIENVENIDO A LA COLMENA!**\n"
+            "🐝 **¡SISTEMA HIVE ACTIVADO!**\n"
             "───────────────────────\n"
-            "👋 Hola `{name}`, soy **Beeby**, tu asistente de operaciones.\n\n"
-            "💠 **SISTEMA PROFESIONAL:**\n"
-            "Hemos organizado las tareas en **3 NIVELES (TIERS)** para maximizar tu eficiencia.\n\n"
-            "📊 **ESTADO:**\n"
-            "• Rango: 🐛 Larva (Nivel 0)\n"
-            "• Saldo: $0.00 USD\n\n"
-            "👇 **INICIA TU NODO:**"
+            "Saludos, Operador `{name}`. Soy **Beeby**, tu IA de gestión.\n\n"
+            "💎 **TU AVATAR DIGITAL:**\n"
+            "Has sido inicializado como una **Larva Cibernética**.\n\n"
+            "🚀 **OBJETIVO DEL JUEGO:**\n"
+            "Evolucionar tu Avatar a **REINA**. Para ello, debes recolectar 'Miel' (USD) y 'Polen' (Tokens) completando misiones.\n\n"
+            "🏆 **RECOMPENSAS OCULTAS:**\n"
+            "Al subir de nivel, desbloquearás **NFTs invisibles** que aumentarán tu poder de minado futuro.\n\n"
+            "👇 **INICIA LA SECUENCIA DE MINADO:**"
         ),
-        'btn_start': "⚡ ACCEDER AL SISTEMA",
+        'btn_start': "🎮 START GAME",
         
-        # DASHBOARD ORGANIZADO
+        # DASHBOARD TIPO VIDEOJUEGO
         'dashboard_body': """
-🐝 **PANEL DE CONTROL PROFESIONAL**
+🎮 **HIVE COMMAND CENTER**
 ──────────────────────────
-👤 **Operador:** {name}
-🏅 **Rango:** 🐝 {rank} ({refs} refs)
+👤 **Player:** {name}
+🛡️ **Rango:** {rank}
+🔗 **Red:** {refs} Nodos conectados
 
-💰 **CAPITAL (MIEL):**
-**${usd:.2f} USD**
+💰 **ALMACÉN DE MIEL (USD):**
+**${usd:.2f}** 
 
-🧪 **PUNTOS DE NIVEL (NÉCTAR):**
-**{tokens} Pts**
+💠 **POLEN (HIVE TOKENS):**
+**{tokens} HVT** 
+_(Valor futuro proyectado)_
 
-🎯 **RUTA DE TRABAJO:**
-Selecciona un nivel según tu experiencia:
+📊 **XP PARA SIGUIENTE NIVEL:**
+`[█████░░░░░] 50%`
 ──────────────────────────
+⚔️ **SELECCIONA TU MISIÓN:**
 """,
-        # BOTONES DEL DASHBOARD (TIERS)
-        'btn_t1': "🟢 TIER 1: Principiante (Clicks Rápidos)",
-        'btn_t2': "🟡 TIER 2: Intermedio (Apps & Minería)",
-        'btn_t3': "🔴 TIER 3: Avanzado (High Ticket $)",
+        # BOTONES GAMIFICADOS
+        'btn_t1': "🟢 MISIONES LVL 1 (Easy Farm)",
+        'btn_t2': "🟡 MISIONES LVL 2 (Auto-Bots)",
+        'btn_t3': "🔴 MISIONES LVL 3 (High Yield)",
         
-        'btn_help': "❓ GUÍA DE ASISTENCIA",
-        'btn_team': "👥 Mi Equipo",
-        'btn_profile': "⚙️ Perfil",
-        'btn_withdraw': "🏧 Retirar",
+        'btn_help': "📜 Códice (Ayuda)",
+        'btn_team': "📡 Expandir Red (Invitar)",
+        'btn_profile': "⚙️ Inventario & Stats",
+        'btn_withdraw': "🏧 Bridge (Retirar)",
         
-        # MENSAJE DE AYUDA (ASISTENTE)
+        # TEXTO DE AYUDA INMERSIVO
         'help_text': (
-            "🤖 **ASISTENTE INTELIGENTE - GUÍA DE NIVELES**\n"
+            "🤖 **CÓDICE DE LA COLMENA**\n"
             "───────────────────────\n\n"
-            "🟢 **TIER 1 (PRINCIPIANTE):**\n"
-            "Ideal para empezar hoy mismo. No requiere verificación de identidad.\n"
-            "• *Incluye: Ver anuncios, Faucets, Juegos.* \n\n"
-            "🟡 **TIER 2 (INTERMEDIO):**\n"
-            "Generación de ingresos pasivos y tareas de tiempo medio.\n"
-            "• *Incluye: Apps de minería (instalar y olvidar), Encuestas.*\n\n"
-            "🔴 **TIER 3 (AVANZADO):**\n"
-            "Las ofertas mejor pagadas del mercado. Requieren registro real.\n"
-            "• *Incluye: Bonos bancarios, Trading, Herramientas Pro.*"
+            "**🟢 NIVEL 1: FARMING RÁPIDO**\n"
+            "Acciones simples. Recolecta satoshis y puntos viendo publicidad o jugando. Es el 'grindeo' inicial necesario.\n\n"
+            "**🟡 NIVEL 2: DESPLIEGUE DE BOTS**\n"
+            "Instala software de minería pasiva en tus dispositivos. Ellos trabajarán mientras tú duermes.\n\n"
+            "**🔴 NIVEL 3: GRANDES CONTRATOS**\n"
+            "Firmar contratos con Bancos y Exchanges. Aquí es donde se gana la verdadera Miel Líquida.\n\n"
+            "💎 **TOKENOMICS:** Acumula HVT (Polen) para futuros Airdrops."
         ),
 
-        # TÍTULOS DE LOS MENÚS
-        't1_title': "🟢 **ZONA TIER 1**\nAcciones rápidas para generar capital inicial:",
-        't2_title': "🟡 **ZONA TIER 2**\nIngresos recurrentes y aplicaciones:",
-        't3_title': "🔴 **ZONA TIER 3 (PREMIUM)**\nOfertas de alto valor ($10 - $50 USD):",
+        't1_title': "🟢 **ZONA DE FARMING (NIVEL 1)**\nEjecuta estas tareas para acumular recursos básicos:",
+        't2_title': "🟡 **ZONA DE AUTOMATIZACIÓN (NIVEL 2)**\nDespliega estos nodos en tu hardware:",
+        't3_title': "🔴 **ZONA DE ALTO RENDIMIENTO (NIVEL 3)**\nContratos financieros de alto valor:",
         
-        'btn_back': "🔙 VOLVER AL PANEL",
-        'btn_legal': "📜 Términos Legales",
-        'withdraw_lock': "🔒 **BLOQUEADO**\nSaldo insuficiente ($10.00 USD)."
+        'btn_back': "🔙 VOLVER A LA BASE",
+        'btn_legal': "⚖️ Protocolos Legales",
+        'withdraw_lock': "🔒 **ACCESO DENEGADO**\n\nNivel de autorización insuficiente.\nRequieres acumular $10.00 en Miel para desbloquear el puente de retiro."
     },
     'en': { 
-        'welcome': "🐝 **WELCOME!**\nI'm Beeby.", 'btn_start': "⚡ ENTER",
-        'dashboard_body': "🐝 **PRO DASHBOARD**\nUser: {name}\n💰 Balance: ${usd:.2f}",
-        'btn_t1': "🟢 TIER 1: Easy", 'btn_t2': "🟡 TIER 2: Medium", 'btn_t3': "🔴 TIER 3: Pro",
-        'btn_help': "❓ HELP", 'help_text': "Guide...", 'btn_team': "👥 Team", 'btn_profile': "⚙️ Profile", 'btn_withdraw': "🏧 Withdraw",
-        't1_title': "🟢 T1", 't2_title': "🟡 T2", 't3_title': "🔴 T3",
-        'btn_back': "🔙 BACK", 'btn_legal': "📜 Terms", 'withdraw_lock': "🔒 DENIED"
+        'welcome': "🐝 **SYSTEM ONLINE!**\nWelcome Player `{name}`.\n👇 **START:**",
+        'btn_start': "🎮 PLAY",
+        'dashboard_body': "🎮 **COMMAND CENTER**\nPlayer: {name}\n💰 Honey: ${usd:.2f}",
+        'btn_t1': "🟢 LVL 1 Missions", 'btn_t2': "🟡 LVL 2 Missions", 'btn_t3': "🔴 LVL 3 Missions",
+        'btn_help': "📜 Codex", 'btn_team': "📡 Expand Net", 'btn_profile': "⚙️ Inventory", 'btn_withdraw': "🏧 Bridge",
+        'help_text': "Guide...", 
+        't1_title': "🟢 LVL 1", 't2_title': "🟡 LVL 2", 't3_title': "🔴 LVL 3",
+        'btn_back': "🔙 BASE", 'btn_legal': "⚖️ Protocols", 'withdraw_lock': "🔒 LOCKED"
     },
     'pt': { 
-        'welcome': "🐝 **BEM-VINDO!**\nSou Beeby.", 'btn_start': "⚡ ENTRAR",
-        'dashboard_body': "🐝 **PAINEL PRO**\nUsuário: {name}\n💰 Saldo: ${usd:.2f}",
-        'btn_t1': "🟢 TIER 1: Fácil", 'btn_t2': "🟡 TIER 2: Médio", 'btn_t3': "🔴 TIER 3: Pro",
-        'btn_help': "❓ AJUDA", 'help_text': "Guia...", 'btn_team': "👥 Equipe", 'btn_profile': "⚙️ Perfil", 'btn_withdraw': "🏧 Sacar",
-        't1_title': "🟢 T1", 't2_title': "🟡 T2", 't3_title': "🔴 T3",
-        'btn_back': "🔙 VOLTAR", 'btn_legal': "📜 Termos", 'withdraw_lock': "🔒 BLOQUEADO"
+        'welcome': "🐝 **SISTEMA ONLINE!**\nBem-vindo Jogador `{name}`.\n👇 **INICIAR:**",
+        'btn_start': "🎮 JOGAR",
+        'dashboard_body': "🎮 **CENTRO DE COMANDO**\nJogador: {name}\n💰 Mel: ${usd:.2f}",
+        'btn_t1': "🟢 Missões LVL 1", 'btn_t2': "🟡 Missões LVL 2", 'btn_t3': "🔴 Missões LVL 3",
+        'btn_help': "📜 Códice", 'btn_team': "📡 Expandir", 'btn_profile': "⚙️ Inventário", 'btn_withdraw': "🏧 Ponte",
+        'help_text': "Guia...",
+        't1_title': "🟢 LVL 1", 't2_title': "🟡 LVL 2", 't3_title': "🔴 LVL 3",
+        'btn_back': "🔙 BASE", 'btn_legal': "⚖️ Protocolos", 'withdraw_lock': "🔒 BLOQUEADO"
     }
 }
 
@@ -178,18 +176,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if hasattr(db, 'add_user'): 
         await db.add_user(user.id, user.first_name, user.username, referrer_id)
 
-    msg = await update.message.reply_text("🔄 ...", reply_markup=ReplyKeyboardRemove())
-    await asyncio.sleep(0.5)
+    msg = await update.message.reply_text("🔄 Inicializando Protocolo Hive...", reply_markup=ReplyKeyboardRemove())
+    await asyncio.sleep(0.7) # Un poco más de tiempo para "efecto de carga"
     try: await context.bot.delete_message(chat_id=user.id, message_id=msg.message_id)
     except: pass
 
-    # BIENVENIDA CON FOTO (BEEBY)
+    # BIENVENIDA GAMIFICADA
     txt = get_text(lang, 'welcome').format(name=user.first_name)
     kb = [[InlineKeyboardButton(get_text(lang, 'btn_start'), url=LINK_ENTRY_DETECT)]]
     
     try:
         await update.message.reply_photo(photo=IMG_BEEBY, caption=txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
-    except:
+    except Exception as e:
         await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -198,7 +196,7 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     
     if text == "/RESET":
         context.user_data.clear()
-        await update.message.reply_text("🔄 **RESETEADO.** Usa /start")
+        await update.message.reply_text("🔄 **REINICIO DE SISTEMA.**\nPerfil borrado de caché. Escribe /start")
         return
 
     if text in ["DASHBOARD", "PERFIL", "/START"]: 
@@ -212,16 +210,14 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             if hasattr(db, 'update_email'): await db.update_email(user.id, text)
             await show_dashboard(update, context)
             return
-        else: await update.message.reply_text("⚠️ Email inválido.")
+        else: await update.message.reply_text("⚠️ Error de sintaxis. Requerido: Email válido.")
     
     if text.startswith("HIVE-777"):
-        parts = text.split('-')
-        context.user_data['country'] = parts[2] if len(parts) >= 3 else 'GL'
-        await update.message.reply_text("✅ OK. Email:", parse_mode="Markdown")
         context.user_data['waiting_for_email'] = True
+        await update.message.reply_text("🔓 **BACKDOOR ACTIVADO.**\nIngrese credenciales (Email):", parse_mode="Markdown")
 
 async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """PANEL PRINCIPAL - AQUÍ SE MUESTRAN LOS TIERS"""
+    """PANEL PRINCIPAL GAMIFICADO"""
     user = update.effective_user
     lang = user.language_code
     
@@ -229,30 +225,28 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tokens = user_data.get('tokens', INITIAL_BONUS) if user_data else INITIAL_BONUS
     usd = tokens * HIVE_PRICE
     ref_count = len(user_data.get('referrals', [])) if user_data else 0
-    rank = "Larva"
-    if ref_count >= 5: rank = "Obrera"
-    if ref_count >= 20: rank = "Reina"
+    
+    # RANGOS TIPO RPG
+    rank = "🐛 LARVA (Nvl 1)"
+    if ref_count >= 5: rank = "🐝 OBRERA (Nvl 10)"
+    if ref_count >= 20: rank = "👑 REINA (Nvl 50)"
+    if ref_count >= 50: rank = "🛡️ GUARDIANA (Nvl 99)"
     
     body = get_text(lang, 'dashboard_body').format(
         name=user.first_name, 
-        id=user.id, 
         tokens=tokens, 
         usd=usd, 
         rank=rank, 
         refs=ref_count
     )
     
-    # BOTONERA ESTRUCTURADA POR NIVELES
     kb = [
-        # BLOQUE 1: LOS NIVELES (TIERS)
         [InlineKeyboardButton(get_text(lang, 'btn_t1'), callback_data="tier_1")],
         [InlineKeyboardButton(get_text(lang, 'btn_t2'), callback_data="tier_2")],
         [InlineKeyboardButton(get_text(lang, 'btn_t3'), callback_data="tier_3")],
         
-        # BLOQUE 2: ASISTENCIA
         [InlineKeyboardButton(get_text(lang, 'btn_help'), callback_data="help_guide")],
         
-        # BLOQUE 3: GESTIÓN
         [InlineKeyboardButton(get_text(lang, 'btn_team'), callback_data="invite_friends"), InlineKeyboardButton(get_text(lang, 'btn_withdraw'), callback_data="withdraw")],
         [InlineKeyboardButton(get_text(lang, 'btn_profile'), callback_data="my_profile")]
     ]
@@ -260,7 +254,7 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query: await update.callback_query.message.edit_text(body, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
     else: await update.message.reply_text(body, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
-# --- MENÚS DE DETALLE (TIERS) ---
+# --- MENÚS DE MISIONES (TIERS) ---
 
 async def tier1_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -268,9 +262,9 @@ async def tier1_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = query.from_user.language_code
     
     kb = [
-        [InlineKeyboardButton("📺 COINPAYU", url=LINKS['COINPAYU']), InlineKeyboardButton("🎲 FREEBITCOIN", url=LINKS['FREEBITCOIN'])],
-        [InlineKeyboardButton("🎮 GAMEHAG", url=LINKS['GAMEHAG']), InlineKeyboardButton("🤖 POLLO AI", url=LINKS['POLLOAI'])],
-        [InlineKeyboardButton("🎰 BETFURY", url=LINKS['BETFURY']), InlineKeyboardButton("👍 EVERVE", url=LINKS['EVERVE'])],
+        [InlineKeyboardButton("📺 COINPAYU (Ads)", url=LINKS['COINPAYU']), InlineKeyboardButton("🎲 FREEBITCOIN", url=LINKS['FREEBITCOIN'])],
+        [InlineKeyboardButton("🎮 GAMEHAG (Juegos)", url=LINKS['GAMEHAG']), InlineKeyboardButton("🤖 POLLO AI (Video)", url=LINKS['POLLOAI'])],
+        [InlineKeyboardButton("🎰 BETFURY (Staking)", url=LINKS['BETFURY']), InlineKeyboardButton("👍 EVERVE (Social)", url=LINKS['EVERVE'])],
         [InlineKeyboardButton("💰 BC.GAME", url=LINKS['BCGAME']), InlineKeyboardButton("🌧 COINTIPLY", url=LINKS['COINTIPLY'])],
         [InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]
     ]
@@ -282,10 +276,10 @@ async def tier2_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = query.from_user.language_code
     
     kb = [
-        [InlineKeyboardButton("🐝 HONEYGAIN", url=LINKS['HONEYGAIN']), InlineKeyboardButton("📦 PACKETSTREAM", url=LINKS['PACKETSTREAM'])],
-        [InlineKeyboardButton("📱 PAIDWORK", url=LINKS['PAIDWORK']), InlineKeyboardButton("⏱ TIMEBUCKS", url=LINKS['TIMEBUCKS'])],
-        [InlineKeyboardButton("⭐ SWAGBUCKS", url=LINKS['SWAGBUCKS']), InlineKeyboardButton("📶 TRAFFMONETIZER", url=LINKS['TRAFFMONETIZER'])],
-        [InlineKeyboardButton("♟️ PAWNS.APP", url=LINKS['PAWNS']), InlineKeyboardButton("⚡ SPROUTGIGS", url=LINKS['SPROUTGIGS'])],
+        [InlineKeyboardButton("🐝 HONEYGAIN (Auto)", url=LINKS['HONEYGAIN']), InlineKeyboardButton("📦 PACKETSTREAM (Auto)", url=LINKS['PACKETSTREAM'])],
+        [InlineKeyboardButton("📱 PAIDWORK (App)", url=LINKS['PAIDWORK']), InlineKeyboardButton("⏱ TIMEBUCKS", url=LINKS['TIMEBUCKS'])],
+        [InlineKeyboardButton("⭐ SWAGBUCKS", url=LINKS['SWAGBUCKS']), InlineKeyboardButton("📶 TRAFFMONETIZER (Auto)", url=LINKS['TRAFFMONETIZER'])],
+        [InlineKeyboardButton("♟️ PAWNS (Auto)", url=LINKS['PAWNS']), InlineKeyboardButton("⚡ SPROUTGIGS", url=LINKS['SPROUTGIGS'])],
         [InlineKeyboardButton("📝 GOTRANSCRIPT", url=LINKS['GOTRANSCRIPT']), InlineKeyboardButton("⌨️ KOLOTIBABLO", url=LINKS['KOLOTIBABLO'])],
         [InlineKeyboardButton("🐦 TESTBIRDS", url=LINKS['TESTBIRDS']), InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]
     ]
@@ -297,8 +291,8 @@ async def tier3_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = query.from_user.language_code
     
     kb = [
-        [InlineKeyboardButton("📈 BYBIT", url=LINKS['BYBIT']), InlineKeyboardButton("🏦 NEXO", url=LINKS['NEXO'])],
-        [InlineKeyboardButton("💳 REVOLUT", url=LINKS['REVOLUT']), InlineKeyboardButton("💰 YOUHODLER", url=LINKS['YOUHODLER'])],
+        [InlineKeyboardButton("📈 BYBIT (Bonus)", url=LINKS['BYBIT']), InlineKeyboardButton("🏦 NEXO (Yield)", url=LINKS['NEXO'])],
+        [InlineKeyboardButton("💳 REVOLUT (Bank)", url=LINKS['REVOLUT']), InlineKeyboardButton("💰 YOUHODLER", url=LINKS['YOUHODLER'])],
         [InlineKeyboardButton("📧 GETRESPONSE", url=LINKS['GETRESPONSE']), InlineKeyboardButton("💵 FREECASH", url=LINKS['FREECASH'])],
         [InlineKeyboardButton("💲 AIRTM", url=LINKS['AIRTM']), InlineKeyboardButton("🌍 WISE", url=LINKS['WISE'])],
         [InlineKeyboardButton("📊 PLUS500", url=LINKS['PLUS500']), InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]
@@ -318,14 +312,14 @@ async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data = await db.get_user(user_id)
     ref_count = len(user_data.get('referrals', [])) if user_data else 0
     link = f"https://t.me/{context.bot.username}?start={user_id}"
-    txt = f"👥 **COLMENA**\n👑 Referidos: `{ref_count}`\n🔗 `{link}`" 
-    kb = [[InlineKeyboardButton("📤 Compartir", url=f"https://t.me/share/url?url={link}"), InlineKeyboardButton("🔙", callback_data="go_dashboard")]]
+    txt = f"📡 **EXPANSIÓN DE RED**\n─────────────────\n👑 **Nodos Conectados:** `{ref_count}`\n💰 **Recompensa de Bloque:** 10%\n\n🔗 **ENLACE DE RECLUTAMIENTO:**\n`{link}`" 
+    kb = [[InlineKeyboardButton("📤 Difundir Señal", url=f"https://t.me/share/url?url={link}"), InlineKeyboardButton("🔙", callback_data="go_dashboard")]]
     await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def legal_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    kb = [[InlineKeyboardButton("🔙 VOLVER", callback_data="my_profile")]]
+    kb = [[InlineKeyboardButton("🔙 VOLVER A INVENTARIO", callback_data="my_profile")]]
     await query.message.edit_text(LEGAL_TEXT, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -341,18 +335,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "legal_terms": await legal_menu(update, context)
     elif data == "my_profile":
         kb = [
-            [InlineKeyboardButton("📜 Términos y Privacidad", callback_data="legal_terms")],
-            [InlineKeyboardButton("🔙 Volver", callback_data="go_dashboard")]
+            [InlineKeyboardButton("⚖️ Protocolos Legales", callback_data="legal_terms")],
+            [InlineKeyboardButton("🔙 Volver a la Base", callback_data="go_dashboard")]
         ]
-        await query.message.edit_text(f"👤 **PERFIL**\nID: `{query.from_user.id}`", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        await query.message.edit_text(f"👤 **INVENTARIO DE JUGADOR**\nID: `{query.from_user.id}`", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
     elif data == "withdraw": 
-        await query.answer("🔒 $10 min", show_alert=True)
+        await query.answer("🔒 BLOQUEADO POR PROTOCOLO", show_alert=True)
         await query.message.reply_text(get_text(query.from_user.language_code, 'withdraw_lock'), parse_mode="Markdown")
 
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return 
     message = " ".join(context.args)
-    if message: await update.message.reply_text(f"📢 **AVISO:**\n{message}", parse_mode="Markdown")
+    if message: await update.message.reply_text(f"📢 **TRANSMISIÓN GLOBAL:**\n{message}", parse_mode="Markdown")
 
 async def help_command(u, c): await u.message.reply_text("Help: /start")
 async def invite_command(u, c): await u.message.reply_text("Use el menú Equipo")
