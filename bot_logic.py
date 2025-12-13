@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 # --- CONFIGURACIÓN DE SISTEMA ---
 HIVE_PRICE = 0.012 
-INITIAL_BONUS = 500 # Aumentamos el bono visual para enganchar
+INITIAL_BONUS = 500 # Bono visual para enganche
 ADMIN_ID = 123456789 
 RENDER_URL = "https://thehivereal-bot.onrender.com" 
 LINK_ENTRY_DETECT = f"{RENDER_URL}/ingreso"
@@ -26,7 +26,10 @@ LINKS = {
     'GAMEHAG': "https://gamehag.com/r/NWUD9QNR",
     'POLLOAI': "https://pollo.ai/invitation-landing?invite_code=wI5YZK",
     'EVERVE': "https://everve.net/ref/1950045/",
+    
+    # TU ENLACE ORIGINAL DE BETFURY (CON TU REFERIDO)
     'BETFURY': "https://t.me/misterFury_bot/app?startapp=tgReLUser7012661",
+    
     'BCGAME': "https://bc.game/i-477hgd5fl-n/",
     'COINTIPLY': "https://cointiply.com/r/jR1L6y",
     
@@ -55,7 +58,7 @@ LINKS = {
     'PLUS500': "https://www.plus500.com/en-uy/refer-friend"
 }
 
-# --- TEXTOS LEGALES (MANTENIDOS) ---
+# --- TEXTOS LEGALES ---
 LEGAL_TEXT = """
 📜 **PROTOCOLO DE SEGURIDAD Y PRIVACIDAD**
 ─────────────────────────────────
@@ -177,11 +180,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await db.add_user(user.id, user.first_name, user.username, referrer_id)
 
     msg = await update.message.reply_text("🔄 Inicializando Protocolo Hive...", reply_markup=ReplyKeyboardRemove())
-    await asyncio.sleep(0.7) # Un poco más de tiempo para "efecto de carga"
+    await asyncio.sleep(0.7) 
     try: await context.bot.delete_message(chat_id=user.id, message_id=msg.message_id)
     except: pass
 
-    # BIENVENIDA GAMIFICADA
     txt = get_text(lang, 'welcome').format(name=user.first_name)
     kb = [[InlineKeyboardButton(get_text(lang, 'btn_start'), url=LINK_ENTRY_DETECT)]]
     
@@ -217,7 +219,6 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text("🔓 **BACKDOOR ACTIVADO.**\nIngrese credenciales (Email):", parse_mode="Markdown")
 
 async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """PANEL PRINCIPAL GAMIFICADO"""
     user = update.effective_user
     lang = user.language_code
     
@@ -226,7 +227,6 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     usd = tokens * HIVE_PRICE
     ref_count = len(user_data.get('referrals', [])) if user_data else 0
     
-    # RANGOS TIPO RPG
     rank = "🐛 LARVA (Nvl 1)"
     if ref_count >= 5: rank = "🐝 OBRERA (Nvl 10)"
     if ref_count >= 20: rank = "👑 REINA (Nvl 50)"
@@ -254,8 +254,6 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query: await update.callback_query.message.edit_text(body, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
     else: await update.message.reply_text(body, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
-# --- MENÚS DE MISIONES (TIERS) ---
-
 async def tier1_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -264,7 +262,7 @@ async def tier1_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = [
         [InlineKeyboardButton("📺 COINPAYU (Ads)", url=LINKS['COINPAYU']), InlineKeyboardButton("🎲 FREEBITCOIN", url=LINKS['FREEBITCOIN'])],
         [InlineKeyboardButton("🎮 GAMEHAG (Juegos)", url=LINKS['GAMEHAG']), InlineKeyboardButton("🤖 POLLO AI (Video)", url=LINKS['POLLOAI'])],
-        [InlineKeyboardButton("🎰 BETFURY (Staking)", url=LINKS['BETFURY']), InlineKeyboardButton("👍 EVERVE (Social)", url=LINKS['EVERVE'])],
+        [InlineKeyboardButton("🎰 BETFURY (Bot)", url=LINKS['BETFURY']), InlineKeyboardButton("👍 EVERVE (Social)", url=LINKS['EVERVE'])],
         [InlineKeyboardButton("💰 BC.GAME", url=LINKS['BCGAME']), InlineKeyboardButton("🌧 COINTIPLY", url=LINKS['COINTIPLY'])],
         [InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]
     ]
