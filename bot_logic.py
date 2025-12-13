@@ -18,7 +18,6 @@ RENDER_URL = "https://thehivereal-bot.onrender.com"
 LINK_ENTRY_DETECT = f"{RENDER_URL}/ingreso"
 
 # --- ☢️ ARSENAL MAESTRO DE ENLACES (LISTA EXTENDIDA) ---
-# Aquí están todas las plataformas, una por una.
 LINKS = {
     # --- SECCIÓN 1: CASINO & SUERTE (JACKPOTS) ---
     'BCGAME': "https://bc.game/i-477hgd5fl-n/",
@@ -53,7 +52,7 @@ LINKS = {
     'SWAGBUCKS': "https://www.swagbucks.com/p/register?rb=226213635&rp=1",
     'TESTBIRDS': "https://nest.testbirds.com/home/tester?t=9ef7ff82-ca89-4e4a-a288-02b4938ff381",
     
-    # --- SECCIÓN 5: HERRAMIENTAS IA & MARKETING (NUEVOS) ---
+    # --- SECCIÓN 5: HERRAMIENTAS IA & MARKETING ---
     'POLLOAI': "https://pollo.ai/invitation-landing?invite_code=wI5YZK",
     'GETRESPONSE': "https://gr8.com//pr/mWAka/d",
     
@@ -65,7 +64,6 @@ LINKS = {
 LEGAL_TEXT = """
 📜 **TÉRMINOS DE SERVICIO Y POLÍTICA DE PRIVACIDAD**
 ─────────────────────────────────
-
 **1. Aceptación del Servicio**
 Al iniciar y utilizar el bot THEONE HIVE, usted acepta incondicionalmente estos términos y condiciones.
 
@@ -75,37 +73,26 @@ Este bot actúa exclusivamente como un **intermediario de afiliación**. Proporc
 - No garantizamos ingresos fijos.
 - Las ganancias dependen 100% del esfuerzo del usuario en las plataformas externas.
 
-**3. Descargo de Responsabilidad (Disclaimer)**
-No nos hacemos responsables por:
-- Pagos retrasados de plataformas externas (ej: Freebitcoin, Bybit).
-- Cambios en las políticas de dichas plataformas.
-- Pérdidas derivadas de inversiones en trading o apuestas.
-
-**4. Privacidad de Datos**
-Recopilamos estrictamente:
-- Su ID numérico de Telegram.
-- Su nombre de usuario público.
-- Su correo electrónico (para validación de cuenta).
-**NO** compartimos, vendemos ni alquilamos sus datos a terceros.
-
-**5. Política de Pagos del Bot**
-Los retiros de "Miel" (Saldo interno) están sujetos a una auditoría antifraude. El mínimo de retiro es de $10.00 USD. Cualquier intento de usar bots, scripts o multicuentas resultará en un baneo permanente.
+**3. Privacidad de Datos**
+Recopilamos estrictamente su ID de Telegram y correo electrónico para validación. NO compartimos sus datos.
 
 _Última actualización: Diciembre 2025_
 """
 
-# --- TEXTOS: INTERFAZ "HIVE MIND" ---
+# --- TEXTOS: INTERFAZ "HIVE MIND" (CON BEEBY) ---
 TEXTS = {
     'es': {
+        # AQUÍ ESTÁ EL CAMBIO: BIENVENIDA DE BEEBY
         'welcome': (
-            "🐝 **THEONE HIVE MIND - SYSTEM** 💠\n"
+            "🐝 **¡BIENVENIDO A LA COLMENA!**\n"
             "───────────────────────\n"
-            "🆔 **Usuario:** `{name}`\n"
-            "📡 **Conexión:** Segura (SSL)\n"
-            "⏱ **Sesión:** Activa\n\n"
-            "⚠️ **PROTOCOLO DE ACCESO:**\n"
-            "El sistema requiere verificación humana para sincronizar la billetera de recompensas y activar el panel de control.\n\n"
-            "🔻 **INICIAR ENLACE:**"
+            "👋 Hola `{name}`, soy **Beeby**, tu asistente de minería.\n\n"
+            "💠 **TU MISIÓN:**\n"
+            "Recolectar **Miel (USD)** y **Néctar (Puntos)** completando tareas estratégicas en nuestro ecosistema.\n\n"
+            "📊 **TU ESTADO ACTUAL:**\n"
+            "• Rango: 🐛 Larva\n"
+            "• Conexión: 🟢 Estable\n\n"
+            "👇 **PARA COMENZAR, CONECTA TU NODO:**"
         ),
         'btn_start': "⚡ CONECTAR AL NODO",
         
@@ -203,9 +190,9 @@ TEXTS = {
         'btn_back': "🔙 VOLVER AL DASHBOARD",
         'withdraw_lock': "🔒 **TRANSACCIÓN DENEGADA**\n\n⚠️ **Error:** Saldo insuficiente en Miel.\n💰 **Requerido:** $10.00 USD.\n\n_El sistema desbloqueará esta función automáticamente al alcanzar la meta._"
     },
-    # Idioma Inglés (Simplificado para ahorrar espacio pero mantener funcionalidad)
+    # Idioma Inglés
     'en': { 
-        'welcome': "🐝 **THEONE HIVE MIND**\nStatus: Secure\n👇 **ACCESS:**",
+        'welcome': "🐝 **WELCOME TO THE HIVE!**\nI'm Beeby, your assistant.\n👇 **CONNECT:**",
         'btn_start': "⚡ CONNECT",
         'dashboard_body': "🐝 **HIVE DASHBOARD**\nUser: {name}\n💰 Balance: ${usd:.2f}",
         'btn_work': "⚔️ Tasks", 'btn_fintech': "🌐 Missions", 'btn_passive': "☁️ Mining", 'btn_jackpot': "💎 Luck", 'btn_team': "👥 Team", 'btn_web': "✨ Web", 'btn_profile': "⚙️ Settings", 'btn_withdraw': "🏧 Withdraw", 'btn_legal': "📜 Terms",
@@ -213,7 +200,7 @@ TEXTS = {
     },
     # Idioma Portugués
     'pt': { 
-        'welcome': "🐝 **THEONE HIVE MIND**\nStatus: Seguro\n👇 **ACESSAR:**",
+        'welcome': "🐝 **BEM-VINDO À COLMEIA!**\nSou Beeby, seu assistente.\n👇 **CONECTAR:**",
         'btn_start': "⚡ CONECTAR",
         'dashboard_body': "🐝 **PAINEL HIVE**\nUsuário: {name}\n💰 Saldo: ${usd:.2f}",
         'btn_work': "⚔️ Tarefas", 'btn_fintech': "🌐 Missões", 'btn_passive': "☁️ Mineração", 'btn_jackpot': "💎 Sorte", 'btn_team': "👥 Equipe", 'btn_web': "✨ Web", 'btn_profile': "⚙️ Ajustes", 'btn_withdraw': "🏧 Sacar", 'btn_legal': "📜 Termos",
@@ -252,39 +239,35 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try: await context.bot.delete_message(chat_id=user.id, message_id=msg.message_id)
     except: pass
 
-    # Mensaje de Bienvenida
+    # Mensaje de Bienvenida (TEXTO DE BEEBY)
     txt = get_text(lang, 'welcome').format(name=user.first_name)
     kb = [[InlineKeyboardButton(get_text(lang, 'btn_start'), url=LINK_ENTRY_DETECT)]]
     await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Maneja el texto que escribe el usuario (Emails, comandos ocultos)."""
+    """Maneja el texto que escribe el usuario."""
     text = update.message.text.strip().upper()
     user = update.effective_user
     
-    # Comandos rápidos de texto
     if text in ["DASHBOARD", "PERFIL", "MINAR", "/START"]: 
         await show_dashboard(update, context)
         return
     
-    # Captura de Email (Validación Regex)
     if context.user_data.get('waiting_for_email'):
         if re.match(r"[^@]+@[^@]+\.[^@]+", text):
             context.user_data['email'] = text
             context.user_data['waiting_for_email'] = False
-            # Guardar email en DB
             if hasattr(db, 'update_email'): await db.update_email(user.id, text)
             await show_dashboard(update, context)
             return
         else: 
             await update.message.reply_text("⚠️ **ERROR DE FORMATO**\nPor favor ingrese un correo válido.")
     
-    # Puerta trasera (Backdoor) para simular login externo
     if text.startswith("HIVE-777"):
         parts = text.split('-')
         context.user_data['country'] = parts[2] if len(parts) >= 3 else 'GL'
         await update.message.reply_text(
-            f"✅ **CREDENCIALES ACEPTADAS**\n\n📥 **REGISTRO DE USUARIO:**\nIngrese su correo electrónico para finalizar la configuración de la cuenta y habilitar los retiros.", 
+            f"✅ **CREDENCIALES ACEPTADAS**\n\n📥 **REGISTRO DE USUARIO:**\nIngrese su correo electrónico para finalizar la configuración.", 
             parse_mode="Markdown"
         )
         context.user_data['waiting_for_email'] = True
@@ -295,18 +278,15 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = user.language_code
     country = context.user_data.get('country', 'GL')
     
-    # Obtener datos de DB
     user_data = await db.get_user(user.id)
     tokens = user_data.get('tokens', INITIAL_BONUS) if user_data else INITIAL_BONUS
     usd = tokens * HIVE_PRICE
     
-    # Cálculo de Rango
     ref_count = len(user_data.get('referrals', [])) if user_data else 0
     rank = "Larva"
     if ref_count >= 5: rank = "Obrera"
     if ref_count >= 20: rank = "Reina"
     
-    # Construcción del Mensaje Visual
     body = get_text(lang, 'dashboard_body').format(
         name=user.first_name, 
         id=user.id, 
@@ -316,28 +296,14 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         refs=ref_count
     )
     
-    # Botonera Principal (Expandida)
+    # Botonera Principal
     kb = [
-        [
-            InlineKeyboardButton(get_text(lang, 'btn_work'), callback_data="work_zone")
-        ], 
-        [
-            InlineKeyboardButton(get_text(lang, 'btn_fintech'), callback_data="fintech_vault")
-        ], 
-        [
-            InlineKeyboardButton(get_text(lang, 'btn_passive'), callback_data="passive_income"), 
-            InlineKeyboardButton(get_text(lang, 'btn_jackpot'), callback_data="jackpot_zone")
-        ],
-        [
-            InlineKeyboardButton(get_text(lang, 'btn_team'), callback_data="invite_friends"), 
-            InlineKeyboardButton(get_text(lang, 'btn_withdraw'), callback_data="withdraw")
-        ],
-        [
-            InlineKeyboardButton(get_text(lang, 'btn_web'), url=RENDER_URL)
-        ],
-        [
-            InlineKeyboardButton(get_text(lang, 'btn_profile'), callback_data="my_profile")
-        ]
+        [InlineKeyboardButton(get_text(lang, 'btn_work'), callback_data="work_zone")], 
+        [InlineKeyboardButton(get_text(lang, 'btn_fintech'), callback_data="fintech_vault")], 
+        [InlineKeyboardButton(get_text(lang, 'btn_passive'), callback_data="passive_income"), InlineKeyboardButton(get_text(lang, 'btn_jackpot'), callback_data="jackpot_zone")],
+        [InlineKeyboardButton(get_text(lang, 'btn_team'), callback_data="invite_friends"), InlineKeyboardButton(get_text(lang, 'btn_withdraw'), callback_data="withdraw")],
+        [InlineKeyboardButton(get_text(lang, 'btn_web'), url=RENDER_URL)],
+        [InlineKeyboardButton(get_text(lang, 'btn_profile'), callback_data="my_profile")]
     ]
     
     if update.callback_query: 
@@ -423,18 +389,15 @@ async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def legal_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Muestra los Términos y Condiciones."""
     query = update.callback_query
     await query.answer()
     lang = query.from_user.language_code
     
-    # Botón para volver
     kb = [[InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="my_profile")]]
     
     await query.message.edit_text(LEGAL_TEXT, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gestor Central de Botones (Router)."""
     query = update.callback_query
     data = query.data
     
@@ -446,7 +409,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "invite_friends": await team_menu(update, context)
     elif data == "legal_terms": await legal_menu(update, context) 
     elif data == "my_profile":
-        # Submenú Perfil
         kb = [
             [InlineKeyboardButton(get_text(query.from_user.language_code, 'btn_legal'), callback_data="legal_terms")],
             [InlineKeyboardButton(get_text(query.from_user.language_code, 'btn_back'), callback_data="go_dashboard")]
@@ -461,13 +423,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(get_text(query.from_user.language_code, 'withdraw_lock'), parse_mode="Markdown")
 
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Comando Admin para enviar mensajes a todos."""
     if update.effective_user.id != ADMIN_ID: return 
     message = " ".join(context.args)
     if message: await update.message.reply_text(f"📢 **COMUNICADO DE RED:**\n\n{message}", parse_mode="Markdown")
 
 # --- COMANDOS BÁSICOS ---
-async def help_command(u, c): await u.message.reply_text("Comandos disponibles: /start")
+async def help_command(u, c): await u.message.reply_text("Help: /start")
 async def invite_command(u, c): await u.message.reply_text("Use el menú Equipo")
 async def reset_command(u, c): 
     c.user_data.clear()
