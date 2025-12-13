@@ -3,15 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hive Security Gate</title>
-    <!-- SCRIPT OBLIGATORIO PARA QUE FUNCIONE EL BOTÓN AUTOMÁTICO -->
+    <title>Hive Security</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root {
-            --primary: #f59e0b; /* Amarillo Hive */
-            --dark: #111827;
-            --light: #f3f4f6;
-        }
+        :root { --primary: #f59e0b; --dark: #111827; --light: #f3f4f6; }
         body {
             font-family: 'Segoe UI', sans-serif;
             background-color: var(--dark);
@@ -27,85 +22,67 @@
             background: rgba(255, 255, 255, 0.05);
             padding: 2rem;
             border-radius: 15px;
-            backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            max-width: 90%;
-            width: 350px;
+            width: 300px;
         }
-        h1 { margin-bottom: 0.5rem; font-size: 1.5rem; }
-        p { color: #9ca3af; margin-bottom: 2rem; font-size: 0.9rem; }
+        h1 { margin: 0 0 10px 0; font-size: 1.4rem; color: var(--primary); }
+        p { font-size: 0.9rem; color: #9ca3af; margin-bottom: 20px; }
         
-        /* BOTÓN PRINCIPAL */
+        /* BOTÓN DE VERIFICACIÓN (SIN LINK EXTERNO) */
         .btn-main {
             background: linear-gradient(135deg, #f59e0b, #d97706);
             color: white;
             border: none;
-            padding: 15px 25px;
-            border-radius: 8px;
-            font-weight: bold;
-            font-size: 1.1rem;
-            cursor: pointer;
+            padding: 15px;
             width: 100%;
-            transition: transform 0.2s;
+            border-radius: 10px;
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
             box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
-            text-decoration: none;
-            display: inline-block;
         }
-        .btn-main:active { transform: scale(0.98); }
-
-        /* LOADING SPINNER */
+        
         .loader {
-            border: 3px solid #f3f3f3;
+            border: 3px solid #333;
             border-top: 3px solid var(--primary);
             border-radius: 50%;
-            width: 30px;
-            height: 30px;
+            width: 25px;
+            height: 25px;
             animation: spin 1s linear infinite;
-            margin: 20px auto;
+            margin: 0 auto;
             display: none;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
-
     <div class="container">
-        <h1>🔒 CONEXIÓN SEGURA</h1>
-        <p>Para sincronizar tu nodo y recibir el bono de bienvenida, activa la conexión ahora.</p>
+        <h1>🛡️ HIVE SECURITY</h1>
+        <p>Protocolo de sincronización neural.</p>
 
-        <!-- BOTÓN QUE HACE LA MAGIA (MONETIZA Y VALIDA) -->
-        <a href="#" id="verifyBtn" class="btn-main" onclick="startProcess()">
-            🚀 ACTIVAR NODO Y ENTRAR
-        </a>
-        
+        <button id="btn" class="btn-main" onclick="verificar()">
+            CONECTAR NODO
+        </button>
+
         <div id="loader" class="loader"></div>
-        <p id="statusText" style="display:none; margin-top:10px; color:#0f0;">¡Conexión Exitosa!</p>
+        <p id="msg" style="display:none; color:#0f0; margin-top:10px;">Conexión establecida.</p>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        function startProcess() {
-            const btn = document.getElementById('verifyBtn');
-            const loader = document.getElementById('loader');
-            const status = document.getElementById('statusText');
-
+        function verificar() {
             // 1. Ocultar botón y mostrar carga
-            btn.style.display = 'none';
-            loader.style.display = 'block';
+            document.getElementById('btn').style.display = 'none';
+            document.getElementById('loader').style.display = 'block';
 
-            // 2. ABRIR TU ENLACE DE MONETIZACIÓN (CoinPayU)
-            // Esto abre el navegador del usuario para que te cuente la visita
-            window.open("https://www.coinpayu.com/?r=TheSkywalker", "_blank");
-
-            // 3. ENVIAR SEÑAL AL BOT PARA QUE LE DEJE ENTRAR
-            // Esperamos 1.5 segundos para que parezca que "procesa" y luego cerramos
+            // 2. Simular proceso de 1.5 segundos (Parece que hace algo complejo)
             setTimeout(() => {
-                loader.style.display = 'none';
-                status.style.display = 'block';
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('msg').style.display = 'block';
                 
-                // Esta es la clave: le dice a Python "YA ESTÁ LISTO"
+                // 3. ENVIAR SEÑAL AL BOT (AQUÍ ESTÁ LA CLAVE)
                 tg.sendData("VERIFIED_OK");
                 tg.close();
             }, 1500);
