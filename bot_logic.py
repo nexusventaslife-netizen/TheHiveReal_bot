@@ -17,8 +17,8 @@ ADMIN_ID = 123456789
 RENDER_URL = "https://thehivereal-bot.onrender.com" 
 LINK_ENTRY_DETECT = f"{RENDER_URL}/ingreso"
 
-# IMAGEN DE BIENVENIDA (BEEBY)
-IMG_BEEBY = "https://cdn-icons-png.flaticon.com/512/826/826963.png"
+# --- TU FOTO DE BEEBY (ACTUALIZADA) ---
+IMG_BEEBY = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
 
 # --- ☢️ ARSENAL MAESTRO DE ENLACES (ORGANIZADO POR TIERS) ---
 LINKS = {
@@ -89,7 +89,7 @@ TEXTS = {
         ),
         'btn_start': "⚡ ACCEDER AL SISTEMA",
         
-        # DASHBOARD ORGANIZADO (Aquí está la clave)
+        # DASHBOARD ORGANIZADO
         'dashboard_body': """
 🐝 **PANEL DE CONTROL PROFESIONAL**
 ──────────────────────────
@@ -106,7 +106,7 @@ TEXTS = {
 Selecciona un nivel según tu experiencia:
 ──────────────────────────
 """,
-        # BOTONES DEL DASHBOARD (AHORA SÍ POR TIERS)
+        # BOTONES DEL DASHBOARD (TIERS)
         'btn_t1': "🟢 TIER 1: Principiante (Clicks Rápidos)",
         'btn_t2': "🟡 TIER 2: Intermedio (Apps & Minería)",
         'btn_t3': "🔴 TIER 3: Avanzado (High Ticket $)",
@@ -196,6 +196,11 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     text = update.message.text.strip().upper()
     user = update.effective_user
     
+    if text == "/RESET":
+        context.user_data.clear()
+        await update.message.reply_text("🔄 **RESETEADO.** Usa /start")
+        return
+
     if text in ["DASHBOARD", "PERFIL", "/START"]: 
         await show_dashboard(update, context)
         return
@@ -280,9 +285,9 @@ async def tier2_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🐝 HONEYGAIN", url=LINKS['HONEYGAIN']), InlineKeyboardButton("📦 PACKETSTREAM", url=LINKS['PACKETSTREAM'])],
         [InlineKeyboardButton("📱 PAIDWORK", url=LINKS['PAIDWORK']), InlineKeyboardButton("⏱ TIMEBUCKS", url=LINKS['TIMEBUCKS'])],
         [InlineKeyboardButton("⭐ SWAGBUCKS", url=LINKS['SWAGBUCKS']), InlineKeyboardButton("📶 TRAFFMONETIZER", url=LINKS['TRAFFMONETIZER'])],
-        [InlineKeyboardButton("♟️ PAWNS", url=LINKS['PAWNS']), InlineKeyboardButton("⚡ SPROUTGIGS", url=LINKS['SPROUTGIGS'])],
+        [InlineKeyboardButton("♟️ PAWNS.APP", url=LINKS['PAWNS']), InlineKeyboardButton("⚡ SPROUTGIGS", url=LINKS['SPROUTGIGS'])],
         [InlineKeyboardButton("📝 GOTRANSCRIPT", url=LINKS['GOTRANSCRIPT']), InlineKeyboardButton("⌨️ KOLOTIBABLO", url=LINKS['KOLOTIBABLO'])],
-        [InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]
+        [InlineKeyboardButton("🐦 TESTBIRDS", url=LINKS['TESTBIRDS']), InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]
     ]
     await query.message.edit_text(get_text(lang, 't2_title'), reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
@@ -336,12 +341,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "legal_terms": await legal_menu(update, context)
     elif data == "my_profile":
         kb = [
-            [InlineKeyboardButton(get_text(query.from_user.language_code, 'btn_legal'), callback_data="legal_terms")],
-            [InlineKeyboardButton(get_text(query.from_user.language_code, 'btn_back'), callback_data="go_dashboard")]
+            [InlineKeyboardButton("📜 Términos y Privacidad", callback_data="legal_terms")],
+            [InlineKeyboardButton("🔙 Volver", callback_data="go_dashboard")]
         ]
         await query.message.edit_text(f"👤 **PERFIL**\nID: `{query.from_user.id}`", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
     elif data == "withdraw": 
-        await query.answer("🔒 Locked", show_alert=True)
+        await query.answer("🔒 $10 min", show_alert=True)
         await query.message.reply_text(get_text(query.from_user.language_code, 'withdraw_lock'), parse_mode="Markdown")
 
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
