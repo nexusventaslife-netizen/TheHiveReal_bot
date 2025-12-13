@@ -11,25 +11,24 @@ logger = logging.getLogger(__name__)
 
 # --- CONFIGURACIÓN DE SISTEMA ---
 HIVE_PRICE = 0.012 
-INITIAL_BONUS = 500  # Bono de Bienvenida ($6.00 USD)
+INITIAL_BONUS = 500  
 ADMIN_ID = 123456789 
 
-# TU WEBAPP (Render) - Asegúrate de que esta URL sea la tuya
+# TU WEBAPP (Render)
 RENDER_URL = "https://thehivereal-bot.onrender.com" 
 
 # IMAGEN DE BIENVENIDA
 IMG_BEEBY = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-1.jpg"
 
-# --- ☢️ ARSENAL MAESTRO DE ENLACES (LISTA EXTENDIDA Y COMPLETA) ---
-# Incluye exactamente los que me pasaste más los complementarios.
+# --- ☢️ ARSENAL MAESTRO DE ENLACES (COMPLETO) ---
 LINKS = {
-    # --- SECCIÓN 1: CASINO & SUERTE (JACKPOTS) ---
+    # --- SECCIÓN 1: CASINO & SUERTE ---
     'BCGAME': "https://bc.game/i-477hgd5fl-n/",
-    'BETFURY': "https://betfury.io/?r=6664969919f42d20e7297e29", # Web
+    'BETFURY': "https://betfury.io/?r=6664969919f42d20e7297e29",
     'FREEBITCOIN': "https://freebitco.in/?r=55837744", 
     'COINTIPLY': "https://cointiply.com/r/jR1L6y", 
     
-    # --- SECCIÓN 2: FINTECH & TRADING (ALTO VALOR) ---
+    # --- SECCIÓN 2: FINTECH & TRADING ---
     'BYBIT': "https://www.bybit.com/invite?ref=BBJWAX4",
     'PLUS500': "https://www.plus500.com/en-uy/refer-friend",
     'NEXO': "https://nexo.com/ref/rbkekqnarx?src=android-link",
@@ -38,13 +37,13 @@ LINKS = {
     'YOUHODLER': "https://app.youhodler.com/sign-up?ref=SXSSSNB1",
     'AIRTM': "https://app.airtm.com/ivt/jos3vkujiyj",
     
-    # --- SECCIÓN 3: MINERÍA PASIVA (NODOS) ---
+    # --- SECCIÓN 3: MINERÍA PASIVA ---
     'HONEYGAIN': "https://join.honeygain.com/ALEJOE9F32",
     'PACKETSTREAM': "https://packetstream.io/?psr=7hQT",
     'PAWNS': "https://pawns.app/?r=18399810",
     'TRAFFMONETIZER': "https://traffmonetizer.com/?aff=2034896",
     
-    # --- SECCIÓN 4: TRABAJO ACTIVO & FREELANCE ---
+    # --- SECCIÓN 4: TRABAJO ACTIVO ---
     'PAIDWORK': "https://www.paidwork.com/?r=nexus.ventas.life",
     'GAMEHAG': "https://gamehag.com/r/NWUD9QNR",
     'COINPAYU': "https://www.coinpayu.com/?r=TheSkywalker",
@@ -56,9 +55,12 @@ LINKS = {
     'SWAGBUCKS': "https://www.swagbucks.com/p/register?rb=226213635&rp=1",
     'TESTBIRDS': "https://nest.testbirds.com/home/tester?t=9ef7ff82-ca89-4e4a-a288-02b4938ff381",
     
-    # --- SECCIÓN 5: HERRAMIENTAS IA & MARKETING ---
+    # --- SECCIÓN 5: HERRAMIENTAS IA ---
     'POLLOAI': "https://pollo.ai/invitation-landing?invite_code=wI5YZK",
-    'GETRESPONSE': "https://gr8.com//pr/mWAka/d"
+    'GETRESPONSE': "https://gr8.com//pr/mWAka/d",
+    
+    # --- SECCIÓN 6: OFERTAS CPA ---
+    'FREECASH': "https://freecash.com/r/XYN98"
 }
 
 # --- TEXTOS LEGALES ---
@@ -81,10 +83,9 @@ Recopilamos estrictamente: ID de Telegram y Email (para validación).
 Mínimo de retiro: $10.00 USD. Prohibido multicuentas.
 """
 
-# --- TEXTOS E IDIOMAS ---
+# --- TEXTOS E IDIOMAS (AQUÍ ESTABA EL ERROR: AHORA ESTÁ COMPLETO) ---
 TEXTS = {
     'es': {
-        # MENSAJE 1: BIENVENIDA (FORZAR VERIFICACIÓN)
         'welcome': (
             "🧬 **SISTEMA HIVE DETECTADO**\n"
             "───────────────────────\n"
@@ -95,7 +96,6 @@ TEXTS = {
         ),
         'btn_verify_webapp': "⚡ CONECTAR NODO (Verificar)",
         
-        # MENSAJE 2: SOLICITUD DE EMAIL (AQUÍ FALLABA ANTES)
         'ask_email': (
             "✅ **CONEXIÓN ESTABLECIDA EXITOSAMENTE**\n"
             "───────────────────────\n"
@@ -122,20 +122,60 @@ TEXTS = {
 `[█████░░░░░] 50%`
 ──────────────────────────
 """,
-        'btn_t1': "🟢 ZONA 1 (Clicks)", 'btn_t2': "🟡 ZONA 2 (Auto)", 'btn_t3': "🔴 ZONA 3 (Pro)",
-        'btn_help': "📜 Ayuda", 'btn_team': "📡 Equipo", 'btn_profile': "⚙️ Perfil", 'btn_withdraw': "🏧 Retirar",
-        't1_title': "🟢 **ZONA 1**", 't2_title': "🟡 **ZONA 2**", 't3_title': "🔴 **ZONA 3**",
-        'btn_back': "🔙 VOLVER", 'withdraw_lock': "🔒 **BLOQUEADO** ($10 min)"
+        # BOTONES PRINCIPALES (ESPAÑOL)
+        'btn_t1': "🟢 ZONA 1 (Clicks)", 
+        'btn_t2': "🟡 ZONA 2 (Auto)", 
+        'btn_t3': "🔴 ZONA 3 (Pro)",
+        'btn_help': "📜 Ayuda", 
+        'btn_team': "📡 Equipo", 
+        'btn_profile': "⚙️ Perfil", 
+        'btn_withdraw': "🏧 Retirar",
+        
+        # TÍTULOS DE TIERS (ESPAÑOL)
+        't1_title': "🟢 **ZONA 1**", 
+        't2_title': "🟡 **ZONA 2**", 
+        't3_title': "🔴 **ZONA 3**",
+        
+        # BOTONES GENERALES (ESPAÑOL)
+        'btn_back': "🔙 VOLVER", 
+        'withdraw_lock': "🔒 **BLOQUEADO** ($10 min)",
+        'help_text': "Guía de Operaciones..."
     },
-    'en': { 'welcome': "Connect Node...", 'btn_verify_webapp': "Connect", 'ask_email': "Send Email", 'dashboard_body': "Dashboard", 'btn_back': "Back" }
+    'en': { 
+        # TRADUCCIONES COMPLETAS (LO QUE FALTABA Y CAUSABA EL ERROR)
+        'welcome': "Connect Node...", 
+        'btn_verify_webapp': "Connect", 
+        'ask_email': "✅ Verified. Please enter your email:", 
+        'dashboard_body': "Dashboard\nUser: {name}\nUSD: ${usd:.2f}", 
+        
+        # BOTONES PRINCIPALES (INGLÉS - REAGREGADOS)
+        'btn_t1': "🟢 ZONE 1 (Clicks)",
+        'btn_t2': "🟡 ZONE 2 (Auto)",
+        'btn_t3': "🔴 ZONE 3 (Pro)",
+        'btn_help': "📜 Help",
+        'btn_team': "📡 Team",
+        'btn_profile': "⚙️ Profile",
+        'btn_withdraw': "🏧 Withdraw",
+        
+        # TÍTULOS DE TIERS (INGLÉS - REAGREGADOS)
+        't1_title': "🟢 **ZONE 1**",
+        't2_title': "🟡 **ZONE 2**",
+        't3_title': "🔴 **ZONE 3**",
+        
+        # BOTONES GENERALES (INGLÉS - REAGREGADOS)
+        'btn_back': "🔙 BACK",
+        'withdraw_lock': "🔒 **LOCKED** ($10 min)",
+        'help_text': "Operations Guide..."
+    }
 }
 
 def get_text(lang_code, key):
     lang = 'en'
     if lang_code and lang_code.startswith('es'): lang = 'es'
-    return TEXTS[lang].get(key, TEXTS['en'][key])
+    # Esta línea era la que fallaba porque 'en' no tenía las claves. Ahora sí las tiene.
+    return TEXTS[lang].get(key, TEXTS['en'].get(key, f"MISSING: {key}"))
 
-# --- LÓGICA PRINCIPAL (CORREGIDA) ---
+# --- LÓGICA PRINCIPAL ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """INICIO DEL BOT"""
@@ -146,27 +186,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if hasattr(db, 'add_user'): await db.add_user(user.id, user.first_name, user.username, ref_id)
 
-    # Limpieza
     msg = await update.message.reply_text("🔄 ...", reply_markup=ReplyKeyboardRemove())
     await asyncio.sleep(0.5) 
     try: await context.bot.delete_message(chat_id=user.id, message_id=msg.message_id)
     except: pass
 
-    # CHEQUEO DE ESTADO:
-    # 1. Si ya tiene Email verificado -> Dashboard
+    # CHEQUEO DE ESTADO
     user_data = await db.get_user(user.id)
+    # 1. Todo listo -> Dashboard
     if user_data and user_data.get('email'): 
         context.user_data['email_registered'] = True
         context.user_data['verified'] = True
         await show_dashboard(update, context)
         return
 
-    # 2. Si ya verificó WebApp pero falta mail -> Pedir Mail
+    # 2. Verificado pero sin email -> Pedir mail
     if context.user_data.get('verified') and not context.user_data.get('email_registered'):
         await ask_email_step(update, context)
         return
 
-    # 3. Si no ha hecho nada -> Botón WebApp
+    # 3. Nada -> WebApp
     txt = get_text(lang, 'welcome').format(name=user.first_name)
     kb = [[InlineKeyboardButton(
         get_text(lang, 'btn_verify_webapp'), 
@@ -177,15 +216,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except: await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """MANEJADOR DE MENSAJES Y WEBAPP"""
+    """MANEJADOR"""
     
-    # --- A. RESPUESTA DE LA WEBAPP (AQUÍ ESTÁ LA CORRECCIÓN) ---
+    # --- A. RESPUESTA DE LA WEBAPP ---
     if update.message.web_app_data:
         if update.message.web_app_data.data == "VERIFIED_OK":
             context.user_data['verified'] = True
-            
-            # ¡IMPORTANTE! NO MOSTRAMOS DASHBOARD AÚN.
-            # LLAMAMOS A LA FUNCIÓN QUE PIDE EL EMAIL.
+            # Pedimos el email
             await ask_email_step(update, context)
             return
 
@@ -193,12 +230,8 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     # --- B. CAPTURA DEL EMAIL ---
     if context.user_data.get('waiting_for_email'):
-        # Validar si parece un email
         if "@" in text and "." in text:
-            # Guardar en DB
             if hasattr(db, 'update_email'): await db.update_email(update.effective_user.id, text)
-            
-            # Actualizar estado
             context.user_data['waiting_for_email'] = False
             context.user_data['email_registered'] = True
             
@@ -207,22 +240,19 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             await show_dashboard(update, context)
             return
         else:
-            await update.message.reply_text("⚠️ **ERROR:** Formato inválido. Por favor escribe un email real (ej: juan@gmail.com)")
+            await update.message.reply_text("⚠️ **ERROR:** Email inválido.")
             return
 
-    # --- C. COMANDOS NORMALES ---
+    # --- C. COMANDOS ---
     if text.upper() == "/RESET": 
         context.user_data.clear(); await update.message.reply_text("Reset OK."); return
     if text.upper() in ["DASHBOARD", "PERFIL", "/START"]: 
         await show_dashboard(update, context); return
 
 async def ask_email_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Función auxiliar para pedir el email y activar el flag de espera"""
+    """Pide el email y activa el flag"""
     lang = update.effective_user.language_code
-    
-    # ACTIVAMOS LA BANDERA PARA QUE EL PRÓXIMO MENSAJE SE LEA COMO EMAIL
     context.user_data['waiting_for_email'] = True
-    
     txt = get_text(lang, 'ask_email')
     await update.message.reply_text(txt, parse_mode="Markdown")
 
@@ -240,9 +270,8 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     body = get_text(lang, 'dashboard_body').format(name=user.first_name, rank=rank, usd=usd, tokens=tokens)
     
-    # MENÚ COMPLETO (SIN RECORTES)
+    # MENÚ COMPLETO - AHORA NO FALLARÁ PORQUE 'btn_t1' EXISTE EN EN/ES
     kb = [
-        # BOTÓN DE MONETIZACIÓN INTEGRADO
         [InlineKeyboardButton("🎁 ACTIVAR BONO EXTRA (COINPAYU)", url=LINKS['COINPAYU'])],
         
         [InlineKeyboardButton(get_text(lang, 'btn_t1'), callback_data="tier_1")],
@@ -256,7 +285,7 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query: await update.callback_query.message.edit_text(body, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
     else: await update.message.reply_text(body, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
-# --- MENÚS DE LOS 3 TIERS (TODOS LOS LINKS DE TU LISTA) ---
+# --- MENÚS ---
 async def tier1_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer(); lang = query.from_user.language_code
     kb = [
@@ -287,14 +316,14 @@ async def tier3_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💳 REVOLUT", url=LINKS['REVOLUT']), InlineKeyboardButton("💰 YOUHODLER", url=LINKS['YOUHODLER'])],
         [InlineKeyboardButton("📧 GETRESPONSE", url=LINKS['GETRESPONSE']), InlineKeyboardButton("💵 FREECASH", url=LINKS['FREECASH'])],
         [InlineKeyboardButton("💲 AIRTM", url=LINKS['AIRTM']), InlineKeyboardButton("🌍 WISE", url=LINKS['WISE'])],
-        [InlineKeyboardButton("📊 PLUS500", url=LINKS['PLUS500']), InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]
+        [InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]
     ]
     await query.message.edit_text(get_text(lang, 't3_title'), reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def help_guide_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer(); lang = query.from_user.language_code
     kb = [[InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]]
-    await query.message.edit_text("Guía...", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+    await query.message.edit_text(get_text(lang, 'help_text'), reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; user_id = query.from_user.id; user_data = await db.get_user(user_id); ref_count = len(user_data.get('referrals', [])) if user_data else 0; link = f"https://t.me/{context.bot.username}?start={user_id}"
