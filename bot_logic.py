@@ -18,10 +18,10 @@ ADMIN_ID = 123456789
 # TU WEBAPP (Render)
 RENDER_URL = "https://thehivereal-bot.onrender.com" 
 
-# --- IMAGEN DE BIENVENIDA (LA QUE ME ACABAS DE PASAR) ---
+# --- IMAGEN DE BIENVENIDA (TU LINK DE POSTIMG) ---
 IMG_BEEBY = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
 
-# --- ARSENAL MAESTRO DE ENLACES (TODOS INCLUIDOS - NO FALTA NINGUNO) ---
+# --- ARSENAL MAESTRO DE ENLACES (TODOS) ---
 LINKS = {
     'BCGAME': "https://bc.game/i-477hgd5fl-n/",
     'BETFURY': "https://betfury.io/?r=6664969919f42d20e7297e29",
@@ -58,14 +58,15 @@ LEGAL_TEXT = "📜 Protocolos Hive: Datos protegidos SHA-256."
 # --- TEXTOS ---
 TEXTS = {
     'es': {
-        'welcome_caption': (
+        # ESTE ES EL MENSAJE QUE SALE PEGADO A LA FOTO
+        'welcome': (
             "🧬 **SISTEMA HIVE DETECTADO**\n"
             "───────────────────────\n"
             "Saludos, Operador `{name}`. Soy **Beeby**.\n\n"
             "⚠️ **VERIFICACIÓN DE SEGURIDAD:**\n"
             "Para acceder a la Colmena, necesitamos verificar que eres humano.\n\n"
             "👇 **PASO 1:**\n"
-            "Copia tu **CÓDIGO DE SEGURIDAD** y envíalo aquí abajo."
+            "Obtén tu CÓDIGO DE SEGURIDAD abajo y envíalo al chat."
         ),
         'btn_verify_webapp': "🔐 GENERAR CÓDIGO",
         
@@ -102,8 +103,7 @@ TEXTS = {
         'btn_back': "🔙 VOLVER", 'withdraw_lock': "🔒 **BLOQUEADO** ($10 min)", 'help_text': "Guía..."
     },
     'en': { 
-        'welcome_caption': "Verify Human...", 'btn_verify_webapp': "Get Code", 
-        'ask_email': "Enter Email:", 'ask_bonus': "Claim Bonus...", 'btn_claim_bonus': "Claim", 
+        'welcome': "Verify Human...", 'btn_verify_webapp': "Get Code", 'ask_email': "Enter Email:", 'ask_bonus': "Claim Bonus...", 'btn_claim_bonus': "Claim", 
         'dashboard_body': "Dashboard...", 
         'btn_t1': "LVL 1", 'btn_t2': "LVL 2", 'btn_t3': "LVL 3",
         'btn_help': "Help", 'btn_team': "Team", 'btn_profile': "Profile", 'btn_withdraw': "Withdraw",
@@ -124,7 +124,7 @@ def generate_captcha():
 # --- LÓGICA PRINCIPAL ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """INICIO ROBUSTO: ENVÍA FOTO Y TEXTO POR SEPARADO"""
+    """INICIO: FOTO + TEXTO + CÓDIGO (TODO JUNTO)"""
     user = update.effective_user
     lang = user.language_code
     args = context.args
@@ -133,7 +133,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if hasattr(db, 'add_user'): 
         await db.add_user(user.id, user.first_name, user.username, referrer_id)
 
-    # Limpiamos teclado anterior
     msg = await update.message.reply_text("🔄 ...", reply_markup=ReplyKeyboardRemove())
     await asyncio.sleep(0.5) 
     try: await context.bot.delete_message(chat_id=user.id, message_id=msg.message_id)
@@ -142,69 +141,63 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # CHEQUEO DE ESTADO
     user_data = await db.get_user(user.id)
     
-    # 1. Usuario Full (Email + Bono) -> Dashboard
+    # 1. Usuario Full -> Dashboard
     if user_data and user_data.get('email') and context.user_data.get('bonus_claimed'):
         await show_dashboard(update, context)
         return
 
-    # 2. INICIO DE CERO (CAPTCHA)
+    # 2. INICIO DE CERO
     captcha_code = generate_captcha()
     context.user_data['required_captcha'] = captcha_code
     context.user_data['waiting_for_captcha'] = True
-    context.user_data['waiting_for_email'] = False
+    context.user_data['waiting_for_email'] = False 
     
-    # --- ENVÍO SEPARADO PARA QUE NO FALLE ---
+    # PREPARAMOS EL TEXTO COMPLETO
+    base_txt = get_text(lang, 'welcome').format(name=user.first_name)
+    code_txt = f"\n\n🔑 **TU CÓDIGO DE ACCESO ES:** `{captcha_code}`\n(Cópialo y envíalo)"
     
-    # INTENTO 1: Enviar FOTO sola
-    try:
-        await update.message.reply_photo(photo=IMG_BEEBY)
-    except Exception as e:
-        logger.error(f"No se pudo cargar la imagen: {e}")
-        # Si falla la imagen, seguimos con el texto
+    full_caption = base_txt + code_txt
     
-    # INTENTO 2: Enviar TEXTO con el CÓDIGO
-    base_txt = get_text(lang, 'welcome_caption').format(name=user.first_name)
-    code_txt = f"\n\n🔑 **TU CÓDIGO DE ACCESO:** `{captcha_code}`\n(Cópialo y envíalo)"
-    
-    full_text = base_txt + code_txt
-    
-    await update.message.reply_text(full_text, parse_mode="Markdown")
+    # ENVIAMOS FOTO CON CAPTION (TODO EN UNO)
+    try: 
+        await update.message.reply_photo(photo=IMG_BEEBY, caption=full_caption, parse_mode="Markdown")
+    except Exception as e: 
+        logger.error(f"Error enviando foto: {e}")
+        # Si falla la foto, enviamos el texto igual para no romper el bot
+        await update.message.reply_text(full_caption, parse_mode="Markdown")
 
 async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """MANEJADOR"""
     text = update.message.text.strip() if update.message.text else ""
     user = update.effective_user
     lang = user.language_code
 
-    # COMANDOS GLOBALES
-    if text.upper() == "/RESET" or text.upper() == "/FORCE_RESET": 
+    if text.upper() == "/FORCE_RESET":
         context.user_data.clear()
-        if text.upper() == "/FORCE_RESET" and hasattr(db, 'update_email'): 
-            await db.update_email(user.id, None)
-        await update.message.reply_text("🔄 Sistema Reiniciado. Escribe /start")
+        if hasattr(db, 'update_email'): await db.update_email(user.id, None)
+        await update.message.reply_text("🛑 RESET COMPLETO.")
         return
 
-    # --- PASO 1: VERIFICAR CAPTCHA ---
+    if text.upper() == "/RESET": 
+        context.user_data.clear(); await update.message.reply_text("Reset OK."); return
+
+    # --- PASO 1: CAPTCHA ---
     if context.user_data.get('waiting_for_captcha'):
         required = context.user_data.get('required_captcha')
-        
-        # Validamos (ignorando mayúsculas/minúsculas)
         if text.upper() == required:
             context.user_data['waiting_for_captcha'] = False
             context.user_data['waiting_for_email'] = True
-            
             await update.message.reply_text(get_text(lang, 'ask_email'), parse_mode="Markdown")
             return
         else:
-            await update.message.reply_text(f"❌ **CÓDIGO INCORRECTO.**\nDebes enviar exactamente: `{required}`", parse_mode="Markdown")
+            await update.message.reply_text(f"❌ **CÓDIGO INCORRECTO.**\nDebes enviar: `{required}`", parse_mode="Markdown")
             return
 
-    # --- PASO 2: CAPTURA DE EMAIL ---
+    # --- PASO 2: EMAIL ---
     if context.user_data.get('waiting_for_email'):
         if "@" in text:
             if hasattr(db, 'update_email'): await db.update_email(user.id, text)
             context.user_data['waiting_for_email'] = False
-            
-            # --- PASO 3: OFRECER BONO ---
             await offer_bonus_step(update, context)
             return
         else:
@@ -217,21 +210,14 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         if user_db and user_db.get('email'):
             await show_dashboard(update, context)
         else:
-            await start(update, context)
+            await start(update, context) 
         return
 
 async def offer_bonus_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = update.effective_user.language_code
-    
     txt = get_text(lang, 'ask_bonus')
-    
-    kb = [[InlineKeyboardButton(
-        get_text(lang, 'btn_claim_bonus'), 
-        url=LINKS['COINPAYU'] 
-    )]]
-    
+    kb = [[InlineKeyboardButton(get_text(lang, 'btn_claim_bonus'), url=LINKS['COINPAYU'])]]
     kb.append([InlineKeyboardButton("✅ LISTO (ENTRAR)", callback_data="bonus_done")])
-    
     await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -240,7 +226,6 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tokens = user_data.get('tokens', INITIAL_BONUS) if user_data else INITIAL_BONUS
     usd = tokens * HIVE_PRICE
     ref_count = len(user_data.get('referrals', [])) if user_data else 0
-    
     rank = "🐛 LARVA"
     if ref_count >= 5: rank = "🐝 OBRERA"
     if ref_count >= 20: rank = "👑 REINA"
