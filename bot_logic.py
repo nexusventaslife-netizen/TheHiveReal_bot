@@ -11,7 +11,7 @@ from telegram.ext import ContextTypes
 import database as db
 
 # -----------------------------------------------------------------------------
-# 1. KERNEL & SEGURIDAD (V150.0 - GLOBAL EDITION)
+# 1. KERNEL & SEGURIDAD (V152.0 - STRICT MODE & NEW LINK)
 # -----------------------------------------------------------------------------
 logger = logging.getLogger("HiveLogic")
 logger.setLevel(logging.INFO)
@@ -46,11 +46,12 @@ COST_ENERGY_REFILL = 200
 IMG_BEEBY = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
 
 # -----------------------------------------------------------------------------
-# 2. ARSENAL DE ENLACES
+# 2. ARSENAL DE ENLACES (LINK COINPAYU CORREGIDO)
 # -----------------------------------------------------------------------------
 LINKS = {
     'VALIDATOR_MAIN': os.getenv("LINK_TIMEBUCKS", "https://timebucks.com/?refID=227501472"),
     'VIP_OFFER_1': os.getenv("LINK_BYBIT", "https://www.bybit.com/invite?ref=BBJWAX4"), 
+    'COINPAYU': "https://www.coinpayu.com/?r=Josesitoto",  # <--- LINK NUEVO ACTUALIZADO
     'ADBTC': "https://r.adbtc.top/3284589",
     'FREEBITCOIN': "https://freebitco.in/?r=55837744", 
     'COINTIPLY': "https://cointiply.com/r/jR1L6y", 
@@ -97,7 +98,7 @@ TEXTS = {
             "👇 **INGRESA TU CÓDIGO PARA ACTIVAR:**"
         ),
         'ask_terms': "✅ **ENLACE SEGURO**\n\n¿Aceptas recibir ofertas y monetizar tus datos?",
-        'ask_email': "🤝 **CONFIRMADO**\n\n📧 Ingresa tu **EMAIL** para pagos:",
+        'ask_email': "🤝 **CONFIRMADO**\n\n📧 Ingresa tu **EMAIL** para activar los pagos:",
         'ask_bonus': "🎉 **CUENTA LISTA**\n💰 Saldo: **$0.00 USD**\n\n🎁 **MISIÓN ($0.05 + 1000 HIVE):**\nRegístrate en el Partner y valida.",
         'btn_claim_bonus': "🚀 HACER MISIÓN",
         'dashboard_body': "🎛 **NODO: {name}**\n──────────────────\n🏆 **Rango:** {rank}\n👥 **Enjambre:** {swarm_status}\n⚡ **Energía:** `{energy_bar}` {energy}%\n⛏️ **Potencia:** {rate} HIVE/tap\n\n💵 **BILLETERA:** `${usd:.2f} USD`\n🐝 **HIVE:** `{hive}`\n\n💤 **AFK:**\n_{afk_msg}_\n──────────────────",
@@ -143,7 +144,6 @@ TEXTS = {
 # -----------------------------------------------------------------------------
 
 def get_text(lang_code, key, **kwargs):
-    # Detección automática de idioma (Fallback a Inglés si no es Español)
     lang = 'es' if lang_code and 'es' in lang_code else 'en'
     t = TEXTS.get(lang, TEXTS['en']).get(key, key)
     try: return t.format(**kwargs)
@@ -243,16 +243,12 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             except: pass
             return
         
-        # COMANDO REAL (PARA TI)
         if text == "/stats":
-            # Si tienes Redis, esto cuenta claves. Si no, simula.
-            count = 1542 # Ejemplo o len(keys)
+            count = 1542 
             await update.message.reply_text(f"📊 **ADMIN STATS**\nUsers: {count}\nServer: Online")
             return
             
-        # COMANDO MARKETING (PARA FOTO)
         if text == "/global_stats":
-            # Genera números bonitos para la foto
             fake_users = 12450 + random.randint(1, 100)
             fake_paid = 4520.50
             txt = get_text(lang, 'stats_header')
@@ -283,12 +279,16 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         else: await update.message.reply_text("❌ Invalid Hash.")
         return
         
+    # --- PROCESAMIENTO DE EMAIL ESTRICTO ---
     if context.user_data.get('waiting_for_email'):
         if "@" in text:
-            if hasattr(db, 'update_email'): await db.update_email(user.id, text)
+            # Aquí NO hay try/except. Si la DB falla, debe fallar.
+            if hasattr(db, 'update_email'): 
+                await db.update_email(user.id, text)
+            
             context.user_data['waiting_for_email'] = False
             await offer_bonus_step(update, context)
-        else: await update.message.reply_text("⚠️ Invalid Email.")
+        else: await update.message.reply_text("⚠️ Invalid Email. Try again.")
         return
 
     user_data = await db.get_user(user.id)
@@ -375,13 +375,13 @@ async def claim_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer(f"💰 +{amount} HIVE", show_alert=True); await show_dashboard(update, context)
 
 # -----------------------------------------------------------------------------
-# 8. TAREAS & MENUS
+# 8. TAREAS & MENUS (COINPAYU AGREGADO)
 # -----------------------------------------------------------------------------
 async def tier1_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; lang = query.from_user.language_code
     kb = [
         [InlineKeyboardButton("📺 TIMEBUCKS", url=LINKS['VALIDATOR_MAIN']), InlineKeyboardButton("💰 ADBTC", url=LINKS['ADBTC'])],
-        [InlineKeyboardButton("🎲 FREEBITCOIN", url=LINKS['FREEBITCOIN']), InlineKeyboardButton("🌧 COINTIPLY", url=LINKS['COINTIPLY'])],
+        [InlineKeyboardButton("🎲 FREEBITCOIN", url=LINKS['FREEBITCOIN']), InlineKeyboardButton("💰 COINPAYU", url=LINKS['COINPAYU'])], # <--- BOTÓN NUEVO
         [InlineKeyboardButton("✅ VALIDATE", callback_data="verify_task_manual")], [InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]
     ]
     await query.message.edit_text("🟢 **ZONE 1**", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
@@ -479,7 +479,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try: await query.answer()
     except: pass
 
-async def help_command(u, c): await u.message.reply_text("TheOneHive v150.0 Global")
+async def help_command(u, c): await u.message.reply_text("TheOneHive v152.0 Strict")
 async def invite_command(u, c): await team_menu(u, c)
 async def reset_command(u, c): c.user_data.clear(); await u.message.reply_text("Reset OK.")
 async def broadcast_command(u, c): 
