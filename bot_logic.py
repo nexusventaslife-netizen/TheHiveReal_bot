@@ -11,7 +11,7 @@ from telegram.ext import ContextTypes
 import database as db
 
 # -----------------------------------------------------------------------------
-# 1. KERNEL & SEGURIDAD (V152.0 - STRICT MODE & NEW LINK)
+# 1. KERNEL & SEGURIDAD (V153.0 - SEPARATE START CODE)
 # -----------------------------------------------------------------------------
 logger = logging.getLogger("HiveLogic")
 logger.setLevel(logging.INFO)
@@ -46,12 +46,12 @@ COST_ENERGY_REFILL = 200
 IMG_BEEBY = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
 
 # -----------------------------------------------------------------------------
-# 2. ARSENAL DE ENLACES (LINK COINPAYU CORREGIDO)
+# 2. ARSENAL DE ENLACES
 # -----------------------------------------------------------------------------
 LINKS = {
     'VALIDATOR_MAIN': os.getenv("LINK_TIMEBUCKS", "https://timebucks.com/?refID=227501472"),
     'VIP_OFFER_1': os.getenv("LINK_BYBIT", "https://www.bybit.com/invite?ref=BBJWAX4"), 
-    'COINPAYU': "https://www.coinpayu.com/?r=Josesitoto",  # <--- LINK NUEVO ACTUALIZADO
+    'COINPAYU': "https://www.coinpayu.com/?r=Josesitoto",  
     'ADBTC': "https://r.adbtc.top/3284589",
     'FREEBITCOIN': "https://freebitco.in/?r=55837744", 
     'COINTIPLY': "https://cointiply.com/r/jR1L6y", 
@@ -95,7 +95,7 @@ TEXTS = {
             "2. **Crea Enjambres:** Invita amigos para multiplicar tu potencia.\n"
             "3. **Gana USD:** Completa tareas verificadas.\n\n"
             "🛡️ **FASE 1: VERIFICACIÓN**\n"
-            "👇 **INGRESA TU CÓDIGO PARA ACTIVAR:**"
+            "👇 **INGRESA EL CÓDIGO** que aparecerá a continuación para activar:"
         ),
         'ask_terms': "✅ **ENLACE SEGURO**\n\n¿Aceptas recibir ofertas y monetizar tus datos?",
         'ask_email': "🤝 **CONFIRMADO**\n\n📧 Ingresa tu **EMAIL** para activar los pagos:",
@@ -121,7 +121,7 @@ TEXTS = {
             "2. **Build Swarms:** Invite friends to multiply power.\n"
             "3. **Earn USD:** Complete verified tasks.\n\n"
             "🛡️ **PHASE 1: VERIFICATION**\n"
-            "👇 **ENTER YOUR CODE TO ACTIVATE:**"
+            "👇 **ENTER THE CODE** that appears below to activate:"
         ),
         'ask_terms': "✅ **SECURE LINK**\n\nDo you accept to receive offers and monetize data?",
         'ask_email': "🤝 **CONFIRMED**\n\n📧 Enter your **EMAIL** for payments:",
@@ -219,8 +219,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = get_text(lang, 'welcome_caption', name=user.first_name)
     captcha = f"HIVE-{random.randint(100,999)}"
     context.user_data['captcha'] = captcha
-    try: await update.message.reply_photo(photo=IMG_BEEBY, caption=f"{txt}\n\n🔐 **CODE:** `{captcha}`", parse_mode="Markdown")
-    except: await update.message.reply_text(f"{txt}\n\n🔐 **CODE:** `{captcha}`", parse_mode="Markdown")
+    
+    # 🌟 Implementación del mensaje de código separado
+    welcome_message = f"{txt}"
+    code_message = f"🔐 **CÓDIGO DE ACTIVACIÓN**:\n\n`{captcha}`"
+
+    try: 
+        # Enviamos la imagen con el mensaje de bienvenida
+        await update.message.reply_photo(photo=IMG_BEEBY, caption=welcome_message, parse_mode="Markdown")
+        # Enviamos el código separado
+        await update.message.reply_text(code_message, parse_mode="Markdown")
+    except Exception: 
+        # Si la foto falla, enviamos todo junto como texto plano
+        await update.message.reply_text(f"{welcome_message}\n\n{code_message}", parse_mode="Markdown")
 
 async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip(); user = update.effective_user
@@ -282,7 +293,6 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     # --- PROCESAMIENTO DE EMAIL ESTRICTO ---
     if context.user_data.get('waiting_for_email'):
         if "@" in text:
-            # Aquí NO hay try/except. Si la DB falla, debe fallar.
             if hasattr(db, 'update_email'): 
                 await db.update_email(user.id, text)
             
@@ -375,13 +385,13 @@ async def claim_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer(f"💰 +{amount} HIVE", show_alert=True); await show_dashboard(update, context)
 
 # -----------------------------------------------------------------------------
-# 8. TAREAS & MENUS (COINPAYU AGREGADO)
+# 8. TAREAS & MENUS
 # -----------------------------------------------------------------------------
 async def tier1_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; lang = query.from_user.language_code
     kb = [
         [InlineKeyboardButton("📺 TIMEBUCKS", url=LINKS['VALIDATOR_MAIN']), InlineKeyboardButton("💰 ADBTC", url=LINKS['ADBTC'])],
-        [InlineKeyboardButton("🎲 FREEBITCOIN", url=LINKS['FREEBITCOIN']), InlineKeyboardButton("💰 COINPAYU", url=LINKS['COINPAYU'])], # <--- BOTÓN NUEVO
+        [InlineKeyboardButton("🎲 FREEBITCOIN", url=LINKS['FREEBITCOIN']), InlineKeyboardButton("💰 COINPAYU", url=LINKS['COINPAYU'])], 
         [InlineKeyboardButton("✅ VALIDATE", callback_data="verify_task_manual")], [InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]
     ]
     await query.message.edit_text("🟢 **ZONE 1**", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
@@ -479,7 +489,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try: await query.answer()
     except: pass
 
-async def help_command(u, c): await u.message.reply_text("TheOneHive v152.0 Strict")
+async def help_command(u, c): await u.message.reply_text("TheOneHive v153.0 Separated Start Code")
 async def invite_command(u, c): await team_menu(u, c)
 async def reset_command(u, c): c.user_data.clear(); await u.message.reply_text("Reset OK.")
 async def broadcast_command(u, c): 
