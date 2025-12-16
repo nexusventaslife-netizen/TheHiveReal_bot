@@ -8,11 +8,9 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from telegram.error import Conflict
 
-# Importamos la lógica COMPLETA (incluyendo broadcast)
+# Importamos la lógica COMPLETA
 from bot_logic import start, help_command, general_text_handler, invite_command, reset_command, button_handler, broadcast_command
 import database as db
-
-# --- NUEVO: Importamos la función de inicialización del Caché ---
 from cache import init_cache 
 
 # Logs
@@ -21,18 +19,11 @@ logger = logging.getLogger(__name__)
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
-# --- CONFIGURACIÓN DE OFERTAS (LIMPIO Y SIN ERRORES) ---
-# Hemos quitado USA y Binance. Solo usamos tus links 100% reales.
+# --- CONFIGURACIÓN DE OFERTAS (GEO-LOCALIZACIÓN) ---
 OFFERS_BY_COUNTRY = {
-    # Si detecta España o México, manda a Bybit (Tu High Ticket)
     "ES": "Https://www.bybit.com/invite?ref=BBJWAX4", 
     "MX": "Https://www.bybit.com/invite?ref=BBJWAX4",
-    
-    # Si detecta Argentina, manda a AirTM (Tu link real)
     "AR": "Https://app.airtm.com/ivt/jos3vkujiyj",     
-    
-    # Para TODO el resto del mundo (incluido Uruguay, USA, etc), usa Freecash o Publicidad
-    # He puesto Freecash como predeterminado porque paga bien en todos lados
     "DEFAULT": "https://freecash.com/r/XYN98"          
 }
 
@@ -52,22 +43,17 @@ async def entry_detect(request: Request):
 
 @app.get("/go")
 async def redirect_tasks(request: Request):
-    """
-    Redirección inteligente:
-    Detecta el país del usuario y lo manda a la mejor oferta (Bybit, AirTM o Freecash).
-    """
+    """Detecta país y redirige a la mejor oferta CPA"""
     client_ip = request.headers.get("x-forwarded-for") or request.client.host
     if "," in str(client_ip): client_ip = str(client_ip).split(",")[0]
     
-    target_url = OFFERS_BY_COUNTRY["DEFAULT"] # Por defecto Freecash
-    
+    target_url = OFFERS_BY_COUNTRY["DEFAULT"]
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.get(f"http://ip-api.com/json/{client_ip}", timeout=2.0)
             data = resp.json()
             if data.get('status') == 'success':
                 country = data.get('countryCode')
-                # Si el país está en nuestra lista (ES, MX, AR), cambia el link. Si no, usa Default.
                 target_url = OFFERS_BY_COUNTRY.get(country, OFFERS_BY_COUNTRY["DEFAULT"])
     except: pass
     return RedirectResponse(url=target_url)
@@ -88,20 +74,17 @@ async def startup_event():
     # 1. Iniciar Base de Datos
     await db.init_db()
     
-    # --- NUEVO: Conectar el Caché con el cliente Redis de la DB ---
-    # Esto soluciona el error crítico de conexión entre módulos
+    # 2. Conectar Caché (CRÍTICO)
     if db.r:
         await init_cache(db.r)
-        logger.info("✅ SISTEMA DE CACHÉ CONECTADO EXITOSAMENTE")
+        logger.info("✅ CACHÉ CONECTADO")
     else:
-        logger.warning("⚠️ ALERTA: No se pudo conectar el Caché (Redis cliente no disponible)")
-    # -------------------------------------------------------------
+        logger.warning("⚠️ ERROR: Caché no conectado")
     
     if TOKEN:
-        # 2. Configuración del Bot
         bot_app = ApplicationBuilder().token(TOKEN).build()
         
-        # 3. Handlers (Manejadores) - NO SE HA BORRADO NADA
+        # 3. Registrar Handlers (NO BORRAMOS NADA)
         bot_app.add_handler(CommandHandler("start", start))
         bot_app.add_handler(CommandHandler("help", help_command))
         bot_app.add_handler(CommandHandler("invitar", invite_command))
@@ -114,11 +97,10 @@ async def startup_event():
         await bot_app.initialize()
         await bot_app.start()
         
-        # 4. EL FIX DE LA MUERTE (Anti-Crash)
-        logger.info("🔪 Matando sesiones viejas de Telegram...")
+        # 4. Anti-Crash
+        logger.info("🔪 Matando sesiones viejas...")
         try:
             await bot_app.bot.delete_webhook(drop_pending_updates=True)
-            logger.info("✅ Webhooks eliminados. Iniciando Polling limpio.")
             asyncio.create_task(run_polling_safely())
         except Exception as e:
             logger.error(f"Error limpiando webhooks: {e}")
@@ -126,16 +108,15 @@ async def startup_event():
         logger.error("❌ FALTA TOKEN")
 
 async def run_polling_safely():
-    """Reinicia el polling si Telegram da error de conflicto"""
     try:
         await bot_app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
     except Conflict:
-        logger.warning("⚠️ Conflicto detectado. Reintentando en 5s...")
+        logger.warning("⚠️ Conflicto detectado. Reintentando...")
         await asyncio.sleep(5)
         await bot_app.bot.delete_webhook(drop_pending_updates=True)
         await bot_app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
     except Exception as e:
-        logger.error(f"Error fatal en polling: {e}")
+        logger.error(f"Error polling: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
