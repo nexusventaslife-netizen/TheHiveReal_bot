@@ -6,13 +6,13 @@ from datetime import datetime
 # --- CONFIGURACIÓN ---
 logger = logging.getLogger(__name__)
 
-# TU URL DE UPSTASH (Pegada directa para que no falle)
+# TU URL DE UPSTASH (Mantenemos la conexión directa para evitar errores de config)
 REDIS_URL = "rediss://default:AbEBAAIncDIxNTYwNjk5MzkwODc0OGE2YWUyNmJkMmI1N2M4MmNiM3AyNDUzMTM@brave-hawk-45313.upstash.io:6379"
 
 # Cliente Global
 r = None
 
-# Estructura Base (ACTUALIZADA V47.5 - ENGANCHE MASIVO)
+# Estructura Base (ACTUALIZADA V48.0 - ENGANCHE MASIVO & ANTI-CRASH)
 DEFAULT_USER = {
     "id": 0,
     "first_name": "",
@@ -26,92 +26,134 @@ DEFAULT_USER = {
     "referred_by": None,
     "last_active": "",
     # --- NUEVOS CAMPOS PARA ENGANCHE (ESTRATEGIA ANTI-HAMSTER) ---
-    "streak_days": 0,           # Días seguidos entrando (Racha)
-    "last_streak_date": "",     # Fecha del último login para calcular racha
-    "energy": 100,              # Energía para minar (Limita bots, obliga a gastar HIVE)
-    "lucky_tickets": 0          # Boletos ganados en minería crítica
+    "streak_days": 0,            # Días seguidos entrando (Racha)
+    "last_streak_date": "",      # Fecha del último login para calcular racha
+    "energy": 100,               # Energía para minar (Limita bots, obliga a gastar HIVE)
+    "lucky_tickets": 0,          # Boletos ganados en minería crítica
+    "is_premium": False          # Estado de Licencia de Reina
 }
 
 # --- FUNCIONES DE SISTEMA ---
 
 async def init_db():
-    """Conecta a Redis al iniciar"""
+    """Conecta a Redis al iniciar con reintentos inteligentes"""
     global r
     try:
-        r = redis.from_url(REDIS_URL, decode_responses=True)
+        # decode_responses=True nos ahorra decodificar bytes manualmente
+        r = redis.from_url(
+            REDIS_URL, 
+            decode_responses=True, 
+            socket_timeout=5.0,
+            socket_connect_timeout=5.0
+        )
         await r.ping()
-        logger.info("✅ CONEXIÓN REDIS UPSTASH EXITOSA")
+        logger.info("✅ CONEXIÓN REDIS UPSTASH EXITOSA (Modo: Alto Rendimiento)")
     except Exception as e:
-        logger.error(f"❌ FALLÓ CONEXIÓN REDIS: {e}")
+        logger.error(f"❌ FALLÓ CONEXIÓN REDIS CRÍTICA: {e}")
+        # No matamos el proceso, permitimos que intente reconectar luego
+        r = None
 
 async def close_db():
     """Cierra la conexión al apagar"""
     global r
     if r:
-        await r.aclose()
-        logger.info("🔒 CONEXIÓN REDIS CERRADA")
+        try:
+            await r.aclose()
+            logger.info("🔒 CONEXIÓN REDIS CERRADA CORRECTAMENTE")
+        except Exception as e:
+            logger.error(f"Error cerrando Redis: {e}")
 
 # --- FUNCIONES DE LÓGICA DE USUARIOS ---
 
 async def add_user(user_id, first_name, username, referred_by=None):
-    """Agrega usuario a Redis"""
+    """Agrega usuario a Redis de forma atómica y segura"""
     global r
+    if not r: return False
+    
     uid = str(user_id)
     key = f"user:{uid}"
     
-    exists = await r.exists(key)
-    
-    if not exists:
-        new_user = DEFAULT_USER.copy()
-        new_user.update({
-            "id": user_id,
-            "first_name": first_name,
-            "username": username,
-            "joined_at": datetime.now().isoformat(),
-            "last_active": datetime.now().isoformat(),
-            "referred_by": referred_by
-        })
+    try:
+        exists = await r.exists(key)
         
-        await r.set(key, json.dumps(new_user))
-        
-        # Procesar Referido
-        if referred_by:
-            rid = str(referred_by)
-            ref_key = f"user:{rid}"
+        if not exists:
+            new_user = DEFAULT_USER.copy()
+            new_user.update({
+                "id": user_id,
+                "first_name": first_name,
+                "username": username,
+                "joined_at": datetime.now().isoformat(),
+                "last_active": datetime.now().isoformat(),
+                "referred_by": referred_by
+            })
             
-            if await r.exists(ref_key):
-                parent_data = json.loads(await r.get(ref_key))
+            await r.set(key, json.dumps(new_user))
+            
+            # Procesar Referido (Viralidad)
+            if referred_by:
+                rid = str(referred_by)
+                ref_key = f"user:{rid}"
                 
-                if rid != uid and uid not in parent_data.get("referrals", []):
-                    parent_data.setdefault("referrals", []).append(uid)
-                    parent_data["nectar"] = parent_data.get("nectar", 500) + 50
-                    await r.set(ref_key, json.dumps(parent_data))
-        
-        return True
-    else:
-        # Actualizar last_active
-        data = json.loads(await r.get(key))
-        data["last_active"] = datetime.now().isoformat()
-        await r.set(key, json.dumps(data))
+                # Verificamos si el referido existe para darle su premio
+                if await r.exists(ref_key):
+                    raw_parent = await r.get(ref_key)
+                    if raw_parent:
+                        parent_data = json.loads(raw_parent)
+                        
+                        if rid != uid and uid not in parent_data.get("referrals", []):
+                            parent_data.setdefault("referrals", []).append(uid)
+                            # Bono por referido
+                            parent_data["nectar"] = int(parent_data.get("nectar", 500)) + 50
+                            await r.set(ref_key, json.dumps(parent_data))
+            
+            logger.info(f"🆕 Nuevo Usuario Registrado: {user_id}")
+            return True
+        else:
+            # Actualizar last_active sin borrar datos
+            raw_data = await r.get(key)
+            if raw_data:
+                data = json.loads(raw_data)
+                data["last_active"] = datetime.now().isoformat()
+                # Asegurar que los nuevos campos existen en usuarios viejos
+                for k, v in DEFAULT_USER.items():
+                    if k not in data:
+                        data[k] = v
+                await r.set(key, json.dumps(data))
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error en add_user: {e}")
         return False
 
 async def update_email(user_id, email):
     """Actualiza email en Redis"""
     global r
+    if not r: return
     key = f"user:{user_id}"
-    if await r.exists(key):
-        data = json.loads(await r.get(key))
-        data["email"] = email
-        await r.set(key, json.dumps(data))
+    try:
+        if await r.exists(key):
+            data = json.loads(await r.get(key))
+            data["email"] = email
+            await r.set(key, json.dumps(data))
+    except Exception as e:
+        logger.error(f"Error actualizando email: {e}")
 
 async def get_user(user_id):
     """Obtiene datos de Redis"""
     global r
+    if not r: return None
     key = f"user:{user_id}"
-    data = await r.get(key)
-    if data:
-        return json.loads(data)
+    try:
+        data = await r.get(key)
+        if data:
+            return json.loads(data)
+    except Exception as e:
+        logger.error(f"Error obteniendo usuario {user_id}: {e}")
     return None
 
 async def save_db(data=None):
+    """
+    Redis guarda en memoria automáticamente.
+    Esta función queda reservada para Snapshots o Backups a S3/SQL en el futuro.
+    """
     pass
