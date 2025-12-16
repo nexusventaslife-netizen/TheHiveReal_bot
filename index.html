@@ -27,8 +27,6 @@
         }
         h1 { margin: 0 0 10px 0; font-size: 1.4rem; color: var(--primary); }
         p { font-size: 0.9rem; color: #9ca3af; margin-bottom: 20px; }
-        
-        /* BOTÓN DE VERIFICACIÓN (SIN LINK EXTERNO) */
         .btn-main {
             background: linear-gradient(135deg, #f59e0b, #d97706);
             color: white;
@@ -41,7 +39,6 @@
             cursor: pointer;
             box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
         }
-        
         .loader {
             border: 3px solid #333;
             border-top: 3px solid var(--primary);
@@ -73,16 +70,12 @@
         tg.expand();
 
         function verificar() {
-            // 1. Ocultar botón y mostrar carga
             document.getElementById('btn').style.display = 'none';
             document.getElementById('loader').style.display = 'block';
 
-            // 2. Simular proceso de 1.5 segundos (Parece que hace algo complejo)
             setTimeout(() => {
                 document.getElementById('loader').style.display = 'none';
                 document.getElementById('msg').style.display = 'block';
-                
-                // 3. ENVIAR SEÑAL AL BOT (AQUÍ ESTÁ LA CLAVE)
                 tg.sendData("VERIFIED_OK");
                 tg.close();
             }, 1500);
