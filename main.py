@@ -12,6 +12,9 @@ from telegram.error import Conflict
 from bot_logic import start, help_command, general_text_handler, invite_command, reset_command, button_handler, broadcast_command
 import database as db
 
+# --- NUEVO: Importamos la función de inicialización del Caché ---
+from cache import init_cache 
+
 # Logs
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -26,11 +29,11 @@ OFFERS_BY_COUNTRY = {
     "MX": "Https://www.bybit.com/invite?ref=BBJWAX4",
     
     # Si detecta Argentina, manda a AirTM (Tu link real)
-    "AR": "Https://app.airtm.com/ivt/jos3vkujiyj",    
+    "AR": "Https://app.airtm.com/ivt/jos3vkujiyj",     
     
     # Para TODO el resto del mundo (incluido Uruguay, USA, etc), usa Freecash o Publicidad
     # He puesto Freecash como predeterminado porque paga bien en todos lados
-    "DEFAULT": "https://freecash.com/r/XYN98"         
+    "DEFAULT": "https://freecash.com/r/XYN98"          
 }
 
 app = FastAPI()
@@ -81,13 +84,24 @@ async def read_index():
 @app.on_event("startup")
 async def startup_event():
     global bot_app
+    
+    # 1. Iniciar Base de Datos
     await db.init_db()
     
+    # --- NUEVO: Conectar el Caché con el cliente Redis de la DB ---
+    # Esto soluciona el error crítico de conexión entre módulos
+    if db.r:
+        await init_cache(db.r)
+        logger.info("✅ SISTEMA DE CACHÉ CONECTADO EXITOSAMENTE")
+    else:
+        logger.warning("⚠️ ALERTA: No se pudo conectar el Caché (Redis cliente no disponible)")
+    # -------------------------------------------------------------
+    
     if TOKEN:
-        # 1. Configuración del Bot
+        # 2. Configuración del Bot
         bot_app = ApplicationBuilder().token(TOKEN).build()
         
-        # 2. Handlers
+        # 3. Handlers (Manejadores) - NO SE HA BORRADO NADA
         bot_app.add_handler(CommandHandler("start", start))
         bot_app.add_handler(CommandHandler("help", help_command))
         bot_app.add_handler(CommandHandler("invitar", invite_command))
@@ -100,7 +114,7 @@ async def startup_event():
         await bot_app.initialize()
         await bot_app.start()
         
-        # 3. EL FIX DE LA MUERTE (Anti-Crash)
+        # 4. EL FIX DE LA MUERTE (Anti-Crash)
         logger.info("🔪 Matando sesiones viejas de Telegram...")
         try:
             await bot_app.bot.delete_webhook(drop_pending_updates=True)
