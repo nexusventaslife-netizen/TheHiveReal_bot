@@ -4,6 +4,7 @@ import random
 import string
 import datetime
 import json
+import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, WebAppInfo
 from telegram.ext import ContextTypes
 import database as db
@@ -11,23 +12,33 @@ import database as db
 # Configuración de Logs
 logger = logging.getLogger(__name__)
 
-# --- CONFIGURACIÓN DE SISTEMA (SUPREMACÍA AUS V48.5 - PAYPAL PRO) ---
-ADMIN_ID = 123456789  # <--- CAMBIA ESTO POR TU ID REAL DE TELEGRAM
-INITIAL_USD = 0.05
-INITIAL_HIVE = 500
-HIVE_EXCHANGE_RATE = 0.0001 
+# --- CONFIGURACIÓN DE SISTEMA (SUPREMACÍA AUS V50.0) ---
 
-# COSTOS Y LÍMITES
+# 1. SEGURIDAD: Obtenemos IDs y Wallets de Render (Variables de Entorno)
+try:
+    ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
+except ValueError:
+    ADMIN_ID = 0
+
+# BILLETERA CRIPTO (USDT TRC20)
+# Si no está en Render, mostrará un aviso de "Configurar" en lugar de fallar
+CRYPTO_WALLET_USDT = os.getenv("WALLET_USDT", "⚠️ ERROR: CONFIGURAR WALLET_USDT EN RENDER")
+
+# LINK DE PAGO PAYPAL (NCP)
+LINK_PAGO_GLOBAL = "https://www.paypal.com/ncp/payment/L6ZRFT2ACGAQC"
+
+# 2. ECONOMÍA & SALDOS
+# El usuario empieza en 0. El bono se gana.
+INITIAL_USD = 0.00      
+INITIAL_HIVE = 500      
+BONUS_REWARD = 0.05     # Recompensa por la primera tarea
+
+# 3. COSTOS Y LÍMITES
 COST_PREMIUM_MONTH = 10 
 COST_OBRERO = 50000
 COST_MAPA = 100000
 COST_ENERGY_REFILL = 500 
 MAX_ENERGY = 100
-
-# DIRECCIONES DE PAGO
-# Enlace Profesional (NCP) - Botón Nativo
-LINK_PAGO_GLOBAL = "https://www.paypal.com/ncp/payment/L6ZRFT2ACGAQC"
-CRYPTO_WALLET_USDT = "TU_DIRECCION_USDT_TRC20_AQUI" 
 
 # ASSETS
 IMG_BEEBY = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
@@ -65,128 +76,140 @@ LINKS = {
     'TESTBIRDS': "https://nest.testbirds.com/home/tester?t=9ef7ff82-ca89-4e4a-a288-02b4938ff381"
 }
 
-# --- TEXTOS MULTI-IDIOMA ---
+# --- TEXTOS MULTI-IDIOMA (MEJORADOS) ---
 TEXTS = {
     'es': {
         'welcome_caption': (
-            "🧬 **SISTEMA HIVE DETECTADO (V48.5)**\n"
-            "───────────────────────\n"
-            "Saludos, Operador `{name}`. Soy **Beeby**.\n\n"
-            "Para iniciar tu carrera en la Colmena y generar ingresos, verifica tu humanidad.\n\n"
-            "👇 **PASO 1:**\n"
-            "Obtén tu CÓDIGO DE SEGURIDAD abajo y envíalo al chat."
+            "🚀 **BIENVENIDO A THE ONE HIVE: TU PRIMER ACTIVO DIGITAL**\n"
+            "──────────────────────────\n\n"
+            "Hola, **{name}**. Has encontrado algo diferente. Esto no es un juego de tocar la pantalla sin sentido. **Esto es una Colmena de Ingresos.**\n\n"
+            "🧬 **¿CÓMO FUNCIONA EL SISTEMA DUAL?**\n\n"
+            "1️⃣ **Dinero Real ($USD):** Completas micro-tareas verificadas y ganas dólares retirables a tu Wallet o PayPal.\n"
+            "2️⃣ **Néctar (HIVE):** Acumulas el token interno para subir de nivel y comprar **Licencias** que multiplican tus ganancias.\n\n"
+            "🛡️ **TU PRIMERA MISIÓN:**\n"
+            "Para activar tu billetera y asegurar que eres humano, necesitamos establecer un enlace seguro.\n\n"
+            "👇 **COPIA TU CÓDIGO DE SEGURIDAD Y ENVÍALO AL CHAT:**"
         ),
         'ask_terms': (
-            "✅ **CÓDIGO CORRECTO**\n"
+            "✅ **ENLACE ESTABLECIDO**\n"
             "───────────────────────\n"
-            "⚠️ **PASO LEGAL (REQUIRED):**\n"
-            "¿Aceptas las reglas del juego para continuar?"
+            "Antes de asignarte tu primera tarea pagada, acepta el **Protocolo de la Colmena**:\n\n"
+            "• Usarás datos reales.\n"
+            "• No usarás VPNs ni multicuentas.\n"
+            "• Entiendes que el esfuerzo genera la recompensa.\n\n"
+            "¿Aceptas el desafío?"
         ),
         'ask_email': (
-            "🤝 **CONTRATO ACEPTADO**\n"
+            "🤝 **PROTOCOLO ACEPTADO**\n"
             "───────────────────────\n"
-            "📧 **PASO 3 (FINAL):**\n"
-            "Escribe tu **CORREO ELECTRÓNICO** para activar tu Billetera Dual:"
+            "📧 **ÚLTIMO PASO DE CONFIGURACIÓN:**\n\n"
+            "Escribe tu **CORREO ELECTRÓNICO** principal.\n"
+            "*(Lo usaremos para notificarte cuando recibas un pago o un Airdrop)*."
         ),
         'ask_bonus': (
-            "✅ **CUENTA VINCULADA**\n"
+            "🎉 **¡CUENTA 100% ACTIVA!**\n"
             "───────────────────────\n"
-            "🎁 **PRIMERA MISIÓN DISPONIBLE**\n"
-            "Valida tu identidad en Timebucks para activar el flujo de **$0.01 USD**."
+            "Tu saldo actual es: **$0.00 USD**\n\n"
+            "🎁 **TU PRIMERA TAREA PAGADA (BONO):**\n"
+            "Hemos reservado un bono de **${bonus} USD** para ti. Para desbloquearlo, debes validar tu identidad en nuestro partner principal.\n\n"
+            "1. Entra al enlace.\n"
+            "2. Regístrate o valida.\n"
+            "3. Pulsa 'YA LA COMPLETÉ' para recibir tus primeros $0.05."
         ),
-        'btn_claim_bonus': "💰 VALIDAR Y GANAR $0.05",
+        'btn_claim_bonus': "🚀 IR A LA MISIÓN (GANAR ${bonus})",
+        
         'dashboard_body': """
-🎮 **CENTRO DE COMANDO HIVE**
+📊 **PANEL DE CONTROL: {name}**
 ──────────────────────────
-👤 **Operador:** {name}
-🛡️ **Clase:** {status}
-📢 **Evento:** *Bybit Trading Wars*
+🏆 **Rango:** {status}
+🔥 **Racha:** {streak} Días
+⚡ **Energía:** {energy}/{max_energy}
 
-💵 **SALDO REAL (Retirable):**
-**${usd:.2f} USD** _(Mínimo Retiro: $10)_
+💰 **BILLETERA REAL:**
+**${usd:.2f} USD** _(Disponible para retirar)_
 
-🐝 **TOKENS HIVE:**
+🐝 **BÓVEDA DE NÉCTAR:**
 **{hive} HIVE**
-_(Moneda de Juego)_
+_(Úsalo en la Tienda)_
 
-🔧 **ESTADO:**
+🛠️ **INVENTARIO:**
 {skills}
 ──────────────────────────
 """,
         'premium_pitch': """
-👑 **EVOLUCIÓN DE PERSONAJE: LICENCIA DE REINA**
+👑 **LICENCIA DE REINA: EL PODER TOTAL**
 ──────────────────────────
-¡Domina la economía de la Colmena!
+Deja de ser un obrero. Conviértete en la Realeza de la Colmena.
 
-⚡ **Turbo Minería (x2):** Doble recompensa.
-🔓 **Llave Maestra:** Retiros rápidos ($5).
-💎 **Mercado P2P:** Habilita el Swap.
+✅ **x2 en Todas las Tareas:** Gana el doble por el mismo esfuerzo.
+✅ **Retiros Prioritarios:** Tus pagos salen primero.
+✅ **Acceso al Mercado P2P:** Intercambia HIVE por USD con otros usuarios.
 
-💰 *Costo: $10.00 USD (Pago Único)*
+💎 **INVERSIÓN ÚNICA: $10.00 USD**
 """,
         'payment_crypto_info': """
-💎 **EVOLUCIÓN VÍA CRIPTO (USDT)**
+💎 **PAGO VÍA CRIPTO (USDT TRC20)**
 ──────────────────────────
-Envía **10 USDT** (Red TRC20) a:
+Para activar tu licencia automáticamente, envía **10 USDT** a la siguiente dirección oficial:
 
 `{wallet}`
 
-Copia el HASH (TXID) y envíalo abajo.
+⚠️ **IMPORTANTE:**
+1. Usa solo la red **TRC20**.
+2. Copia el **Hash de Transacción (TXID)** después de enviar.
+3. Pégalo aquí abajo para validar.
 """,
-        # TEXTO ACTUALIZADO (LIMPIO, SIN LINKS)
         'payment_card_info': """
 💳 **PASARELA DE PAGO SEGURA (PAYPAL)**
 ──────────────────────────
-Estás a un paso de adquirir tu **Licencia de Reina**.
+**Estás comprando: Licencia de Reina (Vitalicia)**
 
-🛡️ **Protección al Comprador:**
-El pago se procesa directamente en los servidores encriptados de PayPal. Nosotros no almacenamos tus datos financieros.
+El pago se procesa en una ventana segura de PayPal. TheOneHive no ve tus datos bancarios.
 
-👇 **INSTRUCCIONES:**
-1. Pulsa el botón **"PAGAR AHORA"** de abajo.
-2. Completa el pago de **$10.00 USD**.
-3. Regresa aquí y pulsa el botón **"YA PAGUÉ"**.
+👇 **Pulsa el botón "PAGAR AHORA" para abrir la pasarela:**
 """,
         'shop_body': """
-🏪 **TIENDA DE RECURSOS**
+🏪 **MERCADO DE RECURSOS**
 ──────────────────────────
 *Saldo:* {hive} HIVE
 
 ⚡ **RECARGAR ENERGÍA (500 HIVE)**
-Recupera 100 puntos para seguir minando.
+Recupera 100 puntos para seguir minando hoy.
 
-👑 **LICENCIA DE REINA ($10)**
-Evolución permanente.
+👑 **LICENCIA DE REINA ($10 USD)**
+Multiplicador x2 permanente y retiros rápidos.
 
-👷 **OBRERO CERTIFICADO (50k HIVE)**
-Desbloquea tareas Tier 2.
+👷 **CERTIFICADO DE MAESTRO (50k HIVE)**
+Desbloquea tareas de alto valor (Tier 2).
 
-💎 **NFT MAESTRO (100k HIVE)**
-Comisión de referidos 30%.
+💎 **NFT DE LA COLMENA (100k HIVE)**
+Te otorga 30% de comisión de referidos de por vida.
 """,
-        'justificante_header': "📜 **AUDITORÍA EN TIEMPO REAL**\n──────────────────────────\nPrueba de origen de fondos:\n\n",
+        'justificante_header': "📜 **HISTORIAL DE INGRESOS (TRANSPARENCIA)**\n──────────────────────────\nAuditoría en tiempo real de la Colmena:\n\n",
         
         'btn_shop': "🛒 TIENDA / MEJORAS",
-        'btn_justificante': "📜 JUSTIFICANTE",
-        'btn_t1': "🟢 ZONA 1 (Clicks)", 'btn_t2': "🟡 ZONA 2 (Pasivo)", 'btn_t3': "🔴 ZONA 3 (Pro)",
-        'btn_back': "🔙 VOLVER", 'btn_withdraw': "💸 RETIRAR", 'btn_team': "👥 EQUIPO", 'btn_profile': "👤 PERFIL"
+        'btn_justificante': "📜 TRANSPARENCIA",
+        'btn_t1': "🟢 TAREAS (Clicks)", 'btn_t2': "🟡 PASIVO (AFK)", 'btn_t3': "🔴 PRO (Trading)",
+        'btn_back': "🔙 VOLVER", 'btn_withdraw': "💸 RETIRAR SALDO", 'btn_team': "👥 MI EQUIPO", 'btn_profile': "👤 MI PERFIL"
     },
     'en': { 'welcome_caption': "Verify...", 'dashboard_body': "Dash..." }
 }
 
 # --- UTILIDADES ---
-def get_text(lang_code, key):
+def get_text(lang_code, key, **kwargs):
     lang = 'en'
     if lang_code and lang_code.startswith('es'): lang = 'es'
-    return TEXTS[lang].get(key, TEXTS['en'].get(key, key))
+    text = TEXTS[lang].get(key, TEXTS['en'].get(key, key))
+    try:
+        return text.format(**kwargs)
+    except:
+        return text
 
 def generate_captcha():
     return f"HIVE-{random.randint(100, 999)}"
 
 async def save_user_data(user_id, data):
     """Guarda los datos usando la función add_user del db (que maneja updates)"""
-    # En database.py, 'add_user' ya actualiza si existe, pero para ser más precisos
-    # usaremos 'set' directo si tenemos acceso a 'r' o simulamos update
     if hasattr(db, 'r') and db.r:
         await db.r.set(f"user:{user_id}", json.dumps(data))
 
@@ -248,14 +271,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['waiting_for_email'] = False 
     context.user_data['waiting_for_hash'] = False
     
-    base_txt = get_text(lang, 'welcome_caption').format(name=user.first_name)
-    code_txt = f"\n\n🔑 **TU CÓDIGO DE ACCESO ES:** `{captcha_code}`\n(Cópialo y envíalo)"
+    # Mensaje de bienvenida detallado
+    full_caption = get_text(lang, 'welcome_caption', name=user.first_name)
+    code_txt = f"\n\n🔑 **CÓDIGO:** `{captcha_code}`"
     
     try: 
-        await update.message.reply_photo(photo=IMG_BEEBY, caption=base_txt + code_txt, parse_mode="Markdown")
+        await update.message.reply_photo(photo=IMG_BEEBY, caption=full_caption + code_txt, parse_mode="Markdown")
     except Exception as e: 
         logger.error(f"Error img: {e}")
-        await update.message.reply_text(base_txt + code_txt, parse_mode="Markdown")
+        await update.message.reply_text(full_caption + code_txt, parse_mode="Markdown")
 
 async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip() if update.message.text else ""
@@ -286,7 +310,7 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data['waiting_for_hash'] = False
         context.user_data['is_premium'] = True 
         await update.message.reply_text(
-            "👑 **¡EVOLUCIÓN EN PROCESO!**\n\nTu Licencia de Reina se ha activado temporalmente mientras la blockchain confirma.",
+            "👑 **¡PAGO RECIBIDO!**\n\nTu Licencia de Reina se está validando en la Blockchain. Se activará en breve.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("IR AL CENTRO DE MANDO", callback_data="go_dashboard")]])
         )
         return
@@ -299,7 +323,7 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             context.user_data['waiting_for_terms'] = True 
             
             kb = [
-                [InlineKeyboardButton("✅ JUGAR Y ACEPTAR OFERTAS", callback_data="accept_legal")],
+                [InlineKeyboardButton("✅ ACEPTO EL PROTOCOLO", callback_data="accept_legal")],
                 [InlineKeyboardButton("❌ SALIR", callback_data="reject_legal")]
             ]
             await update.message.reply_text(get_text(lang, 'ask_terms'), reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
@@ -321,10 +345,12 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def offer_bonus_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = update.effective_user.language_code
-    txt = get_text(lang, 'ask_bonus')
+    # Saldo es 0 hasta que completen esto
+    txt = get_text(lang, 'ask_bonus', bonus=BONUS_REWARD)
+    
     kb = [
-        [InlineKeyboardButton(get_text(lang, 'btn_claim_bonus'), url=LINKS['VALIDATOR_MAIN'])],
-        [InlineKeyboardButton("✅ LISTO (ENTRAR)", callback_data="bonus_done")]
+        [InlineKeyboardButton(get_text(lang, 'btn_claim_bonus', bonus=BONUS_REWARD), url=LINKS['VALIDATOR_MAIN'])],
+        [InlineKeyboardButton("✅ YA LA COMPLETÉ", callback_data="bonus_done")]
     ]
     await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
@@ -337,7 +363,6 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     streak = await check_daily_streak(user.id)
     energy = user_data.get('energy', MAX_ENERGY)
-    fire_emoji = "🔥" * (streak if streak < 5 else 5)
     
     is_premium = context.user_data.get('is_premium', False)
     status_txt = "👑 REINA" if is_premium else "🐛 OBRERA"
@@ -345,13 +370,18 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     skills_list = user_data.get('skills', [])
     skills_txt = "• Ninguna" if not skills_list else "\n".join([f"• {s}" for s in skills_list])
 
-    body = get_text(lang, 'dashboard_body').format(
-        name=user.first_name, status=status_txt, usd=usd, hive=hive, skills=skills_txt
+    body = get_text(lang, 'dashboard_body', 
+        name=user.first_name, 
+        status=status_txt, 
+        usd=usd, 
+        hive=hive, 
+        skills=skills_txt,
+        streak=streak,
+        energy=energy,
+        max_energy=MAX_ENERGY
     )
     
-    body += f"\n📅 **Racha:** {streak} Días {fire_emoji}"
-    body += f"\n⚡ **Energía:** {energy}/{MAX_ENERGY}"
-    if streak > 3: body += "\n🚀 *¡Bono x1.5 activo!*"
+    if streak > 3: body += "\n🚀 *¡Bono de Racha x1.5 activo!*"
     
     kb = []
     if is_premium:
@@ -490,6 +520,7 @@ async def tier3_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🏦 NEXO", url=LINKS['NEXO']), InlineKeyboardButton("💳 REVOLUT", url=LINKS['REVOLUT'])],
         [InlineKeyboardButton("💰 YOUHODLER", url=LINKS['YOUHODLER']), InlineKeyboardButton("🌍 WISE", url=LINKS['WISE'])],
         [InlineKeyboardButton("💲 AIRTM", url=LINKS['AIRTM']), InlineKeyboardButton("📧 GETRESPONSE", url=LINKS['GETRESPONSE'])],
+        [InlineKeyboardButton("💹 PLUS500", url=LINKS['PLUS500']), InlineKeyboardButton("🤖 POLLO AI", url=LINKS['POLLOAI'])],
         [InlineKeyboardButton("✅ VALIDAR TAREA (-10 Energía)", callback_data="validate_task")],
         [InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]
     ])
@@ -520,7 +551,7 @@ async def premium_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     kb = [
         [InlineKeyboardButton("💎 PAGAR CON CRIPTO (USDT)", callback_data="pay_crypto_select")],
-        [InlineKeyboardButton("💳 PAGAR CON PAYPAL / TARJETA", callback_data="pay_card_select")],
+        [InlineKeyboardButton("💳 PAGAR CON PAYPAL", callback_data="pay_card_select")],
         [InlineKeyboardButton("🔙 CANCELAR", callback_data="go_shop")]
     ]
     await update.callback_query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
@@ -529,16 +560,16 @@ async def payment_detail_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     lang = update.effective_user.language_code
     
     if method == "crypto":
+        # Usamos la variable de entorno o el mensaje de error si no existe
         txt = get_text(lang, 'payment_crypto_info').format(wallet=CRYPTO_WALLET_USDT)
         kb = [[InlineKeyboardButton("✅ YA ENVIÉ (ENVIAR HASH)", callback_data="confirm_payment_crypto")]]
     else:
-        # --- LÓGICA DE BOTÓN NATIVO PAYPAL ---
+        # PAGO CON BOTÓN NATIVO PAYPAL
         txt = get_text(lang, 'payment_card_info')
         
         kb = [
-            # BOTÓN NATIVO: Abre la URL de PayPal profesional
-            [InlineKeyboardButton("💳 PAGAR $10.00 USD (PAYPAL)", url=LINK_PAGO_GLOBAL)],
-            # BOTÓN DE CONFIRMACIÓN: Para que el usuario avise que pagó
+            # Botón con URL directa (Abre navegador del usuario, seguro y limpio)
+            [InlineKeyboardButton("💳 PAGAR AHORA (SECURE CHECKOUT)", url=LINK_PAGO_GLOBAL)],
             [InlineKeyboardButton("✅ YA PAGUÉ (CONFIRMAR)", callback_data="confirm_payment_card")]
         ]
 
@@ -574,8 +605,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.edit_text("❌ Acceso Denegado.")
         return
 
+    # Lógica de BONO MEJORADA: Suma el dinero en tiempo real
     if data == "bonus_done":
-        context.user_data['bonus_claimed'] = True
+        user_data = await db.get_user(user_id)
+        if not context.user_data.get('bonus_claimed'):
+            context.user_data['bonus_claimed'] = True
+            # Sumar el dinero real
+            new_balance = float(user_data.get('usd_balance', 0)) + BONUS_REWARD
+            user_data['usd_balance'] = new_balance
+            await save_user_data(user_id, user_data)
+            
+            await query.answer(f"✅ ¡Bono de ${BONUS_REWARD} acreditado a tu billetera!", show_alert=True)
+        else:
+            await query.answer("⚠️ Ya reclamaste este bono.", show_alert=True)
+            
         await show_dashboard(update, context)
         return
     
