@@ -10,47 +10,42 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKe
 from telegram.ext import ContextTypes
 import database as db
 
-# [NEXUS-7]: Configuración de Logs optimizada para producción
-logger = logging.getLogger("HiveLogic")
-logger.setLevel(logging.INFO)
+# Configuración de Logs
+logger = logging.getLogger(__name__)
 
-# --- CONFIGURACIÓN MAESTRA DEL ECOSISTEMA (V70.0 - PRODUCTION GRADE) ---
+# --- CONFIGURACIÓN MAESTRA DEL ECOSISTEMA ---
 
-# 1. SEGURIDAD & VARIABLES DE ENTORNO
-# [NEXUS-7]: Validación robusta de entorno. No fallamos silenciosamente.
+# Seguridad
 try:
     ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 except ValueError:
-    logger.warning("⚠️ ADMIN_ID no es un entero válido. Default: 0")
     ADMIN_ID = 0
 
-CRYPTO_WALLET_USDT = os.getenv("WALLET_USDT", "⚠️ ERROR: CONFIGURAR WALLET_USDT EN RENDER")
-LINK_PAGO_GLOBAL = os.getenv("LINK_PAYPAL", "https://www.paypal.com/ncp/payment/L6ZRFT2ACGAQC")
+CRYPTO_WALLET_USDT = os.getenv("WALLET_USDT", "⚠️ Configurar en Render")
+LINK_PAGO_GLOBAL = "https://www.paypal.com/ncp/payment/L6ZRFT2ACGAQC"
 
-# 2. ECONOMÍA DE LA COLMENA (TOKENOMICS)
-# [NEXUS-7]: Ajustado para evitar inflación descontrolada.
+# --- ECONOMÍA DE LA COLMENA (MATH MODEL) ---
 INITIAL_USD = 0.00
 INITIAL_HIVE = 500
 BONUS_REWARD = 0.05
 
-# 3. MOTOR DE MINERÍA
-MINING_RATE_BASE = 1.5       # HIVE/segundo base
-MAX_ENERGY_BASE = 500        # Capacidad batería
-ENERGY_REGEN = 1             # Regen/segundo
-AFK_CAP_HOURS = 6            # Aumentado a 6h para retención nocturna
-MINING_COOLDOWN = 2.0        # [NEXUS-7]: Protección contra Autoclickers
+# Configuración de Minería
+MINING_RATE_BASE = 1.5       # HIVE por segundo (Nivel 1)
+MAX_ENERGY_BASE = 500        # Capacidad de batería
+ENERGY_REGEN = 1             # Energía recuperada por segundo
+AFK_CAP_HOURS = 4            # Tiempo máximo de minado sin entrar al bot
 
 # Costos
 COST_PREMIUM_MONTH = 10 
-COST_ENERGY_REFILL = 500 
+COST_LEVEL_UP = 5000         # Costo para subir nivel de minería
 
-# Assets Visuales
+# Assets
 IMG_BEEBY = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
 
-# --- ARSENAL DE ENLACES (MONETIZACIÓN CPA) ---
+# --- ENLACES (CPA / REVENUE) ---
 LINKS = {
-    'VALIDATOR_MAIN': os.getenv("LINK_TIMEBUCKS", "https://timebucks.com/?refID=227501472"),
-    'VIP_OFFER_1': os.getenv("LINK_BYBIT", "https://www.bybit.com/invite?ref=BBJWAX4"), 
+    'VALIDATOR_MAIN': "https://timebucks.com/?refID=227501472",
+    'VIP_OFFER_1': "https://www.bybit.com/invite?ref=BBJWAX4", 
     'ADBTC': "https://r.adbtc.top/3284589",
     'FREEBITCOIN': "https://freebitco.in/?r=55837744", 
     'COINTIPLY': "https://cointiply.com/r/jR1L6y", 
@@ -80,99 +75,77 @@ LINKS = {
     'TESTBIRDS': "https://nest.testbirds.com/home/tester?t=9ef7ff82-ca89-4e4a-a288-02b4938ff381"
 }
 
-# --- TEXTOS NEUROLINGÜÍSTICOS (COPYWRITING) ---
+# --- TEXTOS PERSUASIVOS ---
 TEXTS = {
     'es': {
         'welcome_caption': (
-            "🧬 **SISTEMA HIVE: ACTIVADO**\n\n"
-            "Saludos, **{name}**. Has salido de la Matrix.\n"
-            "La mayoría pierde tiempo gratis. Aquí, tu tiempo es **CAPITAL**.\n\n"
-            "💎 **TU ESTRATEGIA DUAL:**\n"
-            "1. **Mina Néctar (HIVE):** Tu 'Gas' para operar en la red.\n"
-            "2. **Ejecuta Contratos ($USD):** Tareas verificadas que pagan Dólares.\n"
-            "3. **Escala:** Usa HIVE para comprar Licencias y ganar x2.\n\n"
-            "🛡️ **FASE 1: SINCRONIZACIÓN**\n"
-            "Estableciendo canal seguro con tu billetera...\n\n"
-            "👇 **ENVÍA TU CÓDIGO DE ACCESO PARA CONTINUAR:**"
+            "🧬 **PROTOCOL HIVE INICIADO**\n\n"
+            "Bienvenido, **{name}**. Has sido reclutado.\n"
+            "A diferencia de otros sistemas, aquí tu tiempo genera **VALOR REAL**.\n\n"
+            "💎 **TU MISIÓN:**\n"
+            "1. **Mina Néctar (HIVE):** El combustible de la economía.\n"
+            "2. **Ejecuta Tareas:** Convierte tu actividad en **USD**.\n"
+            "3. **Adquiere NFTs:** Automatiza tu riqueza.\n\n"
+            "👇 **ACTIVA TU NODO AHORA:**"
         ),
         'dashboard_body': """
-🎛 **NODO DE OPERACIONES: {name}**
+🎛 **CENTRO DE MINERÍA**
 ──────────────────
-🏆 **Rango:** {status}
-⚡ **Batería:** {energy}/{max_energy}
+👤 **Nodo:** {name} | 🏆 **Nivel:** {level}
+⚡ **Energía:** {energy}/{max_energy}
 ⛏️ **Hashrate:** {rate} HIVE/s
 
-💵 **LIQUIDEZ REAL:** `${usd:.2f} USD`
-🐝 **NÉCTAR ACUMULADO:** `{hive:.2f}`
+💵 **SALDO REAL:** `${usd:.2f} USD`
+🐝 **HIVE MINADO:** `{hive:.2f}`
 
-⏳ **MINERÍA EN SEGUNDO PLANO (AFK):**
+⏳ **MINERÍA PASIVA (AFK):**
 _{afk_msg}_
 ──────────────────
 """,
-        'mining_active': "⛏️ **EXTRAYENDO BLOQUE...**\n`{bar}` {percent}%\n\n⚡ Hash: `{hash}`",
-        'mining_success': "✅ **BLOQUE VALIDADO**\n\n💰 **Recompensa:** +{gain} HIVE\n🔋 **Consumo:** -{cost} Energía\n",
-        'payment_card_info': """
-💳 **PASARELA PAYPAL PRO**
-──────────────────────────
-**Item:** Licencia de Reina (Lifetime)
-**Beneficio:** Minería x2 + Retiros Express
-
-El pago se procesa externamente. Tus datos están blindados.
-
-👇 **INICIAR TRANSACCIÓN SEGURA:**
-""",
-        'payment_crypto_info': """
-💎 **DEPOSITO TETHER (USDT)**
-──────────────────────────
-Red: **TRON (TRC20)**
-Billetera Destino:
-`{wallet}`
-
-⚠️ **Instrucciones:**
-1. Envía exactamente 10 USDT.
-2. Copia el TXID (Hash).
-3. Pégalo abajo para validación automática.
-""",
+        'mining_active': "⛏️ **MINANDO BLOQUE...**\n`{bar}` {percent}%\n\n⚡ Hash: `{hash}`",
+        'mining_success': "✅ **BLOQUE COMPLETADO**\n\n💰 **Ganancia:** +{gain} HIVE\n🔋 **Energía:** -{cost}\n📈 **XP:** +10",
+        'afk_claim': "💤 **INFORME DE SUEÑO**\n\nTus obreros trabajaron mientras no estabas.\n\n💰 **GENERADO:** {amount} HIVE\n👇 ¡Recoléctalo ahora!",
+        'payment_card_info': "💳 **PASARELA PAYPAL PRO**\n\nAdquiere tu **Licencia de Reina** para duplicar (x2) toda tu minería.\n\n👇 **PAGO SEGURO:**",
+        'btn_mine': "⛏️ MINAR AHORA",
+        'btn_claim': "💰 RECOLECTAR",
+        'btn_shop': "🛒 MEJORAR RIG",
+        'btn_tasks': "📋 TAREAS ($USD)",
     }
 }
 
-# --- UTILIDADES DE ALTA EFICIENCIA ---
 def get_text(lang, key, **kwargs):
     t = TEXTS.get('es', {}).get(key, key)
     try: return t.format(**kwargs)
     except: return t
 
 def generate_hash():
-    # Genera un hash hexadecimal realista
-    return "0x" + ''.join(random.choices("ABCDEF0123456789", k=18))
+    return "0x" + ''.join(random.choices("ABCDEF0123456789", k=16))
+
+# --- CÁLCULOS DE MINERÍA ---
 
 async def calculate_user_state(user_data):
-    """
-    [NEXUS-7]: Cálculo matemático preciso de regeneración y AFK.
-    Evita que los usuarios manipulen el reloj del cliente. Usa tiempo del servidor.
-    """
+    """Calcula energía regenerada y minería AFK basada en el tiempo real"""
     now = time.time()
     last_update = user_data.get('last_update_ts', now)
     elapsed = now - last_update
     
-    # 1. Regenerar Energía (Clamp entre 0 y Max)
+    # 1. Regenerar Energía
     current_energy = user_data.get('energy', MAX_ENERGY_BASE)
     max_e = user_data.get('max_energy', MAX_ENERGY_BASE)
     
-    # Solo regenera si ha pasado tiempo
-    if elapsed > 0:
-        new_energy = min(max_e, current_energy + (elapsed * ENERGY_REGEN))
-        user_data['energy'] = int(new_energy)
+    new_energy = min(max_e, current_energy + (elapsed * ENERGY_REGEN))
+    user_data['energy'] = int(new_energy)
     
-    # 2. Calcular Minería AFK (Solo si Mining Level > 0)
+    # 2. Calcular Minería AFK (Pasiva)
+    # Solo si el usuario tiene nivel > 0 o NFTs
     mining_level = user_data.get('mining_level', 1)
-    afk_rate = mining_level * 0.2  # 20% de eficiencia en modo pasivo
+    afk_rate = mining_level * 0.5 # 0.5 HIVE por segundo pasivo
     
-    # Cap de tiempo AFK para forzar login (Retention Hook)
+    # Cap de tiempo AFK (para obligarlos a entrar)
     afk_time = min(elapsed, AFK_CAP_HOURS * 3600)
     
     pending_afk = user_data.get('pending_afk', 0)
-    if afk_time > 60: # Solo cuenta si estuvo fuera más de 1 minuto
+    if afk_time > 60: # Mínimo 1 minuto para contar
         pending_afk += afk_time * afk_rate
     
     user_data['pending_afk'] = int(pending_afk)
@@ -184,18 +157,17 @@ async def save_user_data(user_id, data):
     if hasattr(db, 'r') and db.r:
         await db.r.set(f"user:{user_id}", json.dumps(data))
 
-# --- HANDLERS Y LÓGICA DE NEGOCIO ---
+# --- HANDLERS PRINCIPALES ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     args = context.args
     referrer_id = args[0] if args and args[0].isdigit() else None
     
-    # Registro silencioso en DB
     if hasattr(db, 'add_user'): 
         await db.add_user(user.id, user.first_name, user.username, referrer_id)
 
-    # Inicialización de Timestamp para minería
+    # Inicializar datos de tiempo si es nuevo o reset
     user_data = await db.get_user(user.id)
     if 'last_update_ts' not in user_data:
         user_data['last_update_ts'] = time.time()
@@ -206,22 +178,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     captcha = f"HIVE-{random.randint(100,999)}"
     context.user_data['captcha'] = captcha
     
-    # [NEXUS-7]: Enviar foto y texto juntos para mejor UX
-    try:
-        await update.message.reply_photo(
-            photo=IMG_BEEBY, 
-            caption=f"{txt}\n\n🔐 **CÓDIGO:** `{captcha}`", 
-            parse_mode="Markdown"
-        )
-    except Exception as e:
-        logger.error(f"Error media: {e}")
-        await update.message.reply_text(f"{txt}\n\n🔐 **CÓDIGO:** `{captcha}`", parse_mode="Markdown")
+    await update.message.reply_photo(
+        photo=IMG_BEEBY, 
+        caption=f"{txt}\n\n🔐 **CÓDIGO:** `{captcha}`", 
+        parse_mode="Markdown"
+    )
 
 async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     user = update.effective_user
     
-    # Bypass de verificación
+    # Verificación Captcha
     expected = context.user_data.get('captcha')
     if expected and text == expected:
         context.user_data['captcha'] = None
@@ -231,22 +198,8 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     if text.upper() == "/START":
         await start(update, context)
         return
-        
-    # Manejo de Hash de Crypto
-    if context.user_data.get('waiting_for_hash'):
-        context.user_data['waiting_for_hash'] = False
-        # [NEXUS-7]: Validación básica de longitud de hash para filtrar spam
-        if len(text) > 10:
-            context.user_data['is_premium'] = True
-            await update.message.reply_text(
-                "✅ **HASH RECIBIDO**\n\nEl sistema está validando la transacción en la Blockchain (3-6 confirmaciones). Tu licencia se activará automáticamente.",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("VOLVER AL NODO", callback_data="go_dashboard")]])
-            )
-        else:
-            await update.message.reply_text("❌ **HASH INVÁLIDO.** Verifica y envía de nuevo.")
-        return
 
-    # Fallback al Dashboard si el usuario está perdido
+    # Si escribe cualquier otra cosa y ya está verificado, mostrar dashboard
     user_data = await db.get_user(user.id)
     if user_data:
         await show_dashboard(update, context)
@@ -255,111 +208,98 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_data = await db.get_user(user.id)
     
-    # Matemáticas de minería en tiempo real
+    # Recalcular estado actual (Energía/AFK)
     user_data = await calculate_user_state(user_data)
     await save_user_data(user.id, user_data)
     
+    # Preparar visualización
     afk_amount = user_data.get('pending_afk', 0)
-    afk_msg = "Sistemas en espera..." if afk_amount < 1 else f"💰 **{afk_amount:.0f} HIVE** generados en ausencia."
-    
-    is_premium = context.user_data.get('is_premium', False)
-    status_txt = "👑 REINA (VIP)" if is_premium else "🐛 OBRERO (STD)"
+    afk_msg = "💤 Todo tranquilo..." if afk_amount < 1 else f"💰 **{afk_amount:.0f} HIVE** pendientes de recolección."
     
     txt = get_text('es', 'dashboard_body',
         name=user.first_name,
-        status=status_txt,
         level=user_data.get('mining_level', 1),
         energy=int(user_data['energy']),
         max_energy=MAX_ENERGY_BASE,
-        rate=MINING_RATE_BASE * user_data.get('mining_level', 1) * (2 if is_premium else 1),
+        rate=MINING_RATE_BASE * user_data.get('mining_level', 1),
         usd=user_data.get('usd_balance', 0.0),
         hive=user_data.get('nectar', 0),
         afk_msg=afk_msg
     )
     
     kb = []
-    # [NEXUS-7]: UX Dinámica - Si hay AFK, el botón principal es recolectar
+    # Botón Principal Dinámico
     if afk_amount > 10:
         kb.append([InlineKeyboardButton(f"💰 RECOLECTAR (+{int(afk_amount)})", callback_data="claim_afk")])
     else:
-        kb.append([InlineKeyboardButton("⛏️ MINAR BLOQUE (TAP)", callback_data="mine_click")])
+        kb.append([InlineKeyboardButton("⛏️ MINAR BLOQUE", callback_data="mine_click")])
         
     kb.append([
         InlineKeyboardButton("📋 TAREAS ($USD)", callback_data="tasks_menu"),
         InlineKeyboardButton("🛒 MEJORAS", callback_data="shop_menu")
     ])
-    kb.append([
-        InlineKeyboardButton("👤 PERFIL", callback_data="profile"), 
-        InlineKeyboardButton("💸 RETIRAR", callback_data="withdraw")
-    ])
+    kb.append([InlineKeyboardButton("👤 PERFIL", callback_data="profile"), InlineKeyboardButton("💸 RETIRAR", callback_data="withdraw")])
     
     if update.callback_query:
+        # Evitar error si el mensaje es idéntico
         try: await update.callback_query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
         except: pass
     else:
         await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
-# --- CORE MINING ENGINE (ANTISPAM PROTECTED) ---
+# --- MOTOR DE MINERÍA ACTIVA (TAP) ---
 async def mining_animation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
-    
-    # [NEXUS-7]: Protección Anti-Flood (Cooldown)
-    last_mine = context.user_data.get('last_mine_time', 0)
-    if time.time() - last_mine < MINING_COOLDOWN:
-        await query.answer("❄️ Enfriando sistemas...", show_alert=False)
-        return
-    context.user_data['last_mine_time'] = time.time()
-
     user_data = await db.get_user(user_id)
-    user_data = await calculate_user_state(user_data) # Actualizar energía
     
-    cost = 20 # Costo de energía por operación
+    # 1. Validar Energía
+    user_data = await calculate_user_state(user_data) # Actualizar primero
+    cost = 20 # Costo por click
+    
     if user_data['energy'] < cost:
-        await query.answer("🔋 Batería Agotada. Compra energía o espera.", show_alert=True)
+        await query.answer("🔋 Batería baja. Espera recarga o compra energía.", show_alert=True)
         return
 
-    # Lógica de Ganancia
+    # 2. Descontar y Calcular
     user_data['energy'] -= cost
-    is_premium = context.user_data.get('is_premium', False)
-    multiplier = 2.0 if is_premium else 1.0
-    
-    base_gain = MINING_RATE_BASE * 15 * multiplier
-    # Probabilidad de golpe crítico (Gamificación)
-    is_crit = random.random() < 0.15
-    gain = base_gain * 2.5 if is_crit else base_gain
+    mining_level = user_data.get('mining_level', 1)
+    # Ganancia variable (Critical hit chance)
+    base_gain = MINING_RATE_BASE * 10 
+    is_crit = random.random() < 0.1 # 10% probabilidad
+    gain = base_gain * 3 if is_crit else base_gain
     
     user_data['nectar'] = int(user_data.get('nectar', 0) + gain)
     await save_user_data(user_id, user_data)
 
-    # Animación Visual
+    # 3. Animación Visual (Barra de progreso)
+    # Editamos el mensaje 2 veces para simular trabajo
     block_hash = generate_hash()
+    
     try:
         await query.message.edit_text(
-            get_text('es', 'mining_active', bar="▓▓░░░░░░░░", percent=25, hash=block_hash[:10]+"..."),
+            get_text('es', 'mining_active', bar="██░░░░░░░░", percent=20, hash=block_hash),
             parse_mode="Markdown"
         )
-        await asyncio.sleep(0.4) # Retardo táctico
+        await asyncio.sleep(0.3) # Pequeña pausa
         
         await query.message.edit_text(
-            get_text('es', 'mining_active', bar="▓▓▓▓▓▓▓▓░░", percent=88, hash=block_hash),
+            get_text('es', 'mining_active', bar="████████░░", percent=80, hash=block_hash),
             parse_mode="Markdown"
         )
-        await asyncio.sleep(0.2)
-    except: pass 
+        await asyncio.sleep(0.3)
+    except: pass # Ignorar si telegram se queja de rapidez
 
-    # Reporte Final
+    # 4. Resultado Final
     final_txt = get_text('es', 'mining_success', gain=int(gain), cost=cost)
-    if is_crit: final_txt += "\n🔥 **¡CRITICAL HIT! (x2.5)**"
-    if is_premium: final_txt += "\n👑 **Bono Reina Aplicado**"
+    if is_crit: final_txt += "\n🔥 **¡GOLPE DE SUERTE! (x3)**"
     
     kb = [[InlineKeyboardButton("⛏️ SEGUIR MINANDO", callback_data="mine_click")],
           [InlineKeyboardButton("🔙 PANEL", callback_data="go_dashboard")]]
           
     await query.message.edit_text(final_txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
-# --- SISTEMAS DE SOPORTE ---
-
+# --- RECOLECCIÓN AFK ---
 async def claim_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
@@ -367,58 +307,64 @@ async def claim_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     amount = int(user_data.get('pending_afk', 0))
     if amount <= 0:
-        await query.answer("Nada que recolectar.", show_alert=True)
+        await query.answer("Nada que recolectar aún.", show_alert=True)
         return
         
     user_data['nectar'] = int(user_data.get('nectar', 0) + amount)
     user_data['pending_afk'] = 0
     await save_user_data(user_id, user_data)
     
-    await query.answer(f"💰 +{amount} HIVE transferidos a Bóveda.", show_alert=True)
+    await query.answer(f"💰 +{amount} HIVE recolectados!", show_alert=True)
     await show_dashboard(update, context)
 
+# --- TAREAS REALES ($USD) ---
 async def tasks_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    user = query.from_user
+    
+    # Aquí es donde el usuario hace dinero real
     txt = (
-        "📋 **CONTRATOS DE LIQUIDEZ ($USD)**\n"
+        "📋 **TABLÓN DE MISIONES (PAGO EN USD)**\n"
         "──────────────────────────\n"
-        "Completa estas operaciones para recibir pagos en Fiat.\n"
-        "⚠️ *Verificación Manual: 24h*\n\n"
-        "1️⃣ **Operación Bybit:** Pago $5.00\n"
-        "2️⃣ **Micro-Tasks Timebucks:** Pago $0.50\n"
-        "3️⃣ **Encuestas FreeCash:** Pago $2.00\n"
+        "Completa estas acciones para cargar tu saldo en Dólares. \n"
+        "⚠️ *El sistema verifica tu IP.* \n\n"
+        "1️⃣ **Registro Bybit:** Pago $5.00\n"
+        "2️⃣ **Encuesta Timebucks:** Pago $0.50\n"
+        "3️⃣ **FreeCash App:** Pago $2.00\n"
     )
+    
     kb = [
         [InlineKeyboardButton("🔥 BYBIT ($5.00)", url=LINKS['VIP_OFFER_1'])],
         [InlineKeyboardButton("⏱ TIMEBUCKS ($0.50)", url=LINKS['VALIDATOR_MAIN'])],
         [InlineKeyboardButton("💰 FREECASH ($2.00)", url=LINKS['FREECASH'])],
-        [InlineKeyboardButton("✅ VALIDAR CONTRATO", callback_data="verify_task_manual")],
+        # BOTÓN DE VALIDACIÓN DE TAREA
+        [InlineKeyboardButton("✅ YA COMPLETÉ UNA TAREA", callback_data="verify_task_manual")],
         [InlineKeyboardButton("🔙 VOLVER", callback_data="go_dashboard")]
     ]
     await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def verify_task_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Simulación de verificación. En producción, esto se conecta al Postback.
     query = update.callback_query
     user_id = query.from_user.id
     user_data = await db.get_user(user_id)
     
-    # [NEXUS-7]: Simulación de verificación con "Loading" para realismo
-    await query.message.edit_text("🛰️ **CONECTANDO CON SERVIDOR CPA...**\nVerificando click ID...")
-    await asyncio.sleep(2.0) # Espera dramática
-    
+    # Bono de bienvenida si es la primera vez
     if not context.user_data.get('bonus_claimed'):
         context.user_data['bonus_claimed'] = True
         user_data['usd_balance'] = float(user_data.get('usd_balance', 0)) + BONUS_REWARD
         await save_user_data(user_id, user_data)
-        await query.answer(f"✅ ¡Verificado! ${BONUS_REWARD} acreditados.", show_alert=True)
+        await query.answer(f"✅ ¡Verificado! +${BONUS_REWARD} USD agregados.", show_alert=True)
     else:
-        await query.answer("⚠️ Tarea en revisión. El saldo se liberará en 24h.", show_alert=True)
+        await query.answer("⏳ Verificando con el anunciante... Esto puede tardar 24h.", show_alert=True)
         
     await show_dashboard(update, context)
 
+# --- TIENDA Y PAGOS ---
 async def shop_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    txt = get_text('es', 'shop_body', hive=0) 
+    txt = get_text('es', 'shop_body', hive=0) # Simplificado para visualización
+    
     kb = [
         [InlineKeyboardButton("⚡ RECARGA ENERGÍA (500 HIVE)", callback_data="buy_energy")],
         [InlineKeyboardButton("👑 LICENCIA REINA ($10 USD)", callback_data="buy_premium_info")],
@@ -429,9 +375,9 @@ async def shop_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def buy_premium_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     txt = get_text('es', 'payment_card_info')
+    
     kb = [
-        # [NEXUS-7]: Botón WebAppInfo para UX nativa (Sin salir de Telegram visualmente)
-        [InlineKeyboardButton("💳 PAGAR AHORA (SECURE)", web_app=WebAppInfo(url=LINK_PAGO_GLOBAL))],
+        [InlineKeyboardButton("💳 PAGAR AHORA (PAYPAL)", web_app=WebAppInfo(url=LINK_PAGO_GLOBAL))],
         [InlineKeyboardButton("💎 PAGAR CON CRIPTO", callback_data="pay_crypto_info")],
         [InlineKeyboardButton("🔙 CANCELAR", callback_data="shop_menu")]
     ]
@@ -445,49 +391,32 @@ async def pay_crypto_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def confirm_crypto_wait(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    # Activar modo "esperando hash"
     context.user_data['waiting_for_hash'] = True
-    await query.message.edit_text("📝 **INGRESO MANUAL DE HASH**\n\nPor favor, pega el TXID de tu transacción para que el sistema la rastree.")
+    await query.message.edit_text("📝 **POR FAVOR, ESCRIBE EL HASH (TXID):**\n\nCopia y pega el código de la transacción aquí en el chat.")
 
-# --- ENRUTADOR CENTRAL ---
+# --- ENRUTADOR DE BOTONES ---
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
     
-    # Mapeo eficiente
-    handlers = {
-        "go_dashboard": show_dashboard,
-        "mine_click": mining_animation,
-        "claim_afk": claim_afk,
-        "tasks_menu": tasks_menu,
-        "verify_task_manual": verify_task_manual,
-        "shop_menu": shop_menu,
-        "buy_premium_info": buy_premium_info,
-        "pay_crypto_info": pay_crypto_info,
-        "confirm_crypto_wait": confirm_crypto_wait
-    }
+    if data == "go_dashboard": await show_dashboard(update, context)
+    elif data == "mine_click": await mining_animation(update, context)
+    elif data == "claim_afk": await claim_afk(update, context)
+    elif data == "tasks_menu": await tasks_menu(update, context)
+    elif data == "verify_task_manual": await verify_task_manual(update, context)
+    elif data == "shop_menu": await shop_menu(update, context)
+    elif data == "buy_energy": 
+        await query.answer("Función de compra en desarrollo (Necesitas HIVE)", show_alert=True)
+    elif data == "buy_premium_info": await buy_premium_info(update, context)
+    elif data == "pay_crypto_info": await pay_crypto_info(update, context)
+    elif data == "confirm_crypto_wait": await confirm_crypto_wait(update, context)
     
-    if data in handlers:
-        await handlers[data](update, context)
-    elif data == "buy_energy":
-        user_id = query.from_user.id
-        user_data = await db.get_user(user_id)
-        if user_data.get('nectar', 0) >= COST_ENERGY_REFILL:
-            user_data['nectar'] -= COST_ENERGY_REFILL
-            user_data['energy'] = min(user_data.get('energy', 0) + MAX_ENERGY_BASE, 2000)
-            await save_user_data(user_id, user_data)
-            await query.answer("⚡ Recarga exitosa.", show_alert=True)
-            await show_dashboard(update, context)
-        else:
-            await query.answer("❌ Saldo HIVE insuficiente.", show_alert=True)
-    elif data == "profile":
-        await query.message.edit_text(f"👤 **NODO:** `{query.from_user.id}`\nEstado: Activo", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙", callback_data="go_dashboard")]]), parse_mode="Markdown")
-    elif data == "withdraw":
-        await query.answer("🔒 Mínimo de retiro: $10.00 USD (Balance insuficiente)", show_alert=True)
-    
+    # Manejo genérico para botones no definidos arriba
     try: await query.answer()
     except: pass
 
-async def help_command(u, c): await u.message.reply_text("Sistema TheOneHive v70.0\nUsa /start para reiniciar.")
-async def invite_command(u, c): await u.message.reply_text("Sistema de referidos en mantenimiento.")
-async def reset_command(u, c): c.user_data.clear(); await u.message.reply_text("Cache local limpiado.")
+async def help_command(u, c): await u.message.reply_text("Ayuda: /start para reiniciar.")
+async def invite_command(u, c): await u.message.reply_text("Tu enlace está en el Perfil.")
+async def reset_command(u, c): c.user_data.clear(); await u.message.reply_text("Reset OK")
 async def broadcast_command(u, c): pass
