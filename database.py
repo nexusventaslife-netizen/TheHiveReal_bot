@@ -12,26 +12,32 @@ REDIS_URL = "rediss://default:AbEBAAIncDIxNTYwNjk5MzkwODc0OGE2YWUyNmJkMmI1N2M4Mm
 # Cliente Global
 r = None
 
-# Estructura Base
+# Estructura Base (ACTUALIZADA V47.5 - ENGANCHE MASIVO)
 DEFAULT_USER = {
     "id": 0,
     "first_name": "",
     "username": "",
     "email": None,
-    "tokens": 100,
+    "nectar": 500,        # Moneda Interna (HIVE)
+    "usd_balance": 0.05,  # Saldo Real
+    "skills": [],         # Inventario
     "joined_at": "",
     "referrals": [],
     "referred_by": None,
-    "last_active": ""
+    "last_active": "",
+    # --- NUEVOS CAMPOS PARA ENGANCHE (ESTRATEGIA ANTI-HAMSTER) ---
+    "streak_days": 0,           # Días seguidos entrando (Racha)
+    "last_streak_date": "",     # Fecha del último login para calcular racha
+    "energy": 100,              # Energía para minar (Limita bots, obliga a gastar HIVE)
+    "lucky_tickets": 0          # Boletos ganados en minería crítica
 }
 
-# --- FUNCIONES DE SISTEMA (OBLIGATORIAS PARA MAIN.PY) ---
+# --- FUNCIONES DE SISTEMA ---
 
 async def init_db():
     """Conecta a Redis al iniciar"""
     global r
     try:
-        # decode_responses=True hace que los datos vengan como texto, no bytes
         r = redis.from_url(REDIS_URL, decode_responses=True)
         await r.ping()
         logger.info("✅ CONEXIÓN REDIS UPSTASH EXITOSA")
@@ -53,11 +59,9 @@ async def add_user(user_id, first_name, username, referred_by=None):
     uid = str(user_id)
     key = f"user:{uid}"
     
-    # Verificar si existe
     exists = await r.exists(key)
     
     if not exists:
-        # Crear usuario nuevo
         new_user = DEFAULT_USER.copy()
         new_user.update({
             "id": user_id,
@@ -68,7 +72,6 @@ async def add_user(user_id, first_name, username, referred_by=None):
             "referred_by": referred_by
         })
         
-        # Guardar como JSON string en Redis
         await r.set(key, json.dumps(new_user))
         
         # Procesar Referido
@@ -76,22 +79,17 @@ async def add_user(user_id, first_name, username, referred_by=None):
             rid = str(referred_by)
             ref_key = f"user:{rid}"
             
-            # Verificar si el padre existe
             if await r.exists(ref_key):
-                # Traer datos del padre
                 parent_data = json.loads(await r.get(ref_key))
                 
-                # Evitar duplicados y autoreferidos
                 if rid != uid and uid not in parent_data.get("referrals", []):
                     parent_data.setdefault("referrals", []).append(uid)
-                    parent_data["tokens"] = parent_data.get("tokens", 100) + 50
-                    
-                    # Guardar actualización del padre
+                    parent_data["nectar"] = parent_data.get("nectar", 500) + 50
                     await r.set(ref_key, json.dumps(parent_data))
         
-        return True # Nuevo usuario creado
+        return True
     else:
-        # Usuario ya existe, actualizar last_active
+        # Actualizar last_active
         data = json.loads(await r.get(key))
         data["last_active"] = datetime.now().isoformat()
         await r.set(key, json.dumps(data))
@@ -115,8 +113,5 @@ async def get_user(user_id):
         return json.loads(data)
     return None
 
-# Función auxiliar de compatibilidad
 async def save_db(data=None):
-    pass # Redis guarda al instante, no necesitamos save manual
-async def load_db():
-    pass # Redis no carga archivos
+    pass
