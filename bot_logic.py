@@ -11,7 +11,7 @@ from telegram.ext import ContextTypes
 import database as db
 
 # -----------------------------------------------------------------------------
-# 1. KERNEL & SEGURIDAD (V156.1 - CLAIM_AFK FIX)
+# 1. KERNEL & SEGURIDAD (V154.0 - REALITY LOOP ENGINE)
 # -----------------------------------------------------------------------------
 logger = logging.getLogger("HiveLogic")
 logger.setLevel(logging.INFO)
@@ -34,8 +34,8 @@ BONUS_REWARD_USD = 0.05
 # TOKENOMICS (HIVE/Token Utility)
 INITIAL_HIVE = 50 
 MINING_COST_PER_TAP = 20    
-BASE_REWARD_PER_TAP = 5     
-REWARD_VARIABILITY = 0.4    
+BASE_REWARD_PER_TAP = 5     # Recompensa base antes de variabilidad y utilidad
+REWARD_VARIABILITY = 0.4    # Variabilidad de +/- 40% en la recompensa
 
 # ALGORITMO DE MINERÍA / ENERGÍA
 MAX_ENERGY_BASE = 500       
@@ -43,10 +43,6 @@ ENERGY_REGEN = 1
 AFK_CAP_HOURS = 6           
 MINING_COOLDOWN = 1.2       
 COST_ENERGY_REFILL = 200    
-
-# ANTI-FRAUDE CONSTANTES
-MIN_TIME_PER_TASK = 15 
-TASK_TIMESTAMPS_LIMIT = 5 
 
 # ESTADOS DEL SISTEMA
 STATES = {
@@ -61,7 +57,7 @@ STATES = {
 IMG_BEEBY = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
 
 # -----------------------------------------------------------------------------
-# 2. ARSENAL DE ENLACES
+# 2. ARSENAL DE ENLACES (Se mantienen los mismos enlaces)
 # -----------------------------------------------------------------------------
 LINKS = {
     'VALIDATOR_MAIN': os.getenv("LINK_TIMEBUCKS", "https://timebucks.com/?refID=227501472"),
@@ -102,11 +98,13 @@ LINKS = {
 TEXTS = {
     'es': {
         'welcome_caption': (
-            "Hola, **{name}**.\n\n"
-            "Este no es un bot de tareas comunes.\n"
-            "Acá **construís posición**.\n"
-            "El sistema prioriza a los usuarios constantes.\n\n"
+            "🧬 **BIENVENIDO A THE ONE HIVE**\n"
             "──────────────────────────\n"
+            "Hola, **{name}**. Estás entrando a una economía real.\n\n"
+            "🧠 **TU ESTRATEGIA**\n"
+            "1. **TOKEN:** No es inversión, es utilidad y acceso.\n"
+            "2. **ESTADO:** Sube tu estatus (no niveles) y desbloquea ventajas.\n"
+            "3. **CONSTANCIA:** Los usuarios activos entran primero.\n\n"
             "🛡️ **FASE 1: VERIFICACIÓN**\n"
             "👇 **INGRESA EL CÓDIGO** que aparecerá a continuación para activar:"
         ),
@@ -144,18 +142,19 @@ TEXTS = {
             "📌 **Tu Enlace:**\n`{link}`\n\n"
             "_{bonus_msg}_"
         ),
-        'fraud_alert': "⚠️ **INCONSISTENCIA DEL SISTEMA**\n\nEl motor de realidad detectó patrones inusuales. Tu acceso ha sido restringido por 24 horas para mantener la integridad de la economía. Intenta de nuevo mañana.",
         'btn_tasks': "🧠 VER TAREAS", 'btn_progress': "🚀 MI PROGRESO", 'btn_mission': "🎯 MISIÓN ESPECIAL",
         'btn_state': "🧬 ESTADO / BENEFICIOS", 'btn_shop': "🛒 TIENDA", 'btn_withdraw': "💸 RETIRAR", 
         'btn_team': "👥 REFERIDOS", 'btn_back': "🔙 VOLVER"
     },
     'en': {
         'welcome_caption': (
-            "Hello, **{name}**.\n\n"
-            "This is not a common task bot.\n"
-            "Here, you **build position**.\n"
-            "The system prioritizes consistent users.\n\n"
+            "🧬 **WELCOME TO THE ONE HIVE**\n"
             "──────────────────────────\n"
+            "Hello, **{name}**. You are entering a real economy.\n\n"
+            "🧠 **YOUR STRATEGY**\n"
+            "1. **TOKEN:** Not investment, but utility and access.\n"
+            "2. **STATE:** Increase your status (not levels) and unlock advantages.\n"
+            "3. **CONSISTENCY:** Active users get priority.\n\n"
             "🛡️ **PHASE 1: VERIFICATION**\n"
             "👇 **ENTER THE CODE** that appears below to activate:"
         ),
@@ -181,7 +180,18 @@ TEXTS = {
             "🪙 **Tokens generated:** +{gain:.0f} (Var. x{mult})\n"
             "🔓 **Internal progress updated.** The system considers you more active."
         ),
-        'fraud_alert': "⚠️ **SYSTEM INCONSISTENCY**\n\nThe Reality Engine detected unusual patterns. Your access has been restricted for 24 hours to maintain the economy's integrity. Please try again tomorrow.",
+        'mining_success_old': "⛏️ **MINED**\n🔋 E: `{old_e}`->`{new_e}`\n🐝 H: `{old_h}`->`{new_h}`\n🤝 **Bonus:** x{mult}",
+        'payment_card_info': "💳 **QUEEN LICENSE (VIP)**\nMining x2. Secure PayPal checkout.\n👇 **PAY NOW:**",
+        'payment_crypto_info': "💎 **PAYMENT USDT (TRC20)**\nWallet: `{wallet}`\n\nSend 10 USDT and paste TXID.",
+        'shop_body': "🏪 **MARKET**\nBalance: {hive} HIVE\n\n⚡ **REFILL ENERGY (200 HIVE)**\n👑 **QUEEN LICENSE ($10)**",
+        'swarm_menu_body': (
+            "🔗 **INVITE USERS**\n\n"
+            "You don't earn by inviting. **You earn when your invitees become active.**\n"
+            "👥 **Active Workers:** {count}\n"
+            "🚀 **Multiplier:** x{mult}\n\n"
+            "📌 **Your Link:**\n`{link}`\n\n"
+            "_{bonus_msg}_"
+        ),
         'btn_tasks': "🧠 VIEW TASKS", 'btn_progress': "🚀 MY PROGRESS", 'btn_mission': "🎯 SPECIAL MISSION",
         'btn_state': "🧬 STATE / BENEFITS", 'btn_shop': "🛒 SHOP", 'btn_withdraw': "💸 WITHDRAW", 
         'btn_team': "👥 REFERRALS", 'btn_back': "🔙 BACK"
@@ -189,12 +199,12 @@ TEXTS = {
 }
 
 # -----------------------------------------------------------------------------
-# 4. MOTOR LÓGICO, IDIOMA & ANTI-FRAUDE
+# 4. MOTOR LÓGICO & IDIOMA
 # -----------------------------------------------------------------------------
 
 def get_text(lang_code, key, **kwargs):
     lang = 'es' if lang_code and 'es' in lang_code else 'en'
-    t = TEXTS.get(lang, TEXTS['es']).get(key, key) # Default a ES
+    t = TEXTS.get(lang, TEXTS['en']).get(key, key)
     try: return t.format(**kwargs)
     except: return t
 
@@ -207,6 +217,7 @@ def render_progressbar(current, total, length=10):
     return "█" * filled + "░" * empty
 
 def calculate_swarm_bonus(referrals_count):
+    # El multiplicador ahora es por actividad, no solo por conteo
     return round(1.0 + (min(referrals_count, 50) * 0.05), 2)
 
 async def update_user_progress(user_data, activity_type="mine"):
@@ -217,11 +228,12 @@ async def update_user_progress(user_data, activity_type="mine"):
     last_activity = user_data.get('last_activity_ts', 0)
     day_ago = now_ts - (24 * 3600)
     
-    if now_ts - last_activity > (48 * 3600):
-        user_data['streak'] = 0 
+    if last_activity < day_ago:
+        user_data['streak'] = 0  # Reiniciar si la última actividad fue hace más de 24h
         user_data['progress_to_next_state'] = 0
 
     if activity_type == "mine" and (now_ts - last_activity > 3600):
+        # Aumentar racha si minó al menos una vez en las últimas 24h
         if last_activity > day_ago and user_data['streak'] == 0:
             user_data['streak'] = 1
         elif last_activity < day_ago and user_data['streak'] > 0:
@@ -234,9 +246,9 @@ async def update_user_progress(user_data, activity_type="mine"):
     max_progress = 100
     
     if activity_type == "mine":
-        progress_gain = random.randint(3, 7) 
+        progress_gain = random.randint(3, 7) # Pequeña ganancia por TAP
     elif activity_type == "task_complete":
-        progress_gain = 15 
+        progress_gain = 15 # Ganancia alta por tarea
     else:
         progress_gain = 0
         
@@ -246,7 +258,7 @@ async def update_user_progress(user_data, activity_type="mine"):
     current_state = user_data.get('state', 1)
     if current_state < len(STATES) and user_data['progress_to_next_state'] >= 100:
         user_data['state'] += 1
-        user_data['progress_to_next_state'] = 0 
+        user_data['progress_to_next_state'] = 0 # Reiniciar progreso para el nuevo estado
         
     return user_data
 
@@ -271,64 +283,17 @@ async def calculate_user_state(user_data):
     pending_afk = user_data.get('pending_afk', 0)
     if afk_time > 60: 
         pending_afk += afk_time * afk_rate
+        # Los tokens AFK se consideran bloqueados hasta que el usuario reingresa.
         user_data['tokens_locked'] = int(user_data.get('tokens_locked', 0) + pending_afk)
     
-    user_data['pending_afk'] = 0
+    user_data['pending_afk'] = 0 # Se mueve al contador locked
+    
     user_data['last_update_ts'] = now
     
     # Llamar a la lógica de RLE
     user_data = await update_user_progress(user_data, activity_type="check") 
     
     return user_data
-
-# ----------------------------------------------------
-# ANTI-FRAUDE CORE FUNCTIONS
-# ----------------------------------------------------
-
-def check_scripting_speed(task_timestamps):
-    """Detecta si hay una velocidad de finalización de tareas anormal."""
-    if len(task_timestamps) < 3: return 0
-    
-    MIN_TIME = MIN_TIME_PER_TASK 
-    risk_score_increase = 0
-
-    if len(task_timestamps) >= 3:
-        latest_stamps = task_timestamps[::-1] 
-        
-        gap1 = latest_stamps[0] - latest_stamps[1]
-        gap2 = latest_stamps[1] - latest_stamps[2]
-        
-        if gap1 < MIN_TIME and gap2 < MIN_TIME:
-            risk_score_increase = 25 
-    
-    return risk_score_increase
-
-def update_fraud_score(user_data, activity_type="task_complete"):
-    """Aplica la lógica anti-fraude y ajusta el score."""
-    current_score = user_data.get('fraud_score', 0)
-    
-    if activity_type == "task_complete":
-        current_score += check_scripting_speed(user_data.get('task_timestamps', []))
-            
-    user_data['fraud_score'] = min(100, max(0, current_score))
-    
-    if user_data['fraud_score'] >= 80:
-        user_data['ban_status'] = True
-        user_data['tokens_locked'] += user_data.get('nectar', 0) 
-        user_data['nectar'] = 0
-        
-    return user_data
-
-def get_reward_multiplier(fraud_score):
-    """Aplica la reducción de recompensa basada en el riesgo."""
-    if fraud_score >= 80: return 0.0 
-    if fraud_score >= 45: return 0.1 
-    if fraud_score >= 20: return 0.5 
-    return 1.0 
-
-# ----------------------------------------------------
-# END ANTI-FRAUDE CORE FUNCTIONS
-# ----------------------------------------------------
 
 async def save_user_data(user_id, data):
     if hasattr(db, 'r') and db.r: await db.r.set(f"user:{user_id}", json.dumps(data))
@@ -348,68 +313,44 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_data = await db.get_user(user.id)
     if 'last_update_ts' not in user_data:
-        # Inicialización de nuevos campos RLE y ANTI-FRAUDE
+        # Inicialización de nuevos campos RLE
         user_data['last_update_ts'] = time.time()
         user_data['energy'] = MAX_ENERGY_BASE
         user_data['state'] = 1
         user_data['streak'] = 0
         user_data['progress_to_next_state'] = 0
         user_data['tokens_locked'] = 0 
-        user_data['fraud_score'] = 0 
-        user_data['task_timestamps'] = [] 
-        user_data['ban_status'] = False
-        user_data['ip_address_hash'] = "" 
         await save_user_data(user.id, user_data)
-        
-    if user_data.get('ban_status', False):
-        await update.message.reply_text(get_text(lang, 'fraud_alert'), parse_mode="Markdown")
-        return
 
-    txt = get_text(lang, 'welcome_caption', name=user.first_name)
+    txt = (
+        "Este no es un bot de tareas comunes.\n\n"
+        "Acá **construís posición**.\n"
+        "El sistema prioriza a los usuarios constantes.\n\n"
+        "**Toca COMENZAR para validar.**"
+    )
     
     captcha = generate_captcha()
     context.user_data['captcha'] = captcha
     
+    welcome_message = f"{txt}"
     code_message = f"🔐 **CÓDIGO DE ACTIVACIÓN**:\n\n`{captcha}`"
 
     kb = [[InlineKeyboardButton("▶️ COMENZAR", callback_data="start_validation")]]
     
-    # Envío de la foto, el mensaje de bienvenida y el código de activación
     try: 
-        await update.message.reply_photo(
-            photo=IMG_BEEBY, 
-            caption=txt, 
-            reply_markup=InlineKeyboardMarkup(kb), 
-            parse_mode="Markdown"
-        )
-        await update.message.reply_text(code_message, parse_mode="Markdown", reply_to_message_id=update.message.message_id)
+        await update.message.reply_text(welcome_message, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        await update.message.reply_text(code_message, parse_mode="Markdown")
     except Exception: 
-        # Fallback si no se puede enviar foto o markdown complejo
-        full_msg = f"🧬 **BIENVENIDO A THE ONE HIVE**\n\n{txt}\n\n{code_message}"
-        await update.message.reply_text(full_msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        await update.message.reply_text(f"{welcome_message}\n\n{code_message}", parse_mode="Markdown")
 
 async def start_validation_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; user = query.from_user; lang = user.language_code
-    
-    user_data = await db.get_user(user.id)
-    if user_data.get('ban_status', False):
-        await query.message.edit_text(get_text(lang, 'fraud_alert'), parse_mode="Markdown")
-        return
-        
-    # ESTE PASO NO ES NECESARIO SI EL HOOK YA FUE MOSTRADO EN /start, 
-    # PERO LO MANTENEMOS PARA ENVIAR EL SIGUIENTE PASO: ACEPTAR TÉRMINOS
-    kb = [[InlineKeyboardButton("✅ ACCEPT / ACEPTAR", callback_data="accept_legal")]]
-    await query.message.edit_text(get_text(lang, 'ask_terms'), reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+    await query.message.edit_text(get_text(lang, 'welcome_caption', name=user.first_name), parse_mode="Markdown")
 
 async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip(); user = update.effective_user
     lang = user.language_code
     
-    user_data = await db.get_user(user.id)
-    if user_data and user_data.get('ban_status', False):
-        await update.message.reply_text(get_text(lang, 'fraud_alert'), parse_mode="Markdown")
-        return
-        
     # --- ADMIN / STATS COMMANDS ---
     if user.id == ADMIN_ID:
         if text.startswith("/approve_task"):
@@ -418,17 +359,12 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 target_data = await db.get_user(target)
                 if target_data:
                     curr_usd = float(target_data.get('usd_balance', 0))
+                    # La recompensa de USD es plana (la recompensa de token es gamificada)
                     target_data['usd_balance'] = curr_usd + BONUS_REWARD_USD 
-                    
-                    target_data['task_timestamps'].append(time.time())
-                    target_data['task_timestamps'] = target_data['task_timestamps'][-TASK_TIMESTAMPS_LIMIT:]
-
                     target_data = await update_user_progress(target_data, activity_type="task_complete")
-                    target_data = update_fraud_score(target_data, activity_type="task_complete") 
-
                     await save_user_data(target, target_data)
                     
-                    await context.bot.send_message(target, f"✅ **TASK APPROVED**\n💰 +${BONUS_REWARD_USD} USD\n🔓 Progreso interno avanzado. (Score: {target_data.get('fraud_score', 0)})")
+                    await context.bot.send_message(target, f"✅ **TASK APPROVED**\n💰 +${BONUS_REWARD_USD} USD\n🔓 Progreso interno avanzado.")
                     await update.message.reply_text(f"Paid {target}")
             except: pass
             return
@@ -438,16 +374,14 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     expected = context.user_data.get('captcha')
     if expected and text == expected:
         context.user_data['captcha'] = None
-        
-        # Después de ingresar el código, se salta directamente al paso de Aceptación de Términos
         kb = [[InlineKeyboardButton("✅ ACCEPT / ACEPTAR", callback_data="accept_legal")]]
-        await update.message.reply_text("✅ **CÓDIGO ACEPTADO.**", parse_mode="Markdown")
         await update.message.reply_text(get_text(lang, 'ask_terms'), reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
         return
 
     if text.upper() == "/START": await start(update, context); return
     
     if context.user_data.get('waiting_for_hash'):
+        # ... (Lógica de crypto pago se mantiene)
         context.user_data['waiting_for_hash'] = False
         if len(text) > 10:
             if ADMIN_ID != 0:
@@ -468,6 +402,7 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         else: await update.message.reply_text("⚠️ Invalid Email. Try again.")
         return
 
+    user_data = await db.get_user(user.id)
     if user_data: await show_dashboard(update, context)
 
 # -----------------------------------------------------------------------------
@@ -476,19 +411,9 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user; lang = user.language_code
     user_data = await db.get_user(user.id)
-
-    # ANTI-FRAUDE CHECK
-    if user_data.get('ban_status', False):
-        try:
-            await update.callback_query.message.edit_text(get_text(lang, 'fraud_alert'), parse_mode="Markdown")
-        except:
-            await update.message.reply_text(get_text(lang, 'fraud_alert'), parse_mode="Markdown")
-        return
-
     user_data = await calculate_user_state(user_data); await save_user_data(user.id, user_data)
     
     afk_amount = user_data.get('tokens_locked', 0)
-    afk_msg_claim = "Reclamar Bloqueados" if afk_amount > 0 else "---"
     afk_msg = "Desbloquea Tokens con actividad." if afk_amount < 1 else f"🔒 **{afk_amount:.0f} HIVE** (Bloqueados)."
     
     current_e = int(user_data.get('energy', 0))
@@ -509,11 +434,11 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         afk_msg=afk_msg
     )
     
+    # Botones RLE (Ver tareas, Mi progreso, Misión especial, Estado)
     kb = [
-        [InlineKeyboardButton(get_text(lang, 'btn_tasks'), callback_data="mine_click")], 
+        [InlineKeyboardButton(get_text(lang, 'btn_tasks'), callback_data="mine_click")], # Minar es la tarea base
         [InlineKeyboardButton(get_text(lang, 'btn_progress'), callback_data="show_progress"), InlineKeyboardButton(get_text(lang, 'btn_mission'), callback_data="show_mission")],
         [InlineKeyboardButton(get_text(lang, 'btn_state'), callback_data="show_state")],
-        [InlineKeyboardButton(afk_msg_claim, callback_data="claim_afk") if afk_amount > 0 else InlineKeyboardButton("✨", callback_data="ignore")], # Botón AFK
         [InlineKeyboardButton(get_text(lang, 'btn_team'), callback_data="team_menu"), InlineKeyboardButton(get_text(lang, 'btn_withdraw'), callback_data="withdraw")]
     ]
     
@@ -523,24 +448,17 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else: await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 # -----------------------------------------------------------------------------
-# 7. MINING (Token Emission) Y AFK CLAIM (CORRECCIÓN)
+# 7. MINING (Token Emission)
 # -----------------------------------------------------------------------------
-
 async def mining_animation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; user_id = query.from_user.id
     user = query.from_user; lang = user.language_code
     
-    # ANTI-FRAUDE CHECK
-    user_data = await db.get_user(user_id)
-    if user_data.get('ban_status', False):
-        await query.message.edit_text(get_text(lang, 'fraud_alert'), parse_mode="Markdown")
-        return
-        
     last_mine = context.user_data.get('last_mine_time', 0)
     if time.time() - last_mine < MINING_COOLDOWN: await query.answer("❄️...", show_alert=False); return
     context.user_data['last_mine_time'] = time.time()
 
-    user_data = await calculate_user_state(user_data) 
+    user_data = await db.get_user(user_id); user_data = await calculate_user_state(user_data) 
     cost = MINING_COST_PER_TAP
     if user_data['energy'] < cost: await query.answer("🔋 Low Energy.", show_alert=True); return
 
@@ -549,17 +467,14 @@ async def mining_animation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Cálculo de Recompensa (Tokenomics: Variable + Utilidad)
     refs = len(user_data.get('referrals', []))
     swarm_mult = calculate_swarm_bonus(refs)
-    performance_factor = (user_data.get('state', 1) * 0.1)
+    performance_factor = (user_data.get('state', 1) * 0.1) # Utilidad basada en Estado
     
     base_gain = BASE_REWARD_PER_TAP * swarm_mult * performance_factor
     variability = 1.0 + random.uniform(-REWARD_VARIABILITY, REWARD_VARIABILITY)
-    
-    # ANTI-FRAUDE REDUCTION APPLIED HERE
-    fraud_mult = get_reward_multiplier(user_data.get('fraud_score', 0))
-    token_utility_gain = base_gain * variability * fraud_mult
+    token_utility_gain = base_gain * variability
     
     old_hive = user_data.get('nectar', 0)
-    unlock_amount = 0
+    user_data['nectar'] = int(old_hive + token_utility_gain)
     
     # Desbloqueo de Tokens con Actividad (ETH Style)
     if user_data.get('tokens_locked', 0) > 0:
@@ -568,25 +483,16 @@ async def mining_animation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data['tokens_locked'] -= unlock_amount
         if user_data['tokens_locked'] < 0: user_data['tokens_locked'] = 0
     
-    user_data['nectar'] = int(old_hive + token_utility_gain) + unlock_amount
-    
     user_data = await update_user_progress(user_data, activity_type="mine")
     await save_user_data(user_id, user_data)
     
     # Mensaje de Feedback RLE
-    if fraud_mult < 1.0 and fraud_mult > 0:
-        perf_msg = "Ajustado por inconsistencia."
-    elif fraud_mult == 0:
-        perf_msg = "Bloqueado."
-    elif variability > 1.0:
-        perf_msg = "Superior al promedio" 
-    else:
-        perf_msg = "Consistente"
+    perf_msg = "Superior al promedio" if variability > 1.0 else "Consistente"
     
     msg_txt = get_text(lang, 'mine_feedback', 
                         performance_msg=perf_msg, 
                         gain=token_utility_gain + unlock_amount, 
-                        mult=round(variability * fraud_mult, 2))
+                        mult=round(variability, 2))
     
     kb = [[InlineKeyboardButton("🧠 VER TAREAS (TAP)", callback_data="mine_click")], 
           [InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]]
@@ -595,24 +501,7 @@ async def mining_animation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except: await query.answer("⛏️ OK", show_alert=False)
 
 async def claim_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Función para reclamar todos los tokens bloqueados por AFK.
-    """
-    query = update.callback_query
-    user_id = query.from_user.id
-    user_data = await db.get_user(user_id)
-    
-    locked_tokens = user_data.get('tokens_locked', 0)
-    
-    if locked_tokens > 0:
-        user_data['nectar'] += locked_tokens # Transferimos todos los bloqueados
-        user_data['tokens_locked'] = 0
-        await save_user_data(user_id, user_data)
-        
-        await query.answer(f"✅ ¡{locked_tokens:.0f} HIVE desbloqueados!", show_alert=True)
-    else:
-        await query.answer("🔒 No tienes tokens bloqueados para reclamar.", show_alert=True)
-        
+    # La lógica de AFK ahora es interna y se desbloquea con la actividad (Mining)
     await show_dashboard(update, context)
 
 # -----------------------------------------------------------------------------
@@ -620,12 +509,6 @@ async def claim_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # -----------------------------------------------------------------------------
 async def tier1_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; lang = query.from_user.language_code
-    
-    user_data = await db.get_user(query.from_user.id)
-    if user_data.get('ban_status', False):
-        await query.message.edit_text(get_text(lang, 'fraud_alert'), parse_mode="Markdown")
-        return
-        
     kb = [
         [InlineKeyboardButton("📺 TIMEBUCKS", url=LINKS['VALIDATOR_MAIN']), InlineKeyboardButton("💰 ADBTC", url=LINKS['ADBTC'])],
         [InlineKeyboardButton("🎲 FREEBITCOIN", url=LINKS['FREEBITCOIN']), InlineKeyboardButton("💰 COINPAYU", url=LINKS['COINPAYU'])], 
@@ -635,12 +518,6 @@ async def tier1_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def tier2_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; lang = query.from_user.language_code
-    
-    user_data = await db.get_user(query.from_user.id)
-    if user_data.get('ban_status', False):
-        await query.message.edit_text(get_text(lang, 'fraud_alert'), parse_mode="Markdown")
-        return
-        
     kb = [
         [InlineKeyboardButton("🐝 HONEYGAIN", url=LINKS['HONEYGAIN']), InlineKeyboardButton("📦 PACKETSTREAM", url=LINKS['PACKETSTREAM'])],
         [InlineKeyboardButton("✅ VALIDAR", callback_data="verify_task_manual")], [InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]
@@ -649,12 +526,6 @@ async def tier2_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def tier3_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; lang = query.from_user.language_code
-    
-    user_data = await db.get_user(query.from_user.id)
-    if user_data.get('ban_status', False):
-        await query.message.edit_text(get_text(lang, 'fraud_alert'), parse_mode="Markdown")
-        return
-        
     kb = [
         [InlineKeyboardButton("🔥 BYBIT ($5.00)", url=LINKS['BYBIT']), InlineKeyboardButton("🏦 NEXO", url=LINKS['NEXO'])],
         [InlineKeyboardButton("✅ VALIDAR", callback_data="verify_task_manual")], [InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]
@@ -663,14 +534,9 @@ async def tier3_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def verify_task_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; user_id = query.from_user.id; user = query.from_user
-    
-    user_data = await db.get_user(user_id)
-    if user_data.get('ban_status', False):
-        await query.message.edit_text(get_text(user.language_code, 'fraud_alert'), parse_mode="Markdown")
-        return
-        
     await query.message.edit_text("🛰️ **VERIFICANDO...**"); await asyncio.sleep(1.5)
     
+    # Enviar al admin para aprobación de USD y avance de Progreso.
     if ADMIN_ID != 0:
         try: await context.bot.send_message(ADMIN_ID, f"📋 **TASK DONE**\nUser: {user.first_name} (`{user_id}`)\nUsa: `/approve_task {user_id}`")
         except: pass
@@ -679,11 +545,6 @@ async def verify_task_manual(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; user_id = query.from_user.id; user_data = await db.get_user(user_id); lang = query.from_user.language_code
-    
-    if user_data.get('ban_status', False):
-        await query.message.edit_text(get_text(lang, 'fraud_alert'), parse_mode="Markdown")
-        return
-        
     refs = len(user_data.get('referrals', []))
     mult = calculate_swarm_bonus(refs)
     link = f"https://t.me/{context.bot.username}?start={user_id}"
@@ -696,27 +557,15 @@ async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def offer_bonus_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = update.effective_user.language_code
-    
-    user_data = await db.get_user(update.effective_user.id)
-    if user_data.get('ban_status', False):
-        await update.message.reply_text(get_text(lang, 'fraud_alert'), parse_mode="Markdown")
-        return
-        
-    txt = get_text(lang, 'ask_bonus')
+    lang = update.effective_user.language_code; txt = get_text(lang, 'ask_bonus')
     kb = [[InlineKeyboardButton(get_text(lang, 'btn_claim_bonus'), url=LINKS['VALIDATOR_MAIN'])], [InlineKeyboardButton("✅ VALIDAR", callback_data="verify_task_manual")]] 
     await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def show_progress_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; user_id = query.from_user.id; user_data = await db.get_user(user_id); lang = query.from_user.language_code
     
-    if user_data.get('ban_status', False):
-        await query.message.edit_text(get_text(lang, 'fraud_alert'), parse_mode="Markdown")
-        return
-        
     progress = user_data.get('progress_to_next_state', 0)
     state = user_data.get('state', 1)
-    fraud_score = user_data.get('fraud_score', 0)
     
     txt = (
         "🚀 **TU PROGRESO EN EL SISTEMA**\n"
@@ -724,7 +573,8 @@ async def show_progress_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"🧬 **Estado Actual:** {STATES.get(state, 'Unknown')}\n"
         f"📈 **Avance a {STATES.get(state + 1, 'MAX')}:** `{render_progressbar(progress, 100)}` {progress}%\n"
         f"🔥 **Racha Activa:** {user_data.get('streak', 0)} días\n"
-        f"🛡️ **Puntaje de Riesgo:** {fraud_score} / 100\n\n"
+        f"📊 **Consistencia:** { 'Alta' if user_data.get('streak', 0) >= 3 else 'Baja' }\n"
+        f"🔒 **Tokens Bloqueados:** {user_data.get('tokens_locked', 0)}\n\n"
         "💡 **TIP:** Usuarios con racha activa desbloquean mejores tareas."
     )
     kb = [[InlineKeyboardButton("🔙", callback_data="go_dashboard")]]
@@ -732,12 +582,6 @@ async def show_progress_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def show_mission_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; lang = query.from_user.language_code
-    
-    user_data = await db.get_user(query.from_user.id)
-    if user_data.get('ban_status', False):
-        await query.message.edit_text(get_text(lang, 'fraud_alert'), parse_mode="Markdown")
-        return
-        
     txt = (
         "🎯 **MISIÓN ESPECIAL (LIMITADA)**\n\n"
         "Solo para usuarios activos hoy.\n\n"
@@ -753,11 +597,6 @@ async def show_mission_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_state_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; lang = query.from_user.language_code
     
-    user_data = await db.get_user(query.from_user.id)
-    if user_data.get('ban_status', False):
-        await query.message.edit_text(get_text(lang, 'fraud_alert'), parse_mode="Markdown")
-        return
-        
     state_desc = "\n".join([f"🔹 **{name}:** acceso {('básico', 'priorizado', 'multiplicadores', 'anticipado', 'reservado')[i]}" for i, name in STATES.items()])
     
     txt = (
@@ -776,37 +615,17 @@ async def show_state_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; data = query.data; user_id = query.from_user.id
     
-    # ANTI-FRAUDE CHECK: Bloqueo de acceso si está baneado
-    user_data = await db.get_user(user_id)
-    if user_data and user_data.get('ban_status', False) and data != "go_dashboard":
-        await query.message.edit_text(get_text(query.from_user.language_code, 'fraud_alert'), parse_mode="Markdown")
-        try: await query.answer()
-        except: pass
-        return
-    
-    if data == "start_validation": 
-        # Ya no se edita el mensaje, solo se avanza a la aceptación de términos.
-        kb = [[InlineKeyboardButton("✅ ACCEPT / ACEPTAR", callback_data="accept_legal")]]
-        await query.message.edit_caption(f"{query.message.caption}\n\n✅ **CÓDIGO ACEPTADO.**", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
-        return
-        
-    if data == "accept_legal": 
-        context.user_data['waiting_for_terms'] = False
-        context.user_data['waiting_for_email'] = True
-        lang = query.from_user.language_code
-        await query.message.edit_text(get_text(lang, 'ask_email'), parse_mode="Markdown")
-        return
-        
+    if data == "start_validation": await start_validation_flow(update, context); return
+    if data == "accept_legal": context.user_data['waiting_for_terms'] = False; context.user_data['waiting_for_email'] = True; lang = query.from_user.language_code; await query.message.edit_text(get_text(lang, 'ask_email'), parse_mode="Markdown"); return
     if data == "reject_legal": await query.message.edit_text("❌ Bye."); return
 
     handlers = {
         "go_dashboard": show_dashboard, "mine_click": mining_animation, "claim_afk": claim_afk, 
-        "verify_task_manual": verify_task_manual, "shop_menu": tier1_menu, 
+        "verify_task_manual": verify_task_manual, "shop_menu": tier1_menu, # Redirección
         "buy_premium_info": tier3_menu, "pay_crypto_info": tier3_menu, "confirm_crypto_wait": tier3_menu,
         "tier_1": tier1_menu, "tier_2": tier2_menu, "tier_3": tier3_menu, 
         "team_menu": team_menu, "show_progress": show_progress_menu, 
-        "show_mission": show_mission_menu, "show_state": show_state_menu,
-        "ignore": lambda u, c: u.callback_query.answer("---") # Para el botón vacío en el dashboard
+        "show_mission": show_mission_menu, "show_state": show_state_menu
     }
     
     if data in handlers: await handlers[data](update, context)
@@ -816,7 +635,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_data['nectar'] -= COST_ENERGY_REFILL; user_data['energy'] = min(user_data.get('energy', 0) + 200, MAX_ENERGY_BASE)
             await save_user_data(user_id, user_data); await query.answer("⚡ +200 Energy", show_alert=True); await show_dashboard(update, context)
         else: await query.answer(f"❌ Need {COST_ENERGY_REFILL} HIVE.", show_alert=True)
-    elif data == "profile": await show_state_menu(update, context)
+    elif data == "profile": await show_state_menu(update, context) # Redirección a estado
     elif data == "withdraw": 
         user_data = await db.get_user(user_id); bal = user_data.get('usd_balance', 0)
         if bal >= 10:
@@ -829,7 +648,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try: await query.answer()
     except: pass
 
-async def help_command(u, c): await u.message.reply_text("TheOneHive v156.1 RLE Engine + Defense")
+async def help_command(u, c): await u.message.reply_text("TheOneHive v154.0 RLE Engine")
 async def invite_command(u, c): await team_menu(u, c)
 async def reset_command(u, c): c.user_data.clear(); await u.message.reply_text("Reset OK.")
 async def broadcast_command(u, c): 
