@@ -30,15 +30,15 @@ IMG_BEEBY = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm
 CRYPTO_WALLET_USDT = os.getenv("WALLET_USDT", "⚠️ ERROR: CONFIGURAR WALLET_USDT EN RENDER")
 LINK_PAGO_GLOBAL = os.getenv("LINK_PAYPAL", "https://www.paypal.com/ncp/payment/L6ZRFT2ACGAQC")
 
-# ECONOMÍA "HARD MONEY" (CORREGIDA PARA ESCASEZ)
+# ECONOMÍA "HARD MONEY" (AJUSTADA)
 INITIAL_USD = 0.00      
 BONUS_REWARD_USD = 0.05     
 
-# TOKENOMICS (HIVE/Token Utility) - AJUSTE BITCOIN STRATEGY
-INITIAL_HIVE = 0.0          # Empezar en 0 para valor real
-MINING_COST_PER_TAP = 5     # Costo de energía
-BASE_REWARD_PER_TAP = 0.01  # Recompensa muy baja (Hard Money)
-REWARD_VARIABILITY = 0.1    # Menos variabilidad
+# TOKENOMICS (HIVE/Token Utility)
+INITIAL_HIVE = 0.0          # Inicia en 0.0 para crear escasez
+MINING_COST_PER_TAP = 5     # Costo mínimo por minería
+BASE_REWARD_PER_TAP = 0.01  # Baja recompensa por minería
+REWARD_VARIABILITY = 0.1    # Baja variabilidad
 
 # ALGORITMO DE MINERÍA / ENERGÍA
 MAX_ENERGY_BASE = 500       
@@ -61,14 +61,14 @@ STATES = {
 }
 
 # -----------------------------------------------------------------------------
-# 2. ARSENAL DE ENLACES (30 PLATAFORMAS - LISTA COMPLETA)
+# 2. ARSENAL DE ENLACES (ACTUALIZADO)
 # -----------------------------------------------------------------------------
 LINKS = {
     # TIER 1: CLICKS & JUEGOS
     'VALIDATOR_MAIN': os.getenv("LINK_TIMEBUCKS", "https://timebucks.com/?refID=227501472"),
     'ADBTC': "https://r.adbtc.top/3284589",
-    'COINPAYU': "https://www.coinpayu.com/?r=Josesitoto",
     'FREEBITCOIN': "https://freebitco.in/?r=55837744",
+    'FAUCETPAY': "https://faucetpay.io/?r=2275014",
     'COINTIPLY': "https://cointiply.com/r/jR1L6y",
     'GAMEHAG': "https://gamehag.com/r/NWUD9QNR",
     'EVERVE': "https://everve.net/ref/1950045/",
@@ -528,7 +528,7 @@ async def tier1_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     kb = [
         [InlineKeyboardButton("📺 TIMEBUCKS", url=LINKS['VALIDATOR_MAIN']), InlineKeyboardButton("💰 ADBTC", url=LINKS['ADBTC'])],
-        [InlineKeyboardButton("🎲 FREEBITCOIN", url=LINKS['FREEBITCOIN']), InlineKeyboardButton("💰 COINPAYU", url=LINKS['COINPAYU'])],
+        [InlineKeyboardButton("🎲 FREEBITCOIN", url=LINKS['FREEBITCOIN']), InlineKeyboardButton("💰 FAUCETPAY", url=LINKS['FAUCETPAY'])],
         [InlineKeyboardButton("🪙 COINTIPLY", url=LINKS['COINTIPLY']), InlineKeyboardButton("🎮 GAMEHAG", url=LINKS['GAMEHAG'])],
         [InlineKeyboardButton("💸 FREECASH", url=LINKS['FREECASH']), InlineKeyboardButton("🌟 SWAGBUCKS", url=LINKS['SWAGBUCKS'])],
         [InlineKeyboardButton("📉 EVERVE", url=LINKS['EVERVE']), InlineKeyboardButton("⛏️ TAP MINING", callback_data="mine_click")],
