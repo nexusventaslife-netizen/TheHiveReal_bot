@@ -11,9 +11,8 @@ from telegram.ext import ContextTypes
 import database as db
 
 # -----------------------------------------------------------------------------
-# 1. KERNEL & SEGURIDAD (V156.0 - WELCOME FLOW FIX)
+# 1. KERNEL & SEGURIDAD (V156.1 - CLAIM_AFK FIX)
 # -----------------------------------------------------------------------------
-# ... (Constantes de seguridad, economía, tokenomics, anti-fraude se mantienen) ...
 logger = logging.getLogger("HiveLogic")
 logger.setLevel(logging.INFO)
 
@@ -160,7 +159,6 @@ TEXTS = {
             "🛡️ **PHASE 1: VERIFICATION**\n"
             "👇 **ENTER THE CODE** that appears below to activate:"
         ),
-        # ... (Otros textos en inglés se mantienen)
         'ask_terms': "✅ **SECURE LINK**\n\nDo you accept to receive offers and monetize data?",
         'ask_email': "🤝 **CONFIRMED**\n\n📧 Enter your **EMAIL** for USD payments:",
         'ask_bonus': "🎉 **ACCOUNT READY**\n\n🎁 **MISSION ($0.05 USD):**\nRegister at Partner & Validate. Consistent users get priority.",
@@ -490,6 +488,7 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data = await calculate_user_state(user_data); await save_user_data(user.id, user_data)
     
     afk_amount = user_data.get('tokens_locked', 0)
+    afk_msg_claim = "Reclamar Bloqueados" if afk_amount > 0 else "---"
     afk_msg = "Desbloquea Tokens con actividad." if afk_amount < 1 else f"🔒 **{afk_amount:.0f} HIVE** (Bloqueados)."
     
     current_e = int(user_data.get('energy', 0))
@@ -511,9 +510,10 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     kb = [
-        [InlineKeyboardButton(get_text(lang, 'btn_tasks'), callback_data="mine_click")], # Minar es la tarea base
+        [InlineKeyboardButton(get_text(lang, 'btn_tasks'), callback_data="mine_click")], 
         [InlineKeyboardButton(get_text(lang, 'btn_progress'), callback_data="show_progress"), InlineKeyboardButton(get_text(lang, 'btn_mission'), callback_data="show_mission")],
         [InlineKeyboardButton(get_text(lang, 'btn_state'), callback_data="show_state")],
+        [InlineKeyboardButton(afk_msg_claim, callback_data="claim_afk") if afk_amount > 0 else InlineKeyboardButton("✨", callback_data="ignore")], # Botón AFK
         [InlineKeyboardButton(get_text(lang, 'btn_team'), callback_data="team_menu"), InlineKeyboardButton(get_text(lang, 'btn_withdraw'), callback_data="withdraw")]
     ]
     
@@ -523,8 +523,9 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else: await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 # -----------------------------------------------------------------------------
-# 7. MINING (Token Emission)
+# 7. MINING (Token Emission) Y AFK CLAIM (CORRECCIÓN)
 # -----------------------------------------------------------------------------
+
 async def mining_animation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; user_id = query.from_user.id
     user = query.from_user; lang = user.language_code
@@ -592,6 +593,27 @@ async def mining_animation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try: await query.message.edit_text(msg_txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
     except: await query.answer("⛏️ OK", show_alert=False)
+
+async def claim_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Función para reclamar todos los tokens bloqueados por AFK.
+    """
+    query = update.callback_query
+    user_id = query.from_user.id
+    user_data = await db.get_user(user_id)
+    
+    locked_tokens = user_data.get('tokens_locked', 0)
+    
+    if locked_tokens > 0:
+        user_data['nectar'] += locked_tokens # Transferimos todos los bloqueados
+        user_data['tokens_locked'] = 0
+        await save_user_data(user_id, user_data)
+        
+        await query.answer(f"✅ ¡{locked_tokens:.0f} HIVE desbloqueados!", show_alert=True)
+    else:
+        await query.answer("🔒 No tienes tokens bloqueados para reclamar.", show_alert=True)
+        
+    await show_dashboard(update, context)
 
 # -----------------------------------------------------------------------------
 # 8. TAREAS & MENUS (Tier 1/2/3 como Tareas Encadenadas)
@@ -783,7 +805,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "buy_premium_info": tier3_menu, "pay_crypto_info": tier3_menu, "confirm_crypto_wait": tier3_menu,
         "tier_1": tier1_menu, "tier_2": tier2_menu, "tier_3": tier3_menu, 
         "team_menu": team_menu, "show_progress": show_progress_menu, 
-        "show_mission": show_mission_menu, "show_state": show_state_menu
+        "show_mission": show_mission_menu, "show_state": show_state_menu,
+        "ignore": lambda u, c: u.callback_query.answer("---") # Para el botón vacío en el dashboard
     }
     
     if data in handlers: await handlers[data](update, context)
@@ -806,7 +829,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try: await query.answer()
     except: pass
 
-async def help_command(u, c): await u.message.reply_text("TheOneHive v156.0 RLE Engine + Defense")
+async def help_command(u, c): await u.message.reply_text("TheOneHive v156.1 RLE Engine + Defense")
 async def invite_command(u, c): await team_menu(u, c)
 async def reset_command(u, c): c.user_data.clear(); await u.message.reply_text("Reset OK.")
 async def broadcast_command(u, c): 
