@@ -30,15 +30,15 @@ IMG_BEEBY = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm
 CRYPTO_WALLET_USDT = os.getenv("WALLET_USDT", "⚠️ ERROR: CONFIGURAR WALLET_USDT EN RENDER")
 LINK_PAGO_GLOBAL = os.getenv("LINK_PAYPAL", "https://www.paypal.com/ncp/payment/L6ZRFT2ACGAQC")
 
-# ECONOMÍA "HARD MONEY"
+# ECONOMÍA "HARD MONEY" (CORREGIDA PARA ESCASEZ)
 INITIAL_USD = 0.00      
 BONUS_REWARD_USD = 0.05     
 
-# TOKENOMICS (HIVE/Token Utility)
-INITIAL_HIVE = 50 
-MINING_COST_PER_TAP = 20    
-BASE_REWARD_PER_TAP = 5     
-REWARD_VARIABILITY = 0.4    
+# TOKENOMICS (HIVE/Token Utility) - AJUSTE BITCOIN STRATEGY
+INITIAL_HIVE = 0.0          # Empezar en 0 para valor real
+MINING_COST_PER_TAP = 5     # Costo de energía
+BASE_REWARD_PER_TAP = 0.01  # Recompensa muy baja (Hard Money)
+REWARD_VARIABILITY = 0.1    # Menos variabilidad
 
 # ALGORITMO DE MINERÍA / ENERGÍA
 MAX_ENERGY_BASE = 500       
@@ -136,7 +136,7 @@ TEXTS = {
         'mine_feedback': (
             "⛏️ **ACCIÓN COMPLETADA**\n"
             "📊 **Rendimiento:** {performance_msg}\n"
-            "🪙 **Tokens generados:** +{gain:.0f} (Var. x{mult})\n"
+            "🪙 **Tokens generados:** +{gain} (Var. x{mult})\n"
             "🔓 **Progreso interno actualizado.**"
         ),
         'shop_body': "🏪 **MERCADO**\nSaldo: {hive} HIVE\n\n⚡ **RECARGAR ENERGÍA (200 HIVE)**\n👑 **MEMBRESÍA REINA (PREMIUM) - $10**\n(Desbloquea Tier 2 y 3 sin subir de nivel)",
@@ -175,6 +175,7 @@ def get_text(lang_code, key, **kwargs):
 def generate_captcha(): return f"HIVE-{random.randint(100, 999)}"
 
 def render_progressbar(current, total, length=10):
+    if total == 0: total = 1 # Evitar división por cero
     percent = max(0, min(current / total, 1.0))
     filled = int(length * percent)
     empty = length - filled
@@ -203,11 +204,11 @@ async def update_user_progress(user_data, activity_type="mine"):
     current_progress = user_data.get('progress_to_next_state', 0)
     max_progress = 100
     
-    # GAMIFICACIÓN: Subida de nivel real
+    # GAMIFICACIÓN: Subida de nivel real (HARD MONEY ADJUSTMENT)
     if activity_type == "mine":
-        progress_gain = random.randint(3, 7)
+        progress_gain = 0.05  # Mínimo avance por click (necesitas miles de clicks)
     elif activity_type == "task_complete":
-        progress_gain = 15
+        progress_gain = 15    # Tareas dan progreso real
     else:
         progress_gain = 0
         
@@ -233,13 +234,16 @@ async def calculate_user_state(user_data):
         new_energy = min(max_e, current_energy + (elapsed * ENERGY_REGEN))
         user_data['energy'] = int(new_energy)
     
-    afk_rate = user_data.get('state', 1) * 0.1 * calculate_swarm_bonus(len(user_data.get('referrals', [])))
+    # AFK REWARD (HARD MONEY ADJUSTMENT - ESCASEZ)
+    # Tasa reducida drásticamente: 0.0001
+    afk_rate = user_data.get('state', 1) * 0.0001 * calculate_swarm_bonus(len(user_data.get('referrals', [])))
     afk_time = min(elapsed, AFK_CAP_HOURS * 3600)
     
     pending_afk = user_data.get('pending_afk', 0)
     if afk_time > 60: 
         pending_afk += afk_time * afk_rate
-        user_data['tokens_locked'] = int(user_data.get('tokens_locked', 0) + pending_afk)
+        # Usar float para decimales precisos
+        user_data['tokens_locked'] = float(user_data.get('tokens_locked', 0) + pending_afk)
     
     user_data['pending_afk'] = 0
     user_data['last_update_ts'] = now
@@ -309,7 +313,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data['state'] = 1
         user_data['streak'] = 0
         user_data['progress_to_next_state'] = 0
-        user_data['tokens_locked'] = 0 
+        user_data['tokens_locked'] = 0.0 # Float
+        user_data['nectar'] = 0.0 # Float
         user_data['fraud_score'] = 0 
         user_data['task_timestamps'] = [] 
         user_data['ban_status'] = False
@@ -410,24 +415,34 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_data = await calculate_user_state(user_data); await save_user_data(user.id, user_data)
     
-    afk_amount = user_data.get('tokens_locked', 0)
-    afk_msg = "Desbloquea Tokens con actividad." if afk_amount < 1 else f"🔒 **{afk_amount:.0f} HIVE** (Bloqueados)."
+    # VISUALIZACIÓN CORREGIDA
+    locked_balance = float(user_data.get('tokens_locked', 0))
+    afk_msg = "Desbloquea Tokens con actividad." if locked_balance < 0.0001 else f"🔒 **{locked_balance:.4f} HIVE** (Bloqueados)."
     
     current_e = int(user_data.get('energy', 0))
-    bar = render_progressbar(current_e, MAX_ENERGY_BASE)
+    max_e = MAX_ENERGY_BASE
+    
+    # Cálculo porcentual correcto (0-100%)
+    energy_percent_val = int((current_e / max_e) * 100)
+    bar = render_progressbar(current_e, max_e)
     
     current_state = user_data.get('state', 1)
-    progress_percent = user_data.get('progress_to_next_state', 0)
-    progress_bar = render_progressbar(progress_percent, 100)
+    progress_val = user_data.get('progress_to_next_state', 0)
+    progress_bar = render_progressbar(progress_val, 100)
     
+    # Formateo de decimales para HIVE (Efecto Bitcoin)
+    hive_balance = float(user_data.get('nectar', 0))
+
     txt = get_text(lang, 'dashboard_body',
         state_name=STATES.get(current_state, "Unknown"),
         streak=user_data.get('streak', 0),
-        progress_bar=progress_bar, progress_percent=progress_percent,
+        progress_bar=progress_bar, 
+        progress_percent=f"{progress_val:.1f}", # Decimal
         usd=user_data.get('usd_balance', 0.0), 
-        hive=int(user_data.get('nectar', 0)),
-        locked_hive=int(user_data.get('tokens_locked', 0)),
-        energy=current_e, energy_bar=bar,
+        hive=f"{hive_balance:.4f}", # 4 decimales
+        locked_hive=f"{locked_balance:.4f}", # 4 decimales
+        energy=energy_percent_val, # Porcentaje real 0-100
+        energy_bar=bar,
         afk_msg=afk_msg
     )
     
@@ -455,12 +470,12 @@ async def claim_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if user_data.get('ban_status', False): return
 
-    locked = int(user_data.get('tokens_locked', 0))
+    locked = float(user_data.get('tokens_locked', 0))
     if locked > 0:
-        user_data['nectar'] = int(user_data.get('nectar', 0)) + locked
-        user_data['tokens_locked'] = 0
+        user_data['nectar'] = float(user_data.get('nectar', 0)) + locked
+        user_data['tokens_locked'] = 0.0
         await save_user_data(user_id, user_data)
-        await query.answer(f"✅ +{locked} HIVE Reclamados!", show_alert=True)
+        await query.answer(f"✅ +{locked:.4f} HIVE Reclamados!", show_alert=True)
         await show_dashboard(update, context)
     else:
         await query.answer("❄️ No hay tokens AFK.", show_alert=True)
@@ -491,11 +506,11 @@ async def mining_animation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     token_gain = base_gain * variability * fraud_mult
     
-    user_data['nectar'] = int(user_data.get('nectar', 0) + token_gain)
+    user_data['nectar'] = float(user_data.get('nectar', 0) + token_gain)
     user_data = await update_user_progress(user_data, activity_type="mine")
     await save_user_data(user_id, user_data)
     
-    msg_txt = get_text(lang, 'mine_feedback', performance_msg="Óptimo", gain=token_gain, mult=round(variability, 2))
+    msg_txt = get_text(lang, 'mine_feedback', performance_msg="Óptimo", gain=f"{token_gain:.4f}", mult=round(variability, 2))
     kb = [[InlineKeyboardButton("⛏️ MINAR DE NUEVO", callback_data="mine_click")], 
           [InlineKeyboardButton(get_text(lang, 'btn_back'), callback_data="go_dashboard")]]
     
@@ -584,7 +599,9 @@ async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def shop_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; user_id = query.from_user.id; user_data = await db.get_user(user_id); lang = query.from_user.language_code
-    txt = get_text(lang, 'shop_body', hive=user_data.get('nectar', 0))
+    # Formateo visual
+    hive_display = f"{float(user_data.get('nectar', 0)):.4f}"
+    txt = get_text(lang, 'shop_body', hive=hive_display)
     kb = [
         [InlineKeyboardButton("⚡ RECARGA ENERGÍA", callback_data="buy_energy")],
         [InlineKeyboardButton("👑 COMPRAR PREMIUM ($10)", callback_data="buy_premium")],
@@ -606,7 +623,7 @@ async def show_progress_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query; user_id = query.from_user.id; user_data = await db.get_user(user_id)
     progress = user_data.get('progress_to_next_state', 0)
     state = user_data.get('state', 1)
-    txt = f"🚀 **PROGRESO**\n\nNivel: {STATES.get(state)}\nMeta: {STATES.get(state+1, 'MAX')}\n`{render_progressbar(progress, 100)}` {progress}%"
+    txt = f"🚀 **PROGRESO**\n\nNivel: {STATES.get(state)}\nMeta: {STATES.get(state+1, 'MAX')}\n`{render_progressbar(progress, 100)}` {progress:.1f}%"
     kb = [[InlineKeyboardButton("🔙", callback_data="go_dashboard")]]
     await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
@@ -654,8 +671,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if data in handlers: await handlers[data](update, context)
     elif data == "buy_energy":
-        if user_data.get('nectar', 0) >= COST_ENERGY_REFILL:
-            user_data['nectar'] -= COST_ENERGY_REFILL; user_data['energy'] = min(user_data.get('energy', 0) + 200, MAX_ENERGY_BASE)
+        if float(user_data.get('nectar', 0)) >= COST_ENERGY_REFILL:
+            user_data['nectar'] = float(user_data.get('nectar', 0)) - COST_ENERGY_REFILL
+            user_data['energy'] = min(user_data.get('energy', 0) + 200, MAX_ENERGY_BASE)
             await save_user_data(user_id, user_data); await query.answer("⚡ Energía Recargada", show_alert=True); await show_dashboard(update, context)
         else: await query.answer("❌ Saldo insuficiente", show_alert=True)
     elif data == "withdraw": 
