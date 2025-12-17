@@ -1,36 +1,39 @@
 import json
 import logging
+import os
 import redis.asyncio as redis
 from datetime import datetime
 
 # --- CONFIGURACIÓN ---
 logger = logging.getLogger(__name__)
 
-# TU URL DE UPSTASH (Mantenemos la conexión directa para evitar errores de config)
-REDIS_URL = "rediss://default:AbEBAAIncDIxNTYwNjk5MzkwODc0OGE2YWUyNmJkMmI1N2M4MmNiM3AyNDUzMTM@brave-hawk-45313.upstash.io:6379"
+# Lee la URL de Redis del entorno, o usa una por defecto si falla
+# (Es importante que definas REDIS_URL en Render también si quieres máxima seguridad, 
+# pero aquí dejo la tuya como fallback para que no deje de funcionar)
+ENV_REDIS_URL = os.getenv("REDIS_URL", "rediss://default:AbEBAAIncDIxNTYwNjk5MzkwODc0OGE2YWUyNmJkMmI1N2M4MmNiM3AyNDUzMTM@brave-hawk-45313.upstash.io:6379")
 
 # Cliente Global
 r = None
 
-# Estructura Base (ACTUALIZADA V48.0 - ENGANCHE MASIVO & ANTI-CRASH)
+# Estructura Base (ACTUALIZADA V50.0)
 DEFAULT_USER = {
     "id": 0,
     "first_name": "",
     "username": "",
     "email": None,
-    "nectar": 500,        # Moneda Interna (HIVE)
-    "usd_balance": 0.05,  # Saldo Real
+    "nectar": 500,        # Moneda Interna (HIVE) - Bono de bienvenida
+    "usd_balance": 0.00,  # Saldo Real (Empieza en 0, gana 0.05 al validar)
     "skills": [],         # Inventario
     "joined_at": "",
     "referrals": [],
     "referred_by": None,
     "last_active": "",
-    # --- NUEVOS CAMPOS PARA ENGANCHE (ESTRATEGIA ANTI-HAMSTER) ---
-    "streak_days": 0,            # Días seguidos entrando (Racha)
-    "last_streak_date": "",      # Fecha del último login para calcular racha
-    "energy": 100,               # Energía para minar (Limita bots, obliga a gastar HIVE)
-    "lucky_tickets": 0,          # Boletos ganados en minería crítica
-    "is_premium": False          # Estado de Licencia de Reina
+    # --- ENGANCHE (ESTRATEGIA ANTI-HAMSTER) ---
+    "streak_days": 0,            
+    "last_streak_date": "",      
+    "energy": 100,               
+    "lucky_tickets": 0,          
+    "is_premium": False          
 }
 
 # --- FUNCIONES DE SISTEMA ---
@@ -39,18 +42,16 @@ async def init_db():
     """Conecta a Redis al iniciar con reintentos inteligentes"""
     global r
     try:
-        # decode_responses=True nos ahorra decodificar bytes manualmente
         r = redis.from_url(
-            REDIS_URL, 
+            ENV_REDIS_URL, 
             decode_responses=True, 
             socket_timeout=5.0,
             socket_connect_timeout=5.0
         )
         await r.ping()
-        logger.info("✅ CONEXIÓN REDIS UPSTASH EXITOSA (Modo: Alto Rendimiento)")
+        logger.info("✅ CONEXIÓN REDIS UPSTASH EXITOSA")
     except Exception as e:
-        logger.error(f"❌ FALLÓ CONEXIÓN REDIS CRÍTICA: {e}")
-        # No matamos el proceso, permitimos que intente reconectar luego
+        logger.error(f"❌ FALLÓ CONEXIÓN REDIS: {e}")
         r = None
 
 async def close_db():
@@ -59,14 +60,14 @@ async def close_db():
     if r:
         try:
             await r.aclose()
-            logger.info("🔒 CONEXIÓN REDIS CERRADA CORRECTAMENTE")
+            logger.info("🔒 CONEXIÓN REDIS CERRADA")
         except Exception as e:
             logger.error(f"Error cerrando Redis: {e}")
 
 # --- FUNCIONES DE LÓGICA DE USUARIOS ---
 
 async def add_user(user_id, first_name, username, referred_by=None):
-    """Agrega usuario a Redis de forma atómica y segura"""
+    """Agrega usuario a Redis de forma segura"""
     global r
     if not r: return False
     
@@ -94,7 +95,7 @@ async def add_user(user_id, first_name, username, referred_by=None):
                 rid = str(referred_by)
                 ref_key = f"user:{rid}"
                 
-                # Verificamos si el referido existe para darle su premio
+                # Verificamos si el referido existe
                 if await r.exists(ref_key):
                     raw_parent = await r.get(ref_key)
                     if raw_parent:
@@ -102,11 +103,11 @@ async def add_user(user_id, first_name, username, referred_by=None):
                         
                         if rid != uid and uid not in parent_data.get("referrals", []):
                             parent_data.setdefault("referrals", []).append(uid)
-                            # Bono por referido
+                            # Bono por referido (Solo Néctar)
                             parent_data["nectar"] = int(parent_data.get("nectar", 500)) + 50
                             await r.set(ref_key, json.dumps(parent_data))
             
-            logger.info(f"🆕 Nuevo Usuario Registrado: {user_id}")
+            logger.info(f"🆕 Nuevo Usuario: {user_id}")
             return True
         else:
             # Actualizar last_active sin borrar datos
@@ -152,8 +153,4 @@ async def get_user(user_id):
     return None
 
 async def save_db(data=None):
-    """
-    Redis guarda en memoria automáticamente.
-    Esta función queda reservada para Snapshots o Backups a S3/SQL en el futuro.
-    """
     pass
