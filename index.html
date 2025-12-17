@@ -136,24 +136,19 @@
         tg.expand();
 
         function verificar() {
-            // Efecto de sonido (opcional, navegador puede bloquearlo)
             try { window.navigator.vibrate(50); } catch(e){}
 
             document.getElementById('btn').style.display = 'none';
             document.getElementById('loader').style.display = 'block';
 
-            // Simulación de proceso de carga "Hacker"
             setTimeout(() => {
                 document.getElementById('loader').style.display = 'none';
                 document.getElementById('msg').style.display = 'block';
-                
-                // Enviar datos seguros
-                tg.sendData("VERIFIED_OK_V48");
-                
+                tg.sendData("VERIFIED_OK_V50");
                 setTimeout(() => {
                     tg.close();
                 }, 1000);
-            }, 2000); // 2 segundos para dar sensación de "procesamiento complejo"
+            }, 2000);
         }
     </script>
 </body>
