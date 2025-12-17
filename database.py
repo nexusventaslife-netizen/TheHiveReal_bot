@@ -1,156 +1,118 @@
+import os
 import json
 import logging
-import os
-import redis.asyncio as redis
-from datetime import datetime
+import asyncio
+from typing import Dict, Any, Optional
 
-# --- CONFIGURACIÓN ---
-logger = logging.getLogger(__name__)
+# Si usas Python 3.7+, usa redis-py en modo async
+try:
+    import redis.asyncio as redis 
+    # Opcional: si estás en un entorno antiguo o usas aioredis (deprecated)
+    # import aioredis as redis 
+except ImportError:
+    logging.error("❌ Módulo 'redis' (o 'aioredis') no encontrado. Instala: pip install redis")
+    redis = None
 
-# Lee la URL de Redis del entorno, o usa una por defecto si falla
-# (Es importante que definas REDIS_URL en Render también si quieres máxima seguridad, 
-# pero aquí dejo la tuya como fallback para que no deje de funcionar)
-ENV_REDIS_URL = os.getenv("REDIS_URL", "rediss://default:AbEBAAIncDIxNTYwNjk5MzkwODc0OGE2YWUyNmJkMmI1N2M4MmNiM3AyNDUzMTM@brave-hawk-45313.upstash.io:6379")
+logger = logging.getLogger("Database")
+r: Optional[redis.Redis] = None
 
-# Cliente Global
-r = None
-
-# Estructura Base (ACTUALIZADA V50.0)
-DEFAULT_USER = {
-    "id": 0,
-    "first_name": "",
-    "username": "",
+# Constantes de Inicialización
+DEFAULT_USER_DATA = {
+    "usd_balance": 0.00,
+    "nectar": 50, # HIVE Tokens
+    "tokens_locked": 0,
     "email": None,
-    "nectar": 500,        # Moneda Interna (HIVE) - Bono de bienvenida
-    "usd_balance": 0.00,  # Saldo Real (Empieza en 0, gana 0.05 al validar)
-    "skills": [],         # Inventario
-    "joined_at": "",
+    "is_active": False,
     "referrals": [],
-    "referred_by": None,
-    "last_active": "",
-    # --- ENGANCHE (ESTRATEGIA ANTI-HAMSTER) ---
-    "streak_days": 0,            
-    "last_streak_date": "",      
-    "energy": 100,               
-    "lucky_tickets": 0,          
-    "is_premium": False          
+    "referrer_id": None,
+    # El resto de campos RLE/Anti-fraude se inicializan en bot_logic.start
 }
 
-# --- FUNCIONES DE SISTEMA ---
-
 async def init_db():
-    """Conecta a Redis al iniciar con reintentos inteligentes"""
+    """Inicializa la conexión a Redis."""
     global r
+    REDIS_URL = os.getenv("REDIS_URL")
+    
+    if not REDIS_URL:
+        logger.warning("⚠️ Variable de entorno REDIS_URL no encontrada. Usando Redis simulado/Dummy. ¡Los datos no se guardarán!")
+        # Implementación de un Dummy Redis (Solo para desarrollo local sin Redis)
+        class DummyRedis:
+            def __init__(self):
+                self.data = {}
+            async def get(self, key):
+                return self.data.get(key)
+            async def set(self, key, value):
+                self.data[key] = value
+            async def exists(self, key):
+                return key in self.data
+            async def close(self): pass
+        r = DummyRedis()
+        return
+
     try:
-        r = redis.from_url(
-            ENV_REDIS_URL, 
-            decode_responses=True, 
-            socket_timeout=5.0,
-            socket_connect_timeout=5.0
-        )
+        r = redis.from_url(REDIS_URL, decode_responses=True)
         await r.ping()
-        logger.info("✅ CONEXIÓN REDIS UPSTASH EXITOSA")
+        logger.info("✅ Conexión a Redis exitosa.")
     except Exception as e:
-        logger.error(f"❌ FALLÓ CONEXIÓN REDIS: {e}")
-        r = None
+        logger.error(f"❌ Error al conectar a Redis: {e}. Usando Dummy Redis.")
+        # Fallback si la conexión real falla
+        class DummyRedis:
+            def __init__(self): self.data = {}
+            async def get(self, key): return self.data.get(key)
+            async def set(self, key, value): self.data[key] = value
+            async def exists(self, key): return key in self.data
+            async def close(self): pass
+        r = DummyRedis()
 
-async def close_db():
-    """Cierra la conexión al apagar"""
-    global r
-    if r:
+
+async def get_user(user_id: int) -> Dict[str, Any]:
+    """Recupera los datos del usuario de Redis, o devuelve un diccionario vacío."""
+    if not r: return {}
+    
+    key = f"user:{user_id}"
+    data = await r.get(key)
+    
+    if data:
         try:
-            await r.aclose()
-            logger.info("🔒 CONEXIÓN REDIS CERRADA")
-        except Exception as e:
-            logger.error(f"Error cerrando Redis: {e}")
-
-# --- FUNCIONES DE LÓGICA DE USUARIOS ---
-
-async def add_user(user_id, first_name, username, referred_by=None):
-    """Agrega usuario a Redis de forma segura"""
-    global r
-    if not r: return False
-    
-    uid = str(user_id)
-    key = f"user:{uid}"
-    
-    try:
-        exists = await r.exists(key)
-        
-        if not exists:
-            new_user = DEFAULT_USER.copy()
-            new_user.update({
-                "id": user_id,
-                "first_name": first_name,
-                "username": username,
-                "joined_at": datetime.now().isoformat(),
-                "last_active": datetime.now().isoformat(),
-                "referred_by": referred_by
-            })
-            
-            await r.set(key, json.dumps(new_user))
-            
-            # Procesar Referido (Viralidad)
-            if referred_by:
-                rid = str(referred_by)
-                ref_key = f"user:{rid}"
-                
-                # Verificamos si el referido existe
-                if await r.exists(ref_key):
-                    raw_parent = await r.get(ref_key)
-                    if raw_parent:
-                        parent_data = json.loads(raw_parent)
-                        
-                        if rid != uid and uid not in parent_data.get("referrals", []):
-                            parent_data.setdefault("referrals", []).append(uid)
-                            # Bono por referido (Solo Néctar)
-                            parent_data["nectar"] = int(parent_data.get("nectar", 500)) + 50
-                            await r.set(ref_key, json.dumps(parent_data))
-            
-            logger.info(f"🆕 Nuevo Usuario: {user_id}")
-            return True
-        else:
-            # Actualizar last_active sin borrar datos
-            raw_data = await r.get(key)
-            if raw_data:
-                data = json.loads(raw_data)
-                data["last_active"] = datetime.now().isoformat()
-                # Asegurar que los nuevos campos existen en usuarios viejos
-                for k, v in DEFAULT_USER.items():
-                    if k not in data:
-                        data[k] = v
-                await r.set(key, json.dumps(data))
-            return False
-            
-    except Exception as e:
-        logger.error(f"Error en add_user: {e}")
-        return False
-
-async def update_email(user_id, email):
-    """Actualiza email en Redis"""
-    global r
-    if not r: return
-    key = f"user:{user_id}"
-    try:
-        if await r.exists(key):
-            data = json.loads(await r.get(key))
-            data["email"] = email
-            await r.set(key, json.dumps(data))
-    except Exception as e:
-        logger.error(f"Error actualizando email: {e}")
-
-async def get_user(user_id):
-    """Obtiene datos de Redis"""
-    global r
-    if not r: return None
-    key = f"user:{user_id}"
-    try:
-        data = await r.get(key)
-        if data:
             return json.loads(data)
-    except Exception as e:
-        logger.error(f"Error obteniendo usuario {user_id}: {e}")
-    return None
+        except json.JSONDecodeError:
+            logger.error(f"Error al decodificar JSON para el usuario {user_id}")
+            return {} 
+    return {}
 
-async def save_db(data=None):
-    pass
+
+async def add_user(user_id: int, first_name: str, username: Optional[str], referrer_id: Optional[str] = None):
+    """Crea un nuevo usuario si no existe e incrementa el contador de referidos."""
+    if not r: return
+    
+    key = f"user:{user_id}"
+    if not await r.exists(key):
+        new_data = DEFAULT_USER_DATA.copy()
+        new_data.update({
+            "id": user_id,
+            "first_name": first_name,
+            "username": username,
+            "referrer_id": int(referrer_id) if referrer_id else None
+        })
+        
+        await r.set(key, json.dumps(new_data))
+        logger.info(f"➕ Nuevo usuario: {user_id}")
+        
+        # Lógica de Referidos
+        if referrer_id and referrer_id.isdigit():
+            ref_data = await get_user(int(referrer_id))
+            if ref_data:
+                ref_data['referrals'].append(user_id)
+                await r.set(f"user:{referrer_id}", json.dumps(ref_data))
+                logger.info(f"🔗 {user_id} agregado a referidos de {referrer_id}")
+
+async def update_email(user_id: int, email: str):
+    """Actualiza el correo electrónico del usuario."""
+    if not r: return
+    user_data = await get_user(user_id)
+    if user_data:
+        user_data['email'] = email
+        await r.set(f"user:{user_id}", json.dumps(user_data))
+        logger.info(f"📧 Email actualizado para {user_id}")
+
+# La función save_user_data se mantiene en bot_logic.py para usar 'r' globalmente.
