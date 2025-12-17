@@ -1,10 +1,9 @@
-# cache.py
 import json
 import logging
 from typing import Optional, Dict, Any
 from redis.asyncio import Redis
 
-# Intentamos usar orjson para velocidad disruptiva (Carga 5x más rápido)
+# Intentamos usar orjson para velocidad
 try:
     import orjson
     HAS_ORJSON = True
@@ -13,7 +12,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-USER_CACHE_TTL = 300  # Aumentado a 5 min para reducir carga en DB
+USER_CACHE_TTL = 300 
 P2P_CACHE_TTL = 10
 REGION_CACHE_TTL = 3600
 SHARD_COUNT = 64
@@ -21,12 +20,8 @@ SHARD_COUNT = 64
 redis_client: Optional[Redis] = None
 
 def key_for_user(telegram_id: int, shard_count: int = SHARD_COUNT) -> str:
-    # Sistema de Sharding para escalar a millones de usuarios sin lag
     shard = int(telegram_id) % shard_count
     return f"user:{shard}:{telegram_id}"
-
-def key_for_p2p() -> str:
-    return "p2p:offers"
 
 async def init_cache(client: Redis, *, user_ttl: int = USER_CACHE_TTL, p2p_ttl: int = P2P_CACHE_TTL):
     global redis_client, USER_CACHE_TTL, P2P_CACHE_TTL
@@ -37,7 +32,6 @@ async def init_cache(client: Redis, *, user_ttl: int = USER_CACHE_TTL, p2p_ttl: 
 
 def _serialize(obj: Dict[str, Any]) -> str:
     if HAS_ORJSON:
-        # orjson devuelve bytes, lo decodificamos a str para compatibilidad con redis-py standard
         return orjson.dumps(obj).decode('utf-8')
     return json.dumps(obj, default=str, separators=(",", ":"))
 
@@ -63,11 +57,9 @@ async def cache_get_user(telegram_id: int, fallback_db_callable=None, ttl: int =
     except Exception as e:
         logger.error(f"⚠️ Redis Read Error: {e}")
 
-    # Fallback: Si no está en caché o error, buscar en DB real
     if fallback_db_callable:
         data = await fallback_db_callable()
         if data: 
-            # Guardar en caché para la próxima (Self-Healing)
             try:
                 await redis_client.set(key, _serialize(data), ex=ttl or USER_CACHE_TTL)
             except Exception: pass
