@@ -6,26 +6,27 @@ import math
 import statistics
 import os
 import ujson as json
+# AQUI ESTABA EL ERROR: AGREGUE Dict Y List EXPLICITAMENTE
+from typing import Tuple, List, Dict, Any, Optional
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
-import database as db 
 from loguru import logger
+import database as db 
 from email_validator import validate_email, EmailNotValidError
 
 # ==============================================================================
-# CONFIGURACIÓN PANDORA V302 (FULL)
+# CONFIGURACIÓN PANDORA V303 (FULL)
 # ==============================================================================
 
 logger = logging.getLogger("HiveLogic")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 CRYPTO_WALLET_USDT = os.getenv("WALLET_USDT", "TRC20_WALLET_PENDING")
 
-# Assets
 IMG_GENESIS = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
 IMG_DASHBOARD = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
 
-# Tiers de Forrajeo
 FORRAJEO_DB = {
     "TIER_1": [
         {"name": "📺 Timebucks", "url": os.getenv("LINK_TIMEBUCKS", "https://timebucks.com/?refID=227501472")},
@@ -45,7 +46,6 @@ FORRAJEO_DB = {
     ]
 }
 
-# Castas
 CASTAS_CONFIG = {
     "RECOLECTOR": {"desc": "Prod +50%", "bonus_honey": 1.5, "max_polen": 500},
     "GUARDIAN":   {"desc": "Resistencia Max", "bonus_honey": 1.0, "max_polen": 1000},
@@ -72,7 +72,7 @@ def render_bar(current: float, total: float, length: int = 10) -> str:
     return "⬢" * fill + "⬡" * (length - fill)
 
 # ==============================================================================
-# MOTORES LÓGICOS
+# MOTORES LÓGICOS (AQUI DABA EL ERROR PORQUE FALTABA Dict)
 # ==============================================================================
 
 class BioEngine:
@@ -128,7 +128,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await db.db.create_node(user.id, user.first_name, user.username, ref)
     node = await db.db.get_node(user.id)
     
-    # Bypass si ya está activo
     if node.get("email") and node.get("caste"):
         await show_dashboard(update, context)
         return
@@ -217,7 +216,6 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     polen = int(node['polen'])
     max_p = int(node['max_polen'])
-    # AQUÍ SE USA LA FUNCIÓN GLOBAL
     bar = render_bar(polen, max_p)
     oxy = node['oxygen']
     
@@ -376,7 +374,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "v_t2": lambda u,c: view_tier_generic(u, "TIER_2"),
         "v_t3": lambda u,c: view_tier_generic(u, "TIER_3"),
         "squad": squad_menu, 
-        "mk_cell": create_squad_logic, # CORREGIDO: Mapeo correcto
+        "mk_cell": create_squad_logic, 
         "shop": shop_menu, 
         "buy_energy": buy_energy,
         "buy_premium": buy_premium, 
@@ -393,5 +391,5 @@ async def reset_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("💀 NODO PURGADO")
 
 async def invite_cmd(u, c): await team_menu(u, c)
-async def help_cmd(u, c): await u.message.reply_text("Pandora Protocol V302")
+async def help_cmd(u, c): await u.message.reply_text("Pandora Protocol V303")
 async def broadcast_cmd(u, c): pass
