@@ -1,22 +1,46 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>THE ONE HIVE | EVOLUTION</title>
     <style>
-        body { background-color: #000; color: #ffcc00; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; text-align: center; }
-        .box { border: 2px solid #ffcc00; padding: 40px; box-shadow: 0 0 20px rgba(255, 204, 0, 0.4); }
-        h1 { font-size: 3em; margin: 0; text-shadow: 0 0 10px #ffcc00; }
-        .pulse { animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        body {
+            background-color: #050505;
+            color: #f1c40f;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+        .container {
+            border: 2px solid #f1c40f;
+            padding: 3rem;
+            box-shadow: 0 0 25px rgba(241, 196, 15, 0.2);
+            background: rgba(0,0,0,0.8);
+        }
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            text-shadow: 0 0 10px #f1c40f;
+        }
+        p { font-size: 1.2rem; opacity: 0.9; }
+        .blink { animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0; } }
+        a { color: #fff; text-decoration: none; border-bottom: 1px solid #fff; }
     </style>
 </head>
 <body>
-    <div class="box">
+    <div class="container">
         <h1>THE ONE HIVE</h1>
-        <p class="pulse">SYSTEM STATUS: OPERATIONAL</p>
-        <p>VERSION: 200.0 (PANDORA ENGINE)</p>
+        <p>STATUS: <span class="blink">OPERATIONAL</span></p>
+        <p>PROTOCOL: PANDORA V300.0</p>
+        <br>
+        <p>[ ACCESS SECURED ]</p>
     </div>
 </body>
 </html>
