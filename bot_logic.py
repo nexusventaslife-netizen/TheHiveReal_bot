@@ -1,3 +1,4 @@
+import logging
 import asyncio
 import random
 import time
@@ -8,312 +9,267 @@ import ujson as json
 from datetime import datetime
 from typing import Tuple, List, Dict, Any, Optional
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, InputMediaPhoto
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 from loguru import logger
-from database import db
+import database as db 
 from email_validator import validate_email, EmailNotValidError
 
 # ==============================================================================
-# 1. CONFIGURACIÓN MAESTRA DEL SISTEMA (HIVE CONFIG)
+# CONFIGURACIÓN MAESTRA PANDORA V301
 # ==============================================================================
 
-# Variables Administrativas
+logger = logging.getLogger("HiveLogic")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
-CRYPTO_WALLET_USDT = os.getenv("WALLET_USDT", "T-PENDING-ADDRESS-TRC20")
-SUPPORT_CONTACT = "@SoportePandora"
+CRYPTO_WALLET_USDT = os.getenv("WALLET_USDT", "TRC20_WALLET_PENDING")
 
-# Assets Visuales (CDNs)
-IMG_WELCOME = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
+# --- ACTIVOS VISUALES (URLS FIJAS) ---
+IMG_GENESIS = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
 IMG_DASHBOARD = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
-IMG_LEVEL_UP = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
 
-# --- MATRIX DE ENLACES CPA (TIER SYSTEM) ---
-# Estructura expandida con metadata para UI futura
-LINKS_DB = {
-    "TIER_1": {
-        "TIMEBUCKS": {"url": os.getenv("LINK_TIMEBUCKS", "https://timebucks.com/?refID=227501472"), "desc": "Videos y Encuestas", "payout": "$0.50"},
-        "ADBTC": {"url": "https://r.adbtc.top/3284589", "desc": "Surf Ads Crypto", "payout": "Sats"},
-        "FREEBITCOIN": {"url": "https://freebitco.in/?r=55837744", "desc": "Faucet Horaria", "payout": "BTC"},
-        "FAUCETPAY": {"url": "https://faucetpay.io/?r=2275014", "desc": "MicroWallet + Earn", "payout": "Multi"},
-        "COINTIPLY": {"url": "https://cointiply.com/r/jR1L6y", "desc": "Offerwalls", "payout": "$1.00"},
-        "GAMEHAG": {"url": "https://gamehag.com/r/NWUD9QNR", "desc": "Juega y Gana", "payout": "Items"},
-        "FREECASH": {"url": "https://freecash.com/r/XYN98", "desc": "Apps Testing", "payout": "$2.00"},
-        "SWAGBUCKS": {"url": "https://www.swagbucks.com/p/register?rb=226213635&rp=1", "desc": "Gigante GPT", "payout": "$5.00"},
-        "EVERVE": {"url": "https://everve.net/ref/1950045/", "desc": "Social Exchange", "payout": "$0.10"}
+# --- BASE DE DATOS DE FORRAJEO (LINKS CPA) ---
+# Tiers organizados por dificultad y recompensa
+FORRAJEO_DB = {
+    "TIER_1": [
+        {"name": "📺 Timebucks (Videos)", "url": os.getenv("LINK_TIMEBUCKS", "https://timebucks.com/?refID=227501472"), "desc": "Gana por ver contenido"},
+        {"name": "💰 ADBTC (Surf)", "url": "https://r.adbtc.top/3284589", "desc": "Clicks en anuncios"},
+        {"name": "🎲 FreeBitcoin", "url": "https://freebitco.in/?r=55837744", "desc": "Faucet horaria"},
+        {"name": "💸 FreeCash", "url": "https://freecash.com/r/XYN98", "desc": "Instalar Apps"},
+        {"name": "🎮 GameHag", "url": "https://gamehag.com/r/NWUD9QNR", "desc": "Jugar Juegos"}
+    ],
+    "TIER_2": [
+        {"name": "🐝 Honeygain", "url": "https://join.honeygain.com/ALEJOE9F32", "desc": "Ingreso Pasivo"},
+        {"name": "📦 PacketStream", "url": "https://packetstream.io/?psr=7hQT", "desc": "Compartir ancho de banda"},
+        {"name": "♟️ Pawns.app", "url": "https://pawns.app/?r=18399810", "desc": "Internet Sharing"},
+        {"name": "🌱 SproutGigs", "url": "https://sproutgigs.com/?a=83fb1bf9", "desc": "Micro-trabajos"}
+    ],
+    "TIER_3": [
+        {"name": "🔥 ByBit ($20 Bonus)", "url": "https://www.bybit.com/invite?ref=BBJWAX4", "desc": "Trading Pro"},
+        {"name": "🏦 Nexo", "url": "https://nexo.com/ref/rbkekqnarx?src=android-link", "desc": "Crypto Bank"},
+        {"name": "💳 Revolut", "url": "https://revolut.com/referral/?referral-code=alejandroperdbhx", "desc": "Banco Digital"},
+        {"name": "☁️ AirTM", "url": "https://app.airtm.com/ivt/jos3vkujiyj", "desc": "Dólar Digital"}
+    ]
+}
+
+# --- GENÉTICA DE CASTAS (DECISIÓN IRREVERSIBLE) ---
+CASTAS_CONFIG = {
+    "RECOLECTOR": {
+        "desc": "🐝 **Producción**. Especialistas en generar Miel.\n• Bonus Producción: +50%\n• Capacidad Polen: 500",
+        "bonus_honey": 1.5,
+        "bonus_luck": 1.0,
+        "max_polen": 500
     },
-    "TIER_2": {
-        "HONEYGAIN": {"url": "https://join.honeygain.com/ALEJOE9F32", "desc": "Comparte Internet", "payout": "Pasivo"},
-        "PACKETSTREAM": {"url": "https://packetstream.io/?psr=7hQT", "desc": "Banda Ancha P2P", "payout": "Pasivo"},
-        "PAWNS": {"url": "https://pawns.app/?r=18399810", "desc": "Internet Sharing", "payout": "Pasivo"},
-        "TRAFFMONETIZER": {"url": "https://traffmonetizer.com/?aff=2034896", "desc": "Monetiza Tráfico", "payout": "Pasivo"},
-        "PAIDWORK": {"url": "https://www.paidwork.com/?r=nexus.ventas.life", "desc": "Freelance Micro", "payout": "Varía"},
-        "SPROUTGIGS": {"url": "https://sproutgigs.com/?a=83fb1bf9", "desc": "Micro Jobs", "payout": "$1.00"},
-        "GOTRANSCRIPT": {"url": "https://gotranscript.com/r/7667434", "desc": "Transcripción", "payout": "Alto"},
-        "TESTBIRDS": {"url": "https://nest.testbirds.com/home/tester?t=9ef7ff82-ca89-4e4a-a288-02b4938ff381", "desc": "UX Testing", "payout": "€10+"}
+    "GUARDIAN": {
+        "desc": "🛡️ **Resistencia**. Tanques de energía masivos.\n• Bonus Producción: +0%\n• Capacidad Polen: 1000",
+        "bonus_honey": 1.0,
+        "bonus_luck": 1.0,
+        "max_polen": 1000
     },
-    "TIER_3": {
-        "BYBIT": {"url": "https://www.bybit.com/invite?ref=BBJWAX4", "desc": "Exchange Top 3", "payout": "$20 Bonus"},
-        "NEXO": {"url": "https://nexo.com/ref/rbkekqnarx?src=android-link", "desc": "Crypto Bank", "payout": "$25 BTC"},
-        "REVOLUT": {"url": "https://revolut.com/referral/?referral-code=alejandroperdbhx", "desc": "Banco Digital", "payout": "€40"},
-        "WISE": {"url": "https://wise.com/invite/ahpc/josealejandrop73", "desc": "Transferencias", "payout": "£50"},
-        "AIRTM": {"url": "https://app.airtm.com/ivt/jos3vkujiyj", "desc": "Dólar Digital", "payout": "$2.00"},
-        "BETFURY": {"url": "https://betfury.io/?r=6664969919f42d20e7297e29", "desc": "iGaming & Staking", "payout": "Varía"},
-        "PLUS500": {"url": "https://www.plus500.com/en-uy/refer-friend", "desc": "Trading CFD", "payout": "Alto"},
-        "YOUHODLER": {"url": "https://app.youhodler.com/sign-up?ref=SXSSSNB1", "desc": "Yield Account", "payout": "APY High"}
+    "EXPLORADOR": {
+        "desc": "🧭 **Suerte**. Encuentran anomalías valiosas.\n• Bonus Producción: -20%\n• Bonus Suerte: x2\n• Capacidad Polen: 600",
+        "bonus_honey": 0.8,
+        "bonus_luck": 2.0,
+        "max_polen": 600
     }
 }
 
-# --- ECONOMÍA Y JUEGO ---
-ROLES_CONFIG = {
-    "LARVA":      {"xp": 0,     "max_energy": 300,  "regen": 0.5, "tiers": ["TIER_1"]},
-    "OBRERO":     {"xp": 500,   "max_energy": 500,  "regen": 0.8, "tiers": ["TIER_1", "TIER_2"]},
-    "EXPLORADOR": {"xp": 1500,  "max_energy": 800,  "regen": 1.0, "tiers": ["TIER_1", "TIER_2", "TIER_3"]},
-    "GUARDIAN":   {"xp": 3500,  "max_energy": 1200, "regen": 1.5, "tiers": ["TIER_1", "TIER_2", "TIER_3"]},
-    "NODO":       {"xp": 7000,  "max_energy": 2500, "regen": 2.0, "tiers": ["TIER_1", "TIER_2", "TIER_3"]},
-    "GENESIS":    {"xp": 20000, "max_energy": 5000, "regen": 5.0, "tiers": ["ALL"]}
-}
-
-CONSTANTS = {
-    "ENERGY_COST": 10,
-    "BASE_REWARD": 0.50,
-    "RECHARGE_COST": 200,
-    "CELL_COST": 100,
-    "OXYGEN_DECAY_HOUR": 5.0, # 5% por hora
-    "PREMIUM_PRICE": 10.0 # USD
+# --- CONSTANTES ECONÓMICAS ---
+CONST = {
+    "COSTO_POLEN": 10,       # Costo por click
+    "RECOMPENSA_BASE": 0.50, # Miel base por click
+    "DECAY_OXIGENO": 5.0,    # % Pérdida por hora inactiva
+    "COSTO_ENJAMBRE": 100,   # Costo creación célula
+    "COSTO_RECARGA": 200,    # Costo recarga energía
 }
 
 # ==============================================================================
-# 2. MOTORES DE LÓGICA (CLASES DE NEGOCIO)
+# 1. MOTORES DE LÓGICA (CLASES DE NEGOCIO)
 # ==============================================================================
 
 class BioEngine:
-    """Calcula la biología del usuario: Energía, Oxígeno, Niveles."""
-    
+    """
+    Motor que calcula el estado vital del nodo (Energía, Oxígeno).
+    """
     @staticmethod
-    def calculate_state(user: Dict) -> Dict:
+    def calculate_state(node: Dict) -> Dict:
         now = time.time()
-        last_regen = user.get("last_regen", now)
+        last_regen = node.get("last_regen", now)
         elapsed = now - last_regen
         
-        role = user.get("role", "LARVA")
-        config = ROLES_CONFIG.get(role, ROLES_CONFIG["LARVA"])
+        # Obtener configuración de casta
+        casta = node.get("caste")
+        specs = CASTAS_CONFIG.get(casta, CASTAS_CONFIG["RECOLECTOR"])
+        node["max_polen"] = specs["max_polen"]
         
-        # 1. Regenerar Energía
+        # 1. Regeneración de Polen (0.5 por segundo)
         if elapsed > 0:
-            regen = elapsed * config["regen"]
-            new_energy = user["energy"] + int(regen)
-            user["energy"] = min(config["max_energy"], new_energy)
-            user["max_energy"] = config["max_energy"] # Sync max cap
+            regen_amount = elapsed * 0.5 
+            node["polen"] = min(node["max_polen"], node["polen"] + int(regen_amount))
             
-        # 2. Decaer Oxígeno (Adicción)
-        # El oxígeno decae si no hay interacción (last_pulse)
-        last_pulse = user.get("last_pulse", now)
-        idle_time = now - last_pulse
+        # 2. Decaimiento de Oxígeno (Si inactivo > 1 hora)
+        last_pulse = node.get("last_pulse", now)
+        time_since_pulse = now - last_pulse
         
-        if idle_time > 3600: # 1 Hora
-            hours_idle = idle_time / 3600
-            decay_amount = hours_idle * CONSTANTS["OXYGEN_DECAY_HOUR"]
-            # No permitir que baje de 5%
-            user["oxygen"] = max(5.0, user.get("oxygen", 100.0) - decay_amount)
+        if time_since_pulse > 3600:
+            hours_idle = time_since_pulse / 3600
+            decay = hours_idle * CONST["DECAY_OXIGENO"]
+            node["oxygen"] = max(5.0, node.get("oxygen", 100.0) - decay)
             
-        # 3. Evolución de Rol
-        # Verificamos si merece un upgrade
-        current_xp = user.get("role_xp", 0)
-        best_role = role
-        
-        for r_name, r_data in ROLES_CONFIG.items():
-            if current_xp >= r_data["xp"]:
-                # Comprobación de jerarquía simple basada en XP
-                if r_data["xp"] >= ROLES_CONFIG[best_role]["xp"]:
-                    best_role = r_name
-        
-        if best_role != role:
-            user["role"] = best_role
-            user["energy"] = ROLES_CONFIG[best_role]["max_energy"] # Heal completo
-            
-        user["last_regen"] = now
-        return user
+        node["last_regen"] = now
+        return node
 
 class SecurityEngine:
-    """Motor Anti-Fraude y Entropía."""
-    
+    """
+    Motor Anti-Bot basado en análisis de entropía de tiempos.
+    """
     @staticmethod
     def analyze_entropy(timestamps: List[float]) -> Tuple[float, str]:
+        # Mínimo de muestras
         if len(timestamps) < 5: 
-            return 1.0, "🔵 Calibrando Sensores..."
+            return 1.0, "🔵 Sintonizando..."
         
+        # Deltas
         deltas = [timestamps[i] - timestamps[i-1] for i in range(1, len(timestamps))]
         
         try:
             mean = statistics.mean(deltas)
             stdev = statistics.stdev(deltas)
-            cv = stdev / mean if mean > 0 else 0
+            cv = stdev / mean if mean > 0 else 0 # Coeficiente de Variación
         except:
             return 1.0, "⚪ Neutro"
             
-        # CV < 0.05 -> Bot (Muy preciso)
-        # CV > 1.5 -> Lento (Humano distraído)
-        # 0.05 < CV < 0.3 -> Flow (Humano óptimo)
-        
-        if cv < 0.05: return 0.1, "🔴 DETECTADO: Patrón Robótico"
-        elif 0.05 <= cv <= 0.35: return 1.4, "🌊 BIO-RITMO PERFECTO (Bonus)"
-        elif cv > 1.5: return 0.8, "💤 Señal Débil"
-        else: return 1.0, "🟢 Señal Humana"
+        # Detección
+        if cv < 0.05: return 0.1, "🔴 ROBÓTICO (Castigo)"
+        elif 0.05 <= cv <= 0.35: return 1.3, "🌊 FLUJO VITAL (Bonus)"
+        else: return 1.0, "🟢 ORGÁNICO"
 
     @staticmethod
     def generate_captcha() -> str:
         return f"HIVE-{random.randint(1000, 9999)}"
 
 # ==============================================================================
-# 3. HANDLERS DE COMANDOS (PUNTOS DE ENTRADA)
+# 2. PROTOCOLO DE ACTIVACIÓN (FLUJO INICIAL)
 # ==============================================================================
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    /start: Inicia el onboarding estricto.
+    Entrada principal. Crea usuario e inicia secuencia.
     """
     user = update.effective_user
     args = context.args
     ref_id = int(args[0]) if args and args[0].isdigit() else None
     
-    # 1. Crear Usuario
-    is_new = await db.create_user(user.id, user.first_name, user.username, ref_id)
-    user_data = await db.get_user(user.id)
+    # 1. Crear Nodo
+    await db.db.create_node(user.id, user.first_name, user.username, ref_id)
+    node = await db.db.get_node(user.id)
     
-    # 2. Verificar Estado
-    # Si ya pasó el captcha y tiene email, mandar al dashboard
-    if user_data and user_data.get("email") and user_data.get("captcha_passed"):
+    # 2. Bypass si ya está activo
+    if node.get("email") and node.get("caste"):
         await show_dashboard(update, context)
         return
 
-    # 3. Flujo de Iniciación (Captcha)
+    # 3. Pantalla de Bienvenida (Activación)
     captcha = SecurityEngine.generate_captcha()
     context.user_data['captcha'] = captcha
-    context.user_data['step'] = 'captcha'
+    context.user_data['step'] = 'captcha_wait'
     
     txt = (
-        f"🧬 **PROTOCOLO PANDORA: SECUENCIA DE INICIO**\n"
-        f"────────────────────────────────\n"
-        f"Sujeto: **{user.first_name}** (ID: `{user.id}`)\n\n"
-        "Has sido seleccionado para la integración en el Enjambre.\n"
-        "Este sistema monetiza tu tiempo y bio-ritmo.\n\n"
-        "🛡️ **VERIFICACIÓN REQUERIDA**\n"
-        "Para asignar tu ID de Larva, confirma tu humanidad:\n\n"
-        f"🔒 CÓDIGO: `{captcha}`\n\n"
-        "👇 **Escribe el código abajo:**"
+        "🟡 **PROTOCOLO DE ACTIVACIÓN**\n"
+        "──────────────────────────\n"
+        f"Nodo Detectado: **{user.first_name}**\n\n"
+        "El sistema ha identificado tu señal biológica.\n"
+        "No eres un usuario. Eres un **Componente Crítico** de la Colmena.\n\n"
+        "⚠️ **REGLA DE ORO:**\n"
+        "La Colmena requiere **ACTIVACIÓN DIARIA**.\n"
+        "Si tu nodo se apaga, la red se debilita.\n\n"
+        "🛡️ **CONFIRMA ACCESO**\n"
+        f"Introduce clave de enlace: `{captcha}`"
     )
     
-    try: await update.message.reply_photo(IMG_WELCOME, caption=txt, parse_mode=ParseMode.MARKDOWN)
+    try: await update.message.reply_photo(IMG_GENESIS, caption=txt, parse_mode=ParseMode.MARKDOWN)
     except: await update.message.reply_text(txt, parse_mode=ParseMode.MARKDOWN)
-
-async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    /reset: Borra todos los datos (Dev Mode).
-    """
-    uid = update.effective_user.id
-    await db.delete_user(uid)
-    context.user_data.clear()
-    await update.message.reply_text("🗑️ **HARD RESET EJECUTADO**\nDatos eliminados. Usa /start.")
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    txt = (
-        "📚 **DOCUMENTACIÓN DE OPERACIONES**\n\n"
-        "1. **Minería (Tap):** Extrae Néctar. Tu ritmo define la ganancia.\n"
-        "2. **Oxígeno:** Mantén tu nivel alto (>80%) o tus ingresos caerán.\n"
-        "3. **Células:** Grupos de trabajo. Aumentan tu multiplicador.\n"
-        "4. **Tiers:** Tareas externas que pagan en USD/Cripto.\n\n"
-        "🔧 **Comandos:**\n"
-        "/start - Reinicio\n"
-        "/invitar - Red de referidos\n"
-        "/reset - Borrar cuenta"
-    )
-    await update.message.reply_text(txt, parse_mode=ParseMode.MARKDOWN)
-
-async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await team_menu(update, context)
-
-# ==============================================================================
-# 4. GESTOR DE MENSAJES (MÁQUINA DE ESTADOS)
-# ==============================================================================
 
 async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Maneja el flujo: Captcha -> Email -> Dashboard.
+    Maneja inputs de texto: Captcha y Email.
     """
     text = update.message.text.strip()
     uid = update.effective_user.id
     step = context.user_data.get('step')
     
-    # COMANDO MANUAL BYPASS
+    # Bypass manual
     if text.upper() == "/START":
         await start_command(update, context)
         return
 
-    # --- PASO 1: CAPTCHA ---
-    if step == 'captcha':
+    # --- FASE 1: CAPTCHA ---
+    if step == 'captcha_wait':
         expected = context.user_data.get('captcha')
         if text == expected:
-            # Éxito
-            context.user_data['step'] = 'email'
-            user = await db.get_user(uid)
-            user['captcha_passed'] = True
-            await db.save_user(uid, user)
+            # Éxito -> Ir a Selección de Casta
+            context.user_data['step'] = 'caste_select_wait'
             
-            kb = [[InlineKeyboardButton("✅ ACEPTAR VINCULACIÓN", callback_data="accept_legal")]]
-            await update.message.reply_text(
-                "✅ **IDENTIDAD BIOLÓGICA CONFIRMADA**\n\n"
-                "Para recibir pagos del ecosistema (CPA/Crypto), debemos vincular una identidad digital.\n"
-                "¿Aceptas sincronizarte con el Enjambre?",
-                reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN
+            txt = (
+                "✅ **SECUENCIA INICIADA**\n\n"
+                "Antes de conectarte a la red neuronal, debes definir tu **BIOLOGÍA**.\n"
+                "Cada casta tiene funciones vitales diferentes.\n\n"
+                "⚠️ **ADVERTENCIA:** Esta elección es genética. No se puede deshacer."
             )
+            
+            kb = [
+                [InlineKeyboardButton("🐝 RECOLECTOR (Producción)", callback_data="sel_RECOLECTOR")],
+                [InlineKeyboardButton("🛡️ GUARDIÁN (Resistencia)", callback_data="sel_GUARDIAN")],
+                [InlineKeyboardButton("🧭 EXPLORADOR (Suerte)", callback_data="sel_EXPLORADOR")]
+            ]
+            
+            await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
         else:
-            await update.message.reply_text("❌ **ERROR DE ACCESO**\nCódigo incorrecto. Intenta de nuevo.")
+            await update.message.reply_text("❌ Clave incorrecta. Reintenta.")
         return
 
-    # --- PASO 2: EMAIL ---
+    # --- FASE 3: EMAIL (Post-Casta) ---
     if step == 'email_wait':
         try:
-            # Validar email con librería robusta
+            # Validar
             valid = validate_email(text)
             email = valid.normalized
             
             # Guardar
-            await db.update_email(uid, email)
-            context.user_data['step'] = 'done'
+            await db.db.update_email(uid, email)
+            context.user_data['step'] = None
             
-            # Bono de Bienvenida
-            u = await db.get_user(uid)
-            u['nectar'] += 150.0
-            await db.save_user(uid, u)
+            # Bono Fundador
+            node = await db.db.get_node(uid)
+            node['honey'] += 200.0
+            await db.db.save_node(uid, node)
             
-            kb = [[InlineKeyboardButton("🚀 ENTRAR AL NÚCLEO", callback_data="go_dashboard")]]
+            kb = [[InlineKeyboardButton("📡 CONECTAR AL ENJAMBRE", callback_data="go_dashboard")]]
             await update.message.reply_text(
-                "🎉 **SINCRONIZACIÓN EXITOSA**\n\n"
-                "• Identidad: Verificada\n"
-                "• Billetera Interna: Creada\n"
-                "• Bono: **+150 Néctar**\n\n"
-                "Tu organismo está listo. Comienza la evolución.",
+                "🎉 **NODO ACTIVADO**\n\n"
+                "• Identidad: Confirmada\n"
+                "• Almacenamiento: Vinculado\n"
+                "• Bono: **+200 Miel**\n\n"
+                "Tu propósito es simple: Evolucionar.",
                 reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN
             )
             
         except EmailNotValidError:
-            await update.message.reply_text("⚠️ **EMAIL INVÁLIDO**\nPor favor ingresa un correo real.")
+            await update.message.reply_text("⚠️ **ERROR DE SINTAXIS**\nIntroduce un email válido.")
         return
 
-    # FALLBACK
-    user = await db.get_user(uid)
-    if user and user.get("email"):
+    # Fallback
+    node = await db.db.get_node(uid)
+    if node and node.get("email"):
         await show_dashboard(update, context)
 
 # ==============================================================================
-# 5. DASHBOARD (HUD PRINCIPAL)
+# 3. INTERFAZ DE COLMENA (DASHBOARD)
 # ==============================================================================
 
 async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Renderiza el panel principal con todas las stats.
+    Panel Principal con métricas en tiempo real.
     """
     if update.callback_query:
         msg_func = update.callback_query.message.edit_text
@@ -322,310 +278,288 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg_func = update.message.reply_text
         uid = update.effective_user.id
 
-    user = await db.get_user(uid)
-    if not user:
-        await msg_func("⚠️ Error crítico de datos. Usa /reset.")
-        return
-
-    # Chequeo de seguridad: Si no tiene email, mandarlo a ponerlo
-    if not user.get("email"):
+    node = await db.db.get_node(uid)
+    if not node:
+        await msg_func("⚠️ Error de conexión. Usa /start"); return
+    
+    # Checks de Integridad
+    if not node.get("caste"):
+        await start_command(update, context); return
+    if not node.get("email"):
         context.user_data['step'] = 'email_wait'
-        await msg_func("⚠️ **ACCIÓN REQUERIDA**\nEscribe tu Email para continuar:")
-        return
+        await msg_func("⚠️ **ENLACE ROTO**\nIntroduce tu Email para reconectar:"); return
 
-    # Procesar lógica de juego (Regenerar, Decaer)
-    user = BioEngine.calculate_state(user)
-    await db.save_user(uid, user)
+    # Actualizar estado
+    node = BioEngine.calculate_state(node)
     
-    # Preparar visualización
-    role = user['role']
-    energy = int(user['energy'])
-    max_e = int(user['max_energy'])
-    oxy = float(user['oxygen'])
-    nectar = float(user['nectar'])
-    usd = float(user['usd_balance'])
-    xp = int(user['role_xp'])
+    # Obtener métricas globales
+    global_stats = await db.db.get_global_stats()
     
-    # Renderizado de Barras
-    oxy_icon = "🟢" if oxy > 70 else ("🟡" if oxy > 30 else "🔴")
-    # Barra ASCII simple: 10 bloques
-    filled = int((energy / max_e) * 10)
-    bar = "█" * filled + "░" * (10 - filled)
+    await db.db.save_node(uid, node)
     
-    # Info de Célula
-    cell_info = "Sin Célula"
-    if user.get("cell_id"):
-        cell = await db.get_cell(user["cell_id"])
-        if cell: cell_info = f"{cell['name']} (x{cell['synergy_level']:.2f})"
-
+    # Renderizado
+    casta = node.get("caste", "LARVA")
+    polen = int(node['polen'])
+    max_polen = int(node['max_polen'])
+    miel = node['honey']
+    oxy = node['oxygen']
+    
+    polen_bar = render_bar(polen, max_polen)
+    oxy_icon = "🟢" if oxy > 75 else ("🟡" if oxy > 30 else "🔴")
+    estado_red = "🟢 SINCRONIZADO" if node.get("zumbido_hoy") else "🟡 PENDIENTE"
+    
     txt = (
-        f"🧬 **NÚCLEO PANDORA** | Rango: **{role}**\n"
-        f"────────────────────────\n"
-        f"🫁 **Oxígeno:** {oxy:.1f}% {oxy_icon}\n"
-        f"⚡ **Energía:** `{bar}` {energy}/{max_e}\n"
-        f"🦠 **Célula:** {cell_info}\n"
-        f"────────────────────────\n"
-        f"🪙 **Néctar:** `{nectar:.2f}`\n"
-        f"💵 **Saldo:** `${usd:.2f}`\n"
-        f"📈 **XP:** {xp}\n"
-        f"────────────────────────\n"
-        f"💡 *Mantén tu oxígeno alto para maximizar ganancias.*"
+        f"🌍 **RED GLOBAL: PANDORA**\n"
+        f"Nodos Activos: `{global_stats['nodes']:,}`\n"
+        f"Miel Global: `{global_stats['honey']:,.2f}`\n"
+        f"Estado: {estado_red}\n"
+        f"────────────────\n"
+        f"🧬 **NODO ID:** `{uid}` | Casta: **{casta}**\n\n"
+        f"⚡ **Potencia (Polen):** `{polen_bar}` {polen}/{max_polen}\n"
+        f"🫁 **Eficiencia (O2):** {oxy:.1f}% {oxy_icon}\n"
+        f"🍯 **Reserva (Miel):** `{miel:.2f}`\n"
+        f"────────────────\n"
+        f"📡 **PRÓXIMA ACTIVACIÓN:** 20:00 UTC"
     )
     
     kb = [
-        [InlineKeyboardButton("⛏️ SINTETIZAR (TAP)", callback_data="mine_action")],
-        [InlineKeyboardButton("🧠 TAREAS", callback_data="tasks_menu"), InlineKeyboardButton("🦠 CÉLULA", callback_data="cell_menu")],
-        [InlineKeyboardButton("🛒 TIENDA", callback_data="shop_menu"), InlineKeyboardButton("👥 EQUIPO", callback_data="team_menu")],
-        [InlineKeyboardButton("🔄 REFRESCAR", callback_data="go_dashboard")]
+        [InlineKeyboardButton("🏵️ RECOLECTAR (TAP)", callback_data="forage_action")],
+        [InlineKeyboardButton("📡 TRANSMISIONES", callback_data="tasks_menu"), InlineKeyboardButton("🦠 ENJAMBRE", callback_data="squad_menu")],
+        [InlineKeyboardButton("🛒 SUMINISTROS", callback_data="shop_menu"), InlineKeyboardButton("👥 CONEXIONES", callback_data="team_menu")],
+        [InlineKeyboardButton("🔄 RESINTONIZAR", callback_data="go_dashboard")]
     ]
     
     try: await msg_func(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
     except: pass
 
-# ==============================================================================
-# 6. MECÁNICA DE MINADO (TAP)
-# ==============================================================================
-
-async def mine_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def forage_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Acción principal de juego.
-    Integra: Energía, Bio-Ritmo, Sinergia y Oxígeno.
+    Acción de Minería (Forrajeo).
     """
     query = update.callback_query
     uid = query.from_user.id
+    node = await db.db.get_node(uid)
+    node = BioEngine.calculate_state(node)
     
-    # 1. Cargar y Actualizar
-    user = await db.get_user(uid)
-    user = BioEngine.calculate_state(user)
-    
-    # 2. Check Energía
-    if user['energy'] < CONSTANTS["ENERGY_COST"]:
-        await query.answer(f"⚡ Energía Agotada. Recarga o espera.", show_alert=True)
+    # 1. Costo
+    if node['polen'] < CONST['COSTO_POLEN']:
+        await query.answer("🥀 Polen insuficiente. Espera regeneración.", show_alert=True)
         return
 
-    # 3. Consumo
-    user['energy'] -= CONSTANTS["ENERGY_COST"]
-    user['last_pulse'] = time.time() # Resetear decaimiento oxígeno
+    node['polen'] -= CONST['COSTO_POLEN']
+    node['last_pulse'] = time.time()
     
-    # 4. Cálculo de Entropía (Anti-Bot)
+    # 2. Seguridad (Entropía)
     now = time.time()
-    trace = user.get("entropy_trace", [])
+    trace = node.get("entropy_trace", [])
     trace.append(now)
     if len(trace) > 15: trace.pop(0)
-    user["entropy_trace"] = trace
+    node["entropy_trace"] = trace
     
     rhythm_mult, rhythm_msg = SecurityEngine.analyze_entropy(trace)
     
-    # 5. Cálculo de Sinergia
-    synergy_mult = 1.0
-    if user.get("cell_id"):
-        cell = await db.get_cell(user["cell_id"])
-        if cell: synergy_mult = cell.get("synergy_level", 1.0)
-            
-    # 6. Fórmula Maestra
-    # Ganancia = Base * Ritmo * Sinergia * (Oxígeno / 100)
-    oxy_mult = user.get("oxygen", 100.0) / 100.0
-    total_gain = CONSTANTS["BASE_REWARD"] * rhythm_mult * synergy_mult * oxy_mult
+    # 3. Ganancias
+    caste_specs = CASTAS_CONFIG.get(node['caste'], CASTAS_CONFIG["RECOLECTOR"])
+    caste_mult = caste_specs["bonus_honey"]
+    oxy_mult = node['oxygen'] / 100.0
     
-    # Aplicar
-    user['nectar'] += total_gain
-    user['role_xp'] += 1.0 * rhythm_mult # XP basada en habilidad
-    user['oxygen'] = min(100.0, user['oxygen'] + 1.5) # Recuperar oxígeno
+    # Sinergia Enjambre
+    synergy = 1.0
+    if node.get("enjambre_id"):
+        c = await db.db.get_cell(node["enjambre_id"])
+        if c: synergy = c.get("synergy", 1.0)
     
-    # Guardar atómicamente
-    await db.save_user(uid, user)
+    yield_amount = CONST['RECOMPENSA_BASE'] * rhythm_mult * caste_mult * synergy * oxy_mult
     
-    # Feedback
-    await query.answer(f"+{total_gain:.2f} | {rhythm_msg}")
+    # Update
+    node['honey'] += yield_amount
+    node['oxygen'] = min(100.0, node['oxygen'] + 1.0) # Recuperar O2
     
-    # Actualizar UI visualmente a veces (ahorrar API calls)
-    if random.random() < 0.2:
+    # DB Save
+    await db.db.add_global_honey(yield_amount)
+    await db.db.save_node(uid, node)
+    
+    await query.answer(f"+{yield_amount:.2f} 🍯 | {rhythm_msg}")
+    
+    # Actualización visual aleatoria
+    if random.random() < 0.15:
         await show_dashboard(update, context)
 
 # ==============================================================================
-# 7. MENÚ DE TAREAS (TIER SYSTEM)
+# 4. SISTEMAS AUXILIARES (MENÚS)
 # ==============================================================================
 
 async def tasks_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     kb = [
-        [InlineKeyboardButton("🟢 TIER 1 (Larvas)", callback_data="view_tier_1")],
-        [InlineKeyboardButton("🟡 TIER 2 (Obreros)", callback_data="view_tier_2")],
-        [InlineKeyboardButton("🔴 TIER 3 (Elite)", callback_data="view_tier_3")],
+        [InlineKeyboardButton("🟢 FRECUENCIA 1", callback_data="view_tier_1")],
+        [InlineKeyboardButton("🟡 FRECUENCIA 2", callback_data="view_tier_2")],
+        [InlineKeyboardButton("🔴 FRECUENCIA 3", callback_data="view_tier_3")],
         [InlineKeyboardButton("🔙 NÚCLEO", callback_data="go_dashboard")]
     ]
     await query.message.edit_text(
-        "🧠 **MATRIZ DE TAREAS**\n\n"
-        "Selecciona el nivel de complejidad.\n"
-        "Los Tiers superiores pagan más pero requieren mayor rango.",
+        "📡 **TRANSMISIONES EXTERNAS**\n\n"
+        "Sintoniza frecuencias para obtener recursos adicionales.\n"
+        "Completar transmisiones aumenta tu reserva de Miel.",
         reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN
     )
 
-async def view_tier_generic(update: Update, tier_key: str, min_role_idx: int):
-    """Renderizador genérico de menús de Tiers."""
+async def view_tier_generic(update: Update, tier_key: str):
+    query = update.callback_query
+    links = FORRAJEO_DB.get(tier_key, [])
+    
+    kb = []
+    for item in links:
+        kb.append([InlineKeyboardButton(item["name"], url=item["url"])])
+    kb.append([InlineKeyboardButton("🔙 ATRÁS", callback_data="tasks_menu")])
+    
+    await query.message.edit_text(f"📍 **CANAL {tier_key}**", reply_markup=InlineKeyboardMarkup(kb))
+
+async def squad_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     uid = query.from_user.id
-    user = await db.get_user(uid)
+    node = await db.db.get_node(uid)
     
-    # Check de Rol (Índice en lista de claves de ROLES_CONFIG)
-    roles_list = list(ROLES_CONFIG.keys())
-    user_role_idx = roles_list.index(user['role'])
-    
-    if user_role_idx < min_role_idx and not user.get('is_premium'):
-        req_role = roles_list[min_role_idx]
-        await query.answer(f"🔒 ACCESO DENEGADO. Requiere Rol: {req_role}", show_alert=True)
-        return
-
-    # Construir Botones dinámicamente desde LINKS_DB
-    links_data = LINKS_DB.get(tier_key, {})
-    buttons = []
-    row = []
-    
-    for name, info in links_data.items():
-        btn = InlineKeyboardButton(f"{name} ({info['payout']})", url=info['url'])
-        row.append(btn)
-        if len(row) == 2:
-            buttons.append(row)
-            row = []
-    if row: buttons.append(row)
-    
-    buttons.append([InlineKeyboardButton("🔙 ATRÁS", callback_data="tasks_menu")])
-    
-    colors = {"TIER_1": "🟢", "TIER_2": "🟡", "TIER_3": "🔴"}
-    
-    await query.message.edit_text(
-        f"{colors[tier_key]} **{tier_key.replace('_', ' ')}**\n"
-        "Completa estas tareas para ganar USD y Cripto real.",
-        reply_markup=InlineKeyboardMarkup(buttons), parse_mode=ParseMode.MARKDOWN
-    )
-
-async def tier_1_handler(u, c): await view_tier_generic(u, "TIER_1", 0)
-async def tier_2_handler(u, c): await view_tier_generic(u, "TIER_2", 1) # Obrero
-async def tier_3_handler(u, c): await view_tier_generic(u, "TIER_3", 2) # Explorador
-
-# ==============================================================================
-# 8. CÉLULAS Y TIENDA
-# ==============================================================================
-
-async def cell_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    uid = query.from_user.id
-    user = await db.get_user(uid)
-    
-    if user.get("cell_id"):
-        # Ver mi célula
-        cell = await db.get_cell(user["cell_id"])
+    if node.get("enjambre_id"):
+        cell = await db.db.get_cell(node["enjambre_id"])
         txt = (
-            f"🦠 **CÉLULA: {cell['name']}**\n"
+            f"🦠 **TU ENJAMBRE: {cell['name']}**\n"
             f"────────────────\n"
-            f"👥 Miembros: {len(cell['members'])}\n"
-            f"🔥 Sinergia: x{cell['synergy_level']:.2f}\n"
-            f"🆔 ID: `{cell['id']}`\n\n"
-            "Comparte el ID con otros para que se unan."
+            f"👥 Nodos Vinculados: {len(cell['members'])}\n"
+            f"🔥 Sinergia Actual: x{cell['synergy']:.2f}\n"
+            f"🆔 ID de Enlace: `{cell['id']}`"
         )
         kb = [[InlineKeyboardButton("🔙 VOLVER", callback_data="go_dashboard")]]
     else:
-        # Menú sin célula
         txt = (
-            "⚠️ **ORGANISMO AISLADO**\n\n"
-            "Estás perdiendo el bono de Sinergia.\n"
-            f"Crea tu propia célula por {CONSTANTS['CELL_COST']} Néctar."
+            "⚠️ **NODO AISLADO**\n\n"
+            "Operar en solitario reduce tu eficiencia.\n"
+            "Crea un Enjambre para aumentar la Sinergia."
         )
         kb = [
-            [InlineKeyboardButton("➕ CREAR CÉLULA", callback_data="create_cell_logic")],
+            [InlineKeyboardButton("➕ CREAR ENJAMBRE (100 Miel)", callback_data="create_squad_logic")],
             [InlineKeyboardButton("🔙 VOLVER", callback_data="go_dashboard")]
         ]
+    
     await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
-async def create_cell_logic(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query; uid = query.from_user.id
-    user = await db.get_user(uid)
+async def create_squad_logic(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    uid = query.from_user.id
+    node = await db.db.get_node(uid)
     
-    if user['nectar'] >= CONSTANTS['CELL_COST']:
-        user['nectar'] -= CONSTANTS['CELL_COST']
-        name = f"Squad-{random.randint(1000, 9999)}"
-        cid = await db.create_cell(uid, name)
-        user['cell_id'] = cid
-        await db.save_user(uid, user)
-        await query.answer("✅ Célula Fundada")
-        await cell_menu(update, context)
+    if node['honey'] >= CONST['COSTO_ENJAMBRE']:
+        node['honey'] -= CONST['COSTO_ENJAMBRE']
+        
+        name = f"Colmena-{random.randint(1000, 9999)}"
+        cell_id = await db.db.create_cell(uid, name)
+        
+        node['enjambre_id'] = cell_id
+        await db.db.save_node(uid, node)
+        
+        await query.answer("✅ Enjambre Estabilizado")
+        await squad_menu(update, context)
     else:
-        await query.answer("❌ Néctar insuficiente", show_alert=True)
+        await query.answer("❌ Miel Insuficiente", show_alert=True)
 
 async def shop_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
     kb = [
-        [InlineKeyboardButton(f"⚡ RECARGA ({CONSTANTS['RECHARGE_COST']} Néctar)", callback_data="buy_energy")],
-        [InlineKeyboardButton("👑 PREMIUM ($10 USD)", callback_data="buy_premium")],
+        [InlineKeyboardButton(f"⚡ SOBRECARGA ({CONST['COSTO_RECARGA']} Miel)", callback_data="buy_energy")],
+        [InlineKeyboardButton("👑 ACCESO PREMIUM ($10)", callback_data="buy_premium")],
         [InlineKeyboardButton("🔙 VOLVER", callback_data="go_dashboard")]
     ]
-    await query.message.edit_text("🛒 **MERCADO**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+    await update.callback_query.message.edit_text("🛒 **SUMINISTROS**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
 async def buy_energy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; uid = query.from_user.id
-    user = await db.get_user(uid)
+    node = await db.db.get_node(uid)
     
-    if user['nectar'] >= CONSTANTS['RECHARGE_COST']:
-        user['nectar'] -= CONSTANTS['RECHARGE_COST']
-        cfg = ROLES_CONFIG.get(user['role'], ROLES_CONFIG['LARVA'])
-        user['energy'] = cfg['max_energy']
-        await db.save_user(uid, user)
-        await query.answer("⚡ Recargado")
-        await show_dashboard(update, context)
+    if node['honey'] >= CONST['COSTO_RECARGA']:
+        node['honey'] -= CONST['COSTO_RECARGA']
+        node['polen'] = node['max_polen']
+        await db.db.save_node(uid, node)
+        await query.answer("⚡ Tanques Llenos"); await show_dashboard(update, context)
     else:
-        await query.answer("❌ Sin fondos")
+        await query.answer("❌ Saldo Insuficiente", show_alert=True)
 
 async def buy_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.message.edit_text(
-        f"💎 **MEMBRESÍA GÉNESIS**\n\n"
-        f"Envía ${CONSTANTS['PREMIUM_PRICE']} USDT (TRC20) a:\n"
-        f"`{CRYPTO_WALLET_USDT}`\n\n"
-        "Envía el hash al soporte: " + SUPPORT_CONTACT,
+    await update.callback_query.message.edit_text(
+        f"💎 **ACTIVACIÓN TOTAL**\n\nEnvía $10 USDT (TRC20) a:\n`{CRYPTO_WALLET_USDT}`",
         parse_mode=ParseMode.MARKDOWN
     )
 
 async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; uid = query.from_user.id
-    user = await db.get_user(uid)
+    node = await db.db.get_node(uid)
     link = f"https://t.me/{context.bot.username}?start={uid}"
     
     txt = (
-        f"👥 **RED DE DESCENDENCIA**\n\n"
-        f"Referidos: {len(user.get('referrals', []))}\n"
-        f"Poder de Enjambre: x{user.get('swarm_power', 1.0):.2f}\n\n"
-        f"🔗 **Tu Enlace:**\n`{link}`"
+        f"👥 **RED MICELIAL**\n\n"
+        f"Nodos Invitados: {len(node.get('referrals', []))}\n"
+        f"Poder de Enjambre: x{node.get('swarm_power', 1.0):.2f}\n\n"
+        f"🔗 **Enlace de Activación:**\n`{link}`"
     )
-    kb = [
-        [InlineKeyboardButton("📤 COMPARTIR", url=f"https://t.me/share/url?url={link}")],
-        [InlineKeyboardButton("🔙 VOLVER", callback_data="go_dashboard")]
-    ]
+    kb = [[InlineKeyboardButton("📤 INVITAR NODOS", url=f"https://t.me/share/url?url={link}")], [InlineKeyboardButton("🔙", callback_data="go_dashboard")]]
     await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
 # ==============================================================================
-# 9. DISPATCHER DE BOTONES
+# 5. DISPATCHER CENTRAL (RUTEO DE EVENTOS)
 # ==============================================================================
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
     
-    if data == "accept_legal":
+    # Selección de Casta
+    if data.startswith("sel_"):
+        caste = data.split("_")[1]
+        uid = query.from_user.id
+        node = await db.db.get_node(uid)
+        
+        # Guardar
+        specs = CASTAS_CONFIG[caste]
+        node["caste"] = caste
+        node["max_polen"] = specs["max_polen"]
+        node["polen"] = specs["max_polen"]
+        await db.db.save_node(uid, node)
+        
+        # Paso siguiente
         context.user_data['step'] = 'email_wait'
-        await query.message.edit_text("📧 Escribe tu **EMAIL** para activar la cuenta:")
+        await query.message.edit_text(
+            f"🧬 **ADN CONFIGURADO: {caste}**\n\n"
+            "Último paso de activación.\n"
+            "Escribe tu **EMAIL** para iniciar la sincronización:",
+            parse_mode=ParseMode.MARKDOWN
+        )
         return
 
-    mapping = {
-        "go_dashboard": show_dashboard, "mine_action": mine_action,
-        "tasks_menu": tasks_menu, "view_tier_1": tier_1_handler,
-        "view_tier_2": tier_2_handler, "view_tier_3": tier_3_handler,
-        "cell_menu": cell_menu, "create_cell_logic": create_cell_logic,
-        "shop_menu": shop_menu, "buy_energy": buy_energy,
-        "buy_premium": buy_premium, "team_menu": team_menu
+    # Mapa de acciones
+    actions = {
+        "go_dashboard": show_dashboard,
+        "forage_action": forage_action,
+        "tasks_menu": tasks_menu,
+        "view_tier_1": lambda u,c: view_tier_generic(u, "TIER_1"),
+        "view_tier_2": lambda u,c: view_tier_generic(u, "TIER_2"),
+        "view_tier_3": lambda u,c: view_tier_generic(u, "TIER_3"),
+        "squad_menu": squad_menu,
+        "create_squad_logic": create_squad_logic,
+        "shop_menu": shop_menu,
+        "buy_energy": buy_energy,
+        "buy_premium": buy_premium,
+        "team_menu": team_menu
     }
     
-    if data in mapping:
-        await mapping[data](update, context)
+    if data in actions:
+        await actions[data](update, context)
         
     try: await query.answer()
     except: pass
+
+async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await db.db.delete_node(update.effective_user.id)
+    context.user_data.clear()
+    await update.message.reply_text("💀 **NODO PURGADO**")
+
+async def invite_command(u, c): await team_menu(u, c)
+async def help_command(u, c): await u.message.reply_text("Protocolo Pandora V301")
+async def broadcast_command(u, c): pass
