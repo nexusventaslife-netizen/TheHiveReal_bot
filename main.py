@@ -8,12 +8,11 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from telegram.error import Conflict, NetworkError
 
-# Importamos la lógica
+# Importamos la lógica V157
 try:
     from bot_logic import start, help_command, general_text_handler, invite_command, reset_command, button_handler, broadcast_command
 except ImportError:
     print("⚠️ CRÍTICO: No se encontró bot_logic.py")
-    # Funciones dummy por si acaso
     async def start(u,c): pass
     async def help_command(u,c): pass
     async def general_text_handler(u,c): pass
@@ -86,14 +85,14 @@ async def read_index():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "hive": "online"}
+    return {"status": "ok", "hive": "online", "version": "157.0-DISRUPT"}
 
 # --- INICIO DEL BOT ---
 @app.on_event("startup")
 async def startup_event():
     global bot_app
     
-    logger.info("🚀 INICIANDO SISTEMA HIVE V50.0...")
+    logger.info("🚀 INICIANDO SISTEMA HIVE V157.0 (DISRUPTIVE MODE)...")
     
     await db.init_db()
     
