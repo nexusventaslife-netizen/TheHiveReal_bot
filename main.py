@@ -8,12 +8,12 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from telegram.error import Conflict, NetworkError
 
-# Importamos la lógica
+# Importamos la lógica V200.0
 try:
     from bot_logic import start, help_command, general_text_handler, invite_command, reset_command, button_handler, broadcast_command
-except ImportError:
-    print("⚠️ CRÍTICO: No se encontró bot_logic.py")
-    # Funciones dummy por si acaso
+except ImportError as e:
+    print(f"⚠️ CRÍTICO: Error importando bot_logic: {e}")
+    # Dummy functions
     async def start(u,c): pass
     async def help_command(u,c): pass
     async def general_text_handler(u,c): pass
@@ -32,17 +32,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger("HiveMain")
 
-# TOKEN Seguro
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
-# --- CONFIGURACIÓN DE OFERTAS (GEO-LOCALIZACIÓN INTELIGENTE) ---
+# --- GEO-LOCALIZACIÓN ---
 OFFERS_BY_COUNTRY = {
     "ES": "https://www.bybit.com/invite?ref=BBJWAX4", 
     "MX": "https://www.bybit.com/invite?ref=BBJWAX4",
     "AR": "https://app.airtm.com/ivt/jos3vkujiyj",      
-    "CO": "https://www.bybit.com/invite?ref=BBJWAX4",
-    "VE": "https://app.airtm.com/ivt/jos3vkujiyj",
-    "UY": "https://wise.com/invite/ahpc/josealejandrop73",
     "DEFAULT": "https://freecash.com/r/XYN98"          
 }
 
@@ -56,7 +52,6 @@ async def entry_detect(request: Request):
 
 @app.get("/go")
 async def redirect_tasks(request: Request):
-    """Detecta país y redirige a la mejor oferta CPA"""
     client_ip = request.headers.get("x-forwarded-for") or request.client.host
     if "," in str(client_ip): client_ip = str(client_ip).split(",")[0]
     
@@ -70,9 +65,8 @@ async def redirect_tasks(request: Request):
                 if data.get('status') == 'success':
                     country = data.get('countryCode')
                     target_url = OFFERS_BY_COUNTRY.get(country, OFFERS_BY_COUNTRY["DEFAULT"])
-                    logger.info(f"🌍 Redirección: {country} -> {target_url}")
     except Exception as e:
-        logger.warning(f"⚠️ Fallo GeoIP: {e}")
+        logger.warning(f"GeoIP Error: {e}")
         
     return RedirectResponse(url=target_url)
 
@@ -82,26 +76,22 @@ async def read_index():
         with open("index.html", "r") as f:
             return HTMLResponse(content=f.read())
     except FileNotFoundError:
-        return HTMLResponse(content="<h1>SYSTEM ERROR: Index Missing</h1>", status_code=404)
+        return HTMLResponse(content="<h1>SYSTEM ERROR</h1>", status_code=404)
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "hive": "online"}
+    return {"status": "ok", "hive": "evolution"}
 
-# --- INICIO DEL BOT ---
+# --- BOT LIFECYCLE ---
 @app.on_event("startup")
 async def startup_event():
     global bot_app
-    
-    logger.info("🚀 INICIANDO SISTEMA HIVE V50.0...")
+    logger.info("🚀 INICIANDO PANDORA HIVE V200.0...")
     
     await db.init_db()
     
     if db.r:
         await init_cache(db.r)
-        logger.info("✅ CACHÉ CONECTADO")
-    else:
-        logger.warning("⚠️ ERROR: Caché no conectado")
     
     if TOKEN:
         try:
@@ -111,7 +101,6 @@ async def startup_event():
             bot_app.add_handler(CommandHandler("help", help_command))
             bot_app.add_handler(CommandHandler("invitar", invite_command))
             bot_app.add_handler(CommandHandler("reset", reset_command))
-            # Admin Command
             bot_app.add_handler(CommandHandler("broadcast", broadcast_command))
             
             bot_app.add_handler(CallbackQueryHandler(button_handler))
@@ -120,43 +109,31 @@ async def startup_event():
             await bot_app.initialize()
             await bot_app.start()
             
-            # Anti-Crash
-            logger.info("🔪 Limpiando webhooks...")
-            await bot_app.bot.delete_webhook(drop_pending_updates=True)
+            try: await bot_app.bot.delete_webhook(drop_pending_updates=True)
+            except: pass
+            
             asyncio.create_task(run_polling_safely())
             
         except Exception as e:
-            logger.critical(f"🔥 ERROR FATAL: {e}")
-    else:
-        logger.error("❌ FALTA TELEGRAM_TOKEN")
+            logger.critical(f"FATAL: {e}")
 
 async def run_polling_safely():
-    retry_delay = 5
     while True:
         try:
-            logger.info("📡 Iniciando Polling...")
             await bot_app.updater.start_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
             break 
         except Conflict:
-            logger.warning("⚠️ Conflicto de Webhook.")
-            await asyncio.sleep(retry_delay)
+            await asyncio.sleep(5)
             try: await bot_app.bot.delete_webhook() 
             except: pass
-        except NetworkError:
-            logger.error(f"⚠️ Error de Red. Reintentando...")
-            await asyncio.sleep(retry_delay)
-            retry_delay = min(retry_delay * 2, 60)
         except Exception as e:
-            logger.error(f"🔥 Error desconocido: {e}")
+            logger.error(f"Polling error: {e}")
             await asyncio.sleep(5)
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    logger.info("🛑 APAGANDO...")
     if bot_app:
-        if bot_app.updater.running:
-            await bot_app.updater.stop()
-        if bot_app.running:
-            await bot_app.stop()
-            await bot_app.shutdown()
+        if bot_app.updater.running: await bot_app.updater.stop()
+        if bot_app.running: await bot_app.stop()
+        await bot_app.shutdown()
     await db.close_db()
