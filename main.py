@@ -4,7 +4,8 @@ import logging
 import asyncio
 import time
 from contextlib import asynccontextmanager
-from typing import Optional
+# AQUI ESTABA EL ERROR, AGREGUE Dict
+from typing import Optional, Dict, Any
 
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException
@@ -37,7 +38,7 @@ logging.basicConfig(level=logging.INFO)
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 WEBHOOK_URL = os.getenv("RENDER_EXTERNAL_URL")
 PORT = int(os.getenv("PORT", 10000))
-SECRET_TOKEN = os.getenv("SECRET_TOKEN", "HIVE-V302")
+SECRET_TOKEN = os.getenv("SECRET_TOKEN", "HIVE-V303")
 
 bot_app: Optional[Application] = None
 
@@ -58,7 +59,7 @@ def build_bot() -> Application:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global bot_app
-    logger.info("🚀 STARTING TITAN...")
+    logger.info("🚀 STARTING TITAN V303...")
     await db.db.connect()
     
     bot_app = build_bot()
