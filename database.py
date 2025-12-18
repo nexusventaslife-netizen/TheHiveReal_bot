@@ -7,21 +7,21 @@ from datetime import datetime
 # --- CONFIGURACIÓN ---
 logger = logging.getLogger(__name__)
 
-# Lee la URL de Redis del entorno. 
+# Lee la URL de Redis del entorno.
 # CRÍTICO: No poner valores por defecto con contraseñas aquí.
 ENV_REDIS_URL = os.getenv("REDIS_URL")
 
 # Cliente Global
 r = None
 
-# Estructura Base (ACTUALIZADA V50.0)
+# Estructura Base (ACTUALIZADA V156.0 + RLE DEFENSE)
 DEFAULT_USER = {
     "id": 0,
     "first_name": "",
     "username": "",
     "email": None,
-    "nectar": 500,        # Moneda Interna (HIVE) - Bono de bienvenida
-    "usd_balance": 0.00,  # Saldo Real (Empieza en 0, gana 0.05 al validar)
+    "nectar": 500.0,      # Moneda Interna (HIVE) - Float para precisión
+    "usd_balance": 0.00,  # Saldo Real
     "skills": [],         # Inventario
     "joined_at": "",
     "referrals": [],
@@ -32,7 +32,13 @@ DEFAULT_USER = {
     "last_streak_date": "",      
     "energy": 100,               
     "lucky_tickets": 0,          
-    "is_premium": False          
+    "is_premium": False,
+    # --- RLE DEFENSE V1.0 (ANTI-FRAUDE) ---
+    "fraud_score": 0,           # Puntuación de riesgo (0-100)
+    "task_timestamps": [],      # Lista de últimos tiempos de tareas [ts1, ts2, ts3...]
+    "ip_address_hash": None,    # Hash de IP (vía WebApp/API futura)
+    "ban_status": False,        # True = Bloqueo activo
+    "tokens_locked": 0.0        # Tokens retenidos por sospecha o AFK
 }
 
 # --- FUNCIONES DE SISTEMA ---
@@ -111,22 +117,27 @@ async def add_user(user_id, first_name, username, referred_by=None):
                         if rid != uid and uid not in parent_data.get("referrals", []):
                             parent_data.setdefault("referrals", []).append(uid)
                             # Bono por referido (Solo Néctar)
-                            parent_data["nectar"] = int(parent_data.get("nectar", 500)) + 50
+                            parent_data["nectar"] = float(parent_data.get("nectar", 500)) + 50.0
                             await r.set(ref_key, json.dumps(parent_data))
             
             logger.info(f"🆕 Nuevo Usuario: {user_id}")
             return True
         else:
-            # Actualizar last_active sin borrar datos
+            # Actualizar last_active sin borrar datos existentes
             raw_data = await r.get(key)
             if raw_data:
                 data = json.loads(raw_data)
                 data["last_active"] = datetime.now().isoformat()
-                # Asegurar que los nuevos campos existen en usuarios viejos
+                
+                # MIGRACIÓN SEGURA: Asegurar que los nuevos campos (Anti-Fraude) existan en usuarios viejos
+                updated = False
                 for k, v in DEFAULT_USER.items():
                     if k not in data:
                         data[k] = v
-                await r.set(key, json.dumps(data))
+                        updated = True
+                
+                if updated:
+                    await r.set(key, json.dumps(data))
             return False
             
     except Exception as e:
