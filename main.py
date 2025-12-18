@@ -3,9 +3,9 @@ import sys
 import logging
 import asyncio
 import time
+import re
 from contextlib import asynccontextmanager
-# AQUI ESTABA EL ERROR, AGREGUE Dict
-from typing import Optional, Dict, Any
+from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException
@@ -38,7 +38,13 @@ logging.basicConfig(level=logging.INFO)
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 WEBHOOK_URL = os.getenv("RENDER_EXTERNAL_URL")
 PORT = int(os.getenv("PORT", 10000))
-SECRET_TOKEN = os.getenv("SECRET_TOKEN", "HIVE-V303")
+
+# --- CORRECCIÓN DEL ERROR DE SECRET TOKEN ---
+# Telegram solo permite A-Z, a-z, 0-9, _ y -
+# Esta función limpia tu variable de entorno para que no rompa el servidor.
+raw_token = os.getenv("SECRET_TOKEN", "HIVE-TITAN-V302")
+SECRET_TOKEN = re.sub(r'[^a-zA-Z0-9_-]', '', raw_token) # Elimina espacios y símbolos raros
+if not SECRET_TOKEN: SECRET_TOKEN = "HIVE-DEFAULT-SECURE" # Fallback por seguridad
 
 bot_app: Optional[Application] = None
 
@@ -59,7 +65,9 @@ def build_bot() -> Application:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global bot_app
-    logger.info("🚀 STARTING TITAN V303...")
+    logger.info("🚀 STARTING TITAN V302...")
+    logger.info(f"🔒 Secret Token Sanitizado: {SECRET_TOKEN}") # Log para verificar
+
     await db.db.connect()
     
     bot_app = build_bot()
@@ -68,6 +76,7 @@ async def lifespan(app: FastAPI):
     
     if WEBHOOK_URL:
         logger.info(f"📡 Webhook: {WEBHOOK_URL}")
+        # Aquí es donde fallaba antes. Ahora SECRET_TOKEN está limpio.
         await bot_app.bot.set_webhook(
             url=f"{WEBHOOK_URL}/webhook", 
             secret_token=SECRET_TOKEN,
@@ -75,7 +84,7 @@ async def lifespan(app: FastAPI):
             drop_pending_updates=True
         )
     else:
-        logger.warning("⚠️ Polling")
+        logger.warning("⚠️ Polling Mode")
         await bot_app.bot.delete_webhook(drop_pending_updates=True)
         asyncio.create_task(run_polling())
 
@@ -97,9 +106,10 @@ async def health(): return {"status": "ok"}
 
 @app.post("/webhook")
 async def webhook(request: Request):
+    # Verificación de seguridad usando el token limpio
     sec = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
     if WEBHOOK_URL and sec != SECRET_TOKEN:
-        return JSONResponse(status_code=403, content={"error": "Auth"})
+        return JSONResponse(status_code=403, content={"error": "Auth Failed"})
     
     try:
         data = await request.json()
@@ -107,7 +117,7 @@ async def webhook(request: Request):
         await bot_app.process_update(update)
         return JSONResponse(content={"ok": True})
     except Exception as e:
-        logger.error(f"Err: {e}")
+        logger.error(f"Webhook Err: {e}")
         return JSONResponse(content={"ok": True})
 
 async def run_polling():
