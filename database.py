@@ -8,44 +8,64 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 # Lee la URL de Redis del entorno
-ENV_REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+ENV_REDIS_URL = os.getenv("REDIS_URL", "rediss://default:AbEBAAIncDIxNTYwNjk5MzkwODc0OGE2YWUyNmJkMmI1N2M4MmNiM3AyNDUzMTM@brave-hawk-45313.upstash.io:6379")
 
 # Cliente Global
 r = None
 
-# Estructura Base PANDORA + HIVE (V200.0)
+# --- ESTRUCTURA DE USUARIO (HIVE + PANDORA MERGE) ---
+# Se han agregado todos los campos necesarios para el motor psicológico
 DEFAULT_USER = {
+    # --- Identidad ---
     "id": 0,
     "first_name": "",
     "username": "",
     "email": None,
-    # --- ECONOMÍA ---
-    "nectar": 0.0,        # HIVE Líquido
-    "locked_nectar": 0.0, # HIVE Bloqueado (Vesting)
-    "usd_balance": 0.00,  
-    # --- PANDORA ENGINE (Factor X) ---
-    "role": "Larva",      # Larva -> Obrero -> Explorador -> Guardián -> Nodo -> Reina
-    "energy": 300,        # Max 300 base
-    "streak": 0,          # Racha de días
-    "consistency": 0.0,   # Puntuación de consistencia (0.0 - 1.0)
-    "behavior_score": 0,  # Score interno del Engine
-    "hidden_progress": 0, # XP oculta para subir de nivel
-    "reputation": 0.0,    # Reputación social
-    "spam_score": 0.0,    # Detección de bots
-    # --- SOCIAL ---
-    "cell_id": None,      # ID de la Célula (Guild)
-    "referrals": [],      # Lista de IDs referidos
-    "referred_by": None,
-    "referral_quality_score": 0, # Puntos por traer gente que TRABAJA
-    # --- META ---
     "joined_at": "",
     "last_active": "",
-    "last_action_ts": 0   # Timestamp para rate limit
+    
+    # --- Economía Hive ---
+    "nectar": 500.0,      # Balance Líquido
+    "usd_balance": 0.00,  # Saldo Real USD
+    
+    # --- Economía Pandora (Hard Money) ---
+    "locked_balance": 0.0, # Saldo bloqueado (Vesting)
+    "vesting_until": "",   # Fecha de liberación
+    
+    # --- Sistema de Referidos (Viralidad + Calidad) ---
+    "referrals": [],
+    "referred_by": None,
+    "ref_quality_score": 0, # Puntos por calidad de referidos
+    
+    # --- Gamificación & Rol (Psych-Engine) ---
+    "role": "Larva",         # Larva -> Obrero -> Explorador -> Guardián -> Nodo -> Reina
+    "role_decay": 0,         # Contador de inactividad
+    "hidden_progress": 0.0,  # Barra de experiencia oculta
+    "behavior_score": 100.0, # Puntuación de comportamiento (Anti-bot)
+    "spam_score": 0.0,
+    
+    # --- Engagement ---
+    "streak_days": 0,
+    "last_streak_date": "",
+    "energy": 500,           # Max Energy base
+    "max_energy": 500,
+    "lucky_tickets": 0,
+    "is_premium": False,
+    
+    # --- Social (Células/Guilds) ---
+    "cell_id": None,         # ID de la Célula a la que pertenece
+    
+    # --- Anti-Fraude ---
+    "task_timestamps": [],
+    "fraud_score": 0,
+    "ban_status": False,
+    "last_update_ts": 0
 }
 
 # --- FUNCIONES DE SISTEMA ---
 
 async def init_db():
+    """Conecta a Redis al iniciar con reintentos inteligentes"""
     global r
     try:
         r = redis.from_url(
@@ -55,21 +75,19 @@ async def init_db():
             socket_connect_timeout=5.0
         )
         await r.ping()
-        
-        # Inicializar variables globales del HIVE si no existen
-        if not await r.exists("hive:global"):
-            await r.hset("hive:global", mapping={
-                "level": 1,
-                "health": 100,
-                "work_today": 0.0
-            })
+        # Inicializar variables globales de la Hive si no existen
+        if not await r.exists("hive:global:level"):
+            await r.set("hive:global:level", 1)
+        if not await r.exists("hive:global:health"):
+            await r.set("hive:global:health", 100)
             
-        logger.info("✅ CONEXIÓN REDIS (PANDORA ENGINE) EXITOSA")
+        logger.info("✅ CONEXIÓN REDIS UPSTASH EXITOSA (Pandora Engine Ready)")
     except Exception as e:
         logger.error(f"❌ FALLÓ CONEXIÓN REDIS: {e}")
         r = None
 
 async def close_db():
+    """Cierra la conexión al apagar"""
     global r
     if r:
         try:
@@ -81,6 +99,7 @@ async def close_db():
 # --- FUNCIONES DE LÓGICA DE USUARIOS ---
 
 async def add_user(user_id, first_name, username, referred_by=None):
+    """Agrega usuario a Redis de forma segura fusionando datos nuevos"""
     global r
     if not r: return False
     
@@ -92,76 +111,62 @@ async def add_user(user_id, first_name, username, referred_by=None):
         
         if not exists:
             new_user = DEFAULT_USER.copy()
-            now_iso = datetime.now().isoformat()
             new_user.update({
                 "id": user_id,
                 "first_name": first_name,
                 "username": username,
-                "joined_at": now_iso,
-                "last_active": now_iso,
+                "joined_at": datetime.now().isoformat(),
+                "last_active": datetime.now().isoformat(),
                 "referred_by": referred_by,
-                "last_action_ts": datetime.now().timestamp()
+                "last_update_ts": datetime.now().timestamp()
             })
             
             await r.set(key, json.dumps(new_user))
             
-            # Procesar Referido (Viralidad + Calidad)
-            if referred_by and str(referred_by) != uid:
-                ref_key = f"user:{referred_by}"
+            # Procesar Referido (Viralidad)
+            if referred_by:
+                rid = str(referred_by)
+                ref_key = f"user:{rid}"
+                
+                # Verificamos si el referido existe
                 if await r.exists(ref_key):
                     raw_parent = await r.get(ref_key)
                     if raw_parent:
                         parent_data = json.loads(raw_parent)
-                        if uid not in parent_data.get("referrals", []):
+                        
+                        if rid != uid and uid not in parent_data.get("referrals", []):
                             parent_data.setdefault("referrals", []).append(uid)
-                            # NO damos bono inmediato. Se da cuando el referido trabaja (Quality).
+                            # Bono por referido simple (Solo Néctar, poco para evitar granjas)
+                            parent_data["nectar"] = float(parent_data.get("nectar", 500)) + 50.0
                             await r.set(ref_key, json.dumps(parent_data))
             
-            logger.info(f"🆕 Nueva Larva: {user_id}")
+            logger.info(f"🆕 Nuevo Usuario (Pandora DNA): {user_id}")
             return True
         else:
-            # Actualizar last_active
+            # Actualizar last_active y migrar estructura si es vieja
             raw_data = await r.get(key)
             if raw_data:
                 data = json.loads(raw_data)
                 data["last_active"] = datetime.now().isoformat()
-                # Migración segura de campos nuevos
-                updated = False
+                
+                # Migración dinámica: Asegurar que los campos nuevos de Pandora existan
+                changed = False
                 for k, v in DEFAULT_USER.items():
                     if k not in data:
                         data[k] = v
-                        updated = True
-                if updated:
+                        changed = True
+                
+                if changed:
                     await r.set(key, json.dumps(data))
+                    
             return False
             
     except Exception as e:
         logger.error(f"Error en add_user: {e}")
         return False
 
-async def get_user(user_id):
-    global r
-    if not r: return None
-    key = f"user:{user_id}"
-    try:
-        data = await r.get(key)
-        if data:
-            return json.loads(data)
-    except Exception as e:
-        logger.error(f"Error obteniendo usuario {user_id}: {e}")
-    return None
-
-async def save_user(user_id, data):
-    """Guarda el estado completo del usuario"""
-    global r
-    if not r: return
-    key = f"user:{user_id}"
-    try:
-        await r.set(key, json.dumps(data))
-    except Exception as e:
-        logger.error(f"Error guardando usuario {user_id}: {e}")
-
 async def update_email(user_id, email):
+    """Actualiza email en Redis"""
     global r
     if not r: return
     key = f"user:{user_id}"
@@ -173,50 +178,61 @@ async def update_email(user_id, email):
     except Exception as e:
         logger.error(f"Error actualizando email: {e}")
 
-# --- FUNCIONES DE CÉLULAS Y HIVE ---
+async def get_user(user_id):
+    """Obtiene datos de Redis"""
+    global r
+    if not r: return None
+    key = f"user:{user_id}"
+    try:
+        data = await r.get(key)
+        if data:
+            return json.loads(data)
+    except Exception as e:
+        logger.error(f"Error obteniendo usuario {user_id}: {e}")
+    return None
 
-async def create_cell_db(owner_id, cell_name):
+# --- FUNCIONES DE CÉLULAS (GUILDS) ---
+async def create_cell(owner_id, cell_name=None):
     global r
     if not r: return None
     cell_id = f"cell:{owner_id}:{int(datetime.now().timestamp())}"
-    
     cell_data = {
         "id": cell_id,
-        "name": cell_name,
         "owner": owner_id,
+        "name": cell_name or f"Hive Cell {owner_id}",
         "members": [owner_id],
-        "synergy": 0.0,
-        "work_today": 0.0
+        "work_today": 0.0,
+        "synergy_level": 1.0
     }
-    
-    # Guardar metadata de la célula
     await r.set(cell_id, json.dumps(cell_data))
-    # Indexar miembro
-    await r.sadd(f"cell_members:{cell_id}", owner_id)
+    # Actualizar usuario
+    u = await get_user(owner_id)
+    u['cell_id'] = cell_id
+    await r.set(f"user:{owner_id}", json.dumps(u))
     return cell_id
 
-async def get_hive_global():
+async def get_cell(cell_id):
     global r
-    if not r: return {"level": 1, "health": 100, "work_today": 0}
-    try:
-        return await r.hgetall("hive:global")
-    except:
-        return {"level": 1, "health": 100, "work_today": 0}
+    if not r or not cell_id: return None
+    data = await r.get(cell_id)
+    return json.loads(data) if data else None
 
-async def update_hive_global(work_amount):
+async def update_global_hive(work_amount):
+    """Actualiza la salud y nivel global de la Hive"""
     global r
     if not r: return
     try:
-        # Incrementar trabajo hoy
-        await r.hincrbyfloat("hive:global", "work_today", work_amount)
-        # Lógica simple de nivel
-        stats = await r.hgetall("hive:global")
-        work = float(stats.get("work_today", 0))
-        level = int(stats.get("level", 1))
+        # Incrementar trabajo acumulado
+        total_work = await r.incrbyfloat("hive:global:work", float(work_amount))
+        level = float(await r.get("hive:global:level") or 1)
         
-        if work > level * 1000:
-            await r.hincrby("hive:global", "level", 1)
-            await r.hset("hive:global", "work_today", 0) # Reset ciclo
-            await r.hincrby("hive:global", "health", 5) # Curar Hive
+        # Lógica de subida de nivel global
+        if total_work > level * 10000:
+            await r.incr("hive:global:level")
+            await r.set("hive:global:health", 100) # Restaurar salud al subir nivel
+            
     except Exception as e:
-        logger.error(f"Error update hive: {e}")
+        logger.error(f"Error hive tick: {e}")
+
+async def save_db(data=None):
+    pass
