@@ -7,31 +7,37 @@ import statistics
 import os
 import json
 from datetime import datetime
-from typing import Tuple, List
+from typing import Tuple, List, Dict, Optional
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 import database as db
 
 # ==============================================================================
-# CONFIGURACIÓN DEL GAMEPLAY & EQUILIBRIO (V200.0)
+# 1. CONFIGURACIÓN DEL SISTEMA Y CONSTANTES
 # ==============================================================================
 
+# Logger Config
 logger = logging.getLogger("HiveLogic")
 logger.setLevel(logging.INFO)
 
-# --- IDS & WALLETS ---
+# ADMIN ID (Para comandos de depuración futuros)
 try:
     ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
-except:
+except ValueError:
     ADMIN_ID = 0
 
+# IMAGEN DE BIENVENIDA (URL Fija)
+IMG_BEEBY = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
+
+# WALLET DE LA EMPRESA (Para pagos manuales de usuarios)
 CRYPTO_WALLET_USDT = os.getenv("WALLET_USDT", "TRC20_WALLET_ADDRESS_PENDING")
 
-# --- ARSENAL DE ENLACES (TIERS 1, 2, 3) ---
-# NO BORRAR NADA - ESTOS SON TUS ACTIVOS DE INGRESOS
+# --- ARSENAL DE ENLACES DE AFILIADOS (CPA MATRIX) ---
+# NO EDITAR NI BORRAR NINGUNO. SON EL MOTOR DE INGRESOS.
 LINKS = {
-    # TIER 1: TRÁFICO Y MICRO-TAREAS (Bajo valor, alto volumen)
+    # === TIER 1: TRÁFICO MASIVO & MICRO-TAREAS (Acceso: LARVA) ===
     'VALIDATOR_MAIN': os.getenv("LINK_TIMEBUCKS", "https://timebucks.com/?refID=227501472"),
     'ADBTC': "https://r.adbtc.top/3284589",
     'FREEBITCOIN': "https://freebitco.in/?r=55837744",
@@ -42,7 +48,7 @@ LINKS = {
     'FREECASH': "https://freecash.com/r/XYN98",
     'SWAGBUCKS': "https://www.swagbucks.com/p/register?rb=226213635&rp=1",
     
-    # TIER 2: BANDA ANCHA Y PROCESAMIENTO (Valor medio, pasivo)
+    # === TIER 2: INGRESOS PASIVOS & BANDA ANCHA (Acceso: OBRERO) ===
     'HONEYGAIN': "https://join.honeygain.com/ALEJOE9F32",
     'PACKETSTREAM': "https://packetstream.io/?psr=7hQT",
     'PAWNS': "https://pawns.app/?r=18399810",
@@ -53,7 +59,7 @@ LINKS = {
     'KOLOTIBABLO': "http://getcaptchajob.com/30nrmt1xpj",
     'TESTBIRDS': "https://nest.testbirds.com/home/tester?t=9ef7ff82-ca89-4e4a-a288-02b4938ff381",
     
-    # TIER 3: FINANZAS Y HIGH-TICKET (Alto valor, CPA puro)
+    # === TIER 3: FINANZAS, TRADING & HIGH TICKET (Acceso: EXPLORADOR) ===
     'BYBIT': "https://www.bybit.com/invite?ref=BBJWAX4",
     'PLUS500': "https://www.plus500.com/en-uy/refer-friend",
     'NEXO': "https://nexo.com/ref/rbkekqnarx?src=android-link",
@@ -67,212 +73,381 @@ LINKS = {
     'BETFURY': "https://betfury.io/?r=6664969919f42d20e7297e29"
 }
 
-# --- IMÁGENES Y MEDIA ---
-IMG_BEEBY = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
-
-# --- MECÁNICAS DE JUEGO (GAME DESIGN) ---
-
-# JERARQUÍA DE ROLES
-# Cada rol desbloquea más capacidad de energía y acceso a Tiers superiores
+# --- CONFIGURACIÓN DE ROLES Y EVOLUCIÓN ---
+# Define la XP necesaria, la energía máxima y la velocidad de regeneración por rango.
 ROLES_CONFIG = {
-    "LARVA":      {"xp": 0,     "max_energy": 300, "regen": 0.5, "tiers": [1]},
-    "OBRERO":     {"xp": 500,   "max_energy": 500, "regen": 0.8, "tiers": [1, 2]},
-    "EXPLORADOR": {"xp": 1500,  "max_energy": 800, "regen": 1.0, "tiers": [1, 2, 3]},
-    "GUARDIAN":   {"xp": 3500,  "max_energy": 1200,"regen": 1.2, "tiers": [1, 2, 3]},
-    "NODO":       {"xp": 7000,  "max_energy": 2000,"regen": 1.5, "tiers": [1, 2, 3]},
-    "GENESIS":    {"xp": 15000, "max_energy": 5000,"regen": 3.0, "tiers": [1, 2, 3]}
+    "LARVA": {
+        "xp_required": 0,
+        "max_energy": 300,
+        "regen_rate": 0.5, # Puntos por segundo
+        "tier_access": [1]
+    },
+    "OBRERO": {
+        "xp_required": 500,
+        "max_energy": 500,
+        "regen_rate": 0.8,
+        "tier_access": [1, 2]
+    },
+    "EXPLORADOR": {
+        "xp_required": 1500,
+        "max_energy": 800,
+        "regen_rate": 1.0,
+        "tier_access": [1, 2, 3]
+    },
+    "GUARDIAN": {
+        "xp_required": 3500,
+        "max_energy": 1200,
+        "regen_rate": 1.5,
+        "tier_access": [1, 2, 3]
+    },
+    "NODO": {
+        "xp_required": 7000,
+        "max_energy": 2500,
+        "regen_rate": 2.0,
+        "tier_access": [1, 2, 3]
+    },
+    "GENESIS": {
+        "xp_required": 15000,
+        "max_energy": 5000,
+        "regen_rate": 5.0,
+        "tier_access": [1, 2, 3] # Acceso total + Bonus
+    }
 }
-ROLES_LIST = list(ROLES_CONFIG.keys())
 
-# ECONOMÍA
-BASE_MINING_REWARD = 0.50   # Néctar base por click
-ENERGY_COST_PER_TAP = 10    # Energía consumida por click
-COST_FULL_RECHARGE = 200    # Costo en Néctar para llenar tanque
-OXYGEN_DECAY_RATE = 5.0     # % de oxígeno perdido por hora de inactividad
+# --- ECONOMÍA DEL JUEGO ---
+ENERGY_COST_PER_TAP = 10         # Costo de energía por acción de minado
+BASE_MINING_REWARD = 0.50        # Recompensa base en Néctar
+COST_FULL_RECHARGE = 200         # Costo en Néctar para rellenar tanque de energía
+OXYGEN_DECAY_RATE_PER_HOUR = 5.0 # Porcentaje de oxígeno perdido por hora inactiva
+CELL_CREATION_COST = 100         # Costo en Néctar para fundar una célula
 
 # ==============================================================================
-# ALGORITMOS MATEMÁTICOS (EL "FACTOR X")
+# 2. ALGORITMOS MATEMÁTICOS Y LÓGICA DE NEGOCIO
 # ==============================================================================
 
 def calculate_bio_rhythm(timestamps: List[float]) -> Tuple[float, str]:
     """
-    ALGORITMO DE ENTROPÍA:
-    Analiza si el usuario es humano o máquina basándose en la varianza temporal.
+    ALGORITMO DE ENTROPÍA (ANTI-BOT)
+    Analiza la varianza de los intervalos de tiempo entre clics.
     
-    - Varianza baja (clicks cada 1.00s exactos) = BOT
-    - Varianza alta (clicks caóticos) = HUMANO NORMAL
-    - Varianza media rítmica (Flow) = HUMANO EXPERTO
+    Retorna:
+        - Multiplicador (float): Factor de ganancia (0.1 a 1.5)
+        - Mensaje (str): Descripción del estado para el usuario
     """
-    if len(timestamps) < 4: 
-        return 1.0, "🔵 Calibrando..."
+    # Necesitamos al menos 4 puntos de datos para calcular varianza
+    if len(timestamps) < 4:
+        return 1.0, "🔵 Calibrando Sensores..."
     
-    # Calcular intervalos (Deltas)
-    intervals = [timestamps[i] - timestamps[i-1] for i in range(1, len(timestamps))]
+    # Calcular los intervalos (deltas) entre clics consecutivos
+    intervals = []
+    for i in range(1, len(timestamps)):
+        delta = timestamps[i] - timestamps[i-1]
+        intervals.append(delta)
     
-    # Estadística básica
+    if not intervals:
+        return 1.0, "⚪ Ritmo Neutro"
+    
     try:
-        avg = statistics.mean(intervals)
-        stdev = statistics.stdev(intervals)
-    except:
-        return 1.0, "⚪ Neutro"
+        avg_interval = statistics.mean(intervals)
+        stdev_interval = statistics.stdev(intervals)
+    except Exception:
+        # Si hay error matemático (ej. división por cero), devolvemos neutro
+        return 1.0, "⚪ Ritmo Neutro"
         
-    if avg == 0: return 0.1, "🔴 ERROR"
+    # Coeficiente de Variación (CV) = Desviación Estándar / Media
+    # CV bajo significa clics muy regulares (Bot)
+    # CV alto significa clics caóticos (Humano distraído)
+    # CV medio significa "Flow" (Humano concentrado)
     
-    # Coeficiente de Variación (CV)
-    cv = stdev / avg 
+    cv = stdev_interval / avg_interval if avg_interval > 0 else 0
     
-    # LÓGICA DE DETECCIÓN
-    if cv < 0.05: 
-        # Demasiado perfecto. Castigo masivo.
-        return 0.1, "🔴 ROBÓTICO (Penalizado)" 
-    elif 0.05 <= cv <= 0.25: 
-        # El "Flow State" humano. Premio.
+    # Lógica de Decisión
+    if cv < 0.05:
+        # Extremadamente preciso. Probablemente un script/autoclicker.
+        # Penalización severa sin banear (Shadowban de recompensa).
+        return 0.1, "🔴 ERROR: Patrón Robótico Detectado"
+        
+    elif 0.05 <= cv <= 0.25:
+        # Ritmo humano, constante y enfocado. Estado de "Flow".
+        # Recompensa máxima.
         return 1.3, "🌊 FLUJO PERFECTO (Bonus x1.3)"
-    elif cv > 1.0:
-        # Demasiado lento/distraído.
-        return 0.8, "💤 Lento"
+        
+    elif cv > 1.5:
+        # Muy irregular. Humano lento.
+        return 0.8, "💤 Ritmo Lento"
+        
     else:
-        # Humano normal
-        return 1.0, "🟢 Humano"
+        # Humano promedio.
+        return 1.0, "🟢 Ritmo Humano Normal"
 
-async def process_biological_update(user: dict) -> dict:
+async def update_user_biology(user_data: Dict) -> Dict:
     """
-    Actualiza el estado biológico del usuario:
-    - Regenera Energía basada en el tiempo y el Rol.
-    - Decae el Oxígeno si ha estado inactivo.
-    - Calcula si debe subir de Rango/Rol.
+    MOTOR BIOLÓGICO: Actualiza Energía, Oxígeno y Roles.
+    Esta función debe llamarse antes de cualquier interacción importante.
     """
     now = time.time()
-    last_ts = user.get('last_update_ts', now)
+    last_ts = user_data.get('last_update_ts', now)
     elapsed = now - last_ts
     
-    # 1. Obtener Configuración del Rol Actual
-    role_name = user.get('role', 'LARVA')
-    config = ROLES_CONFIG.get(role_name, ROLES_CONFIG['LARVA'])
+    # 1. Determinar Rol y Configuración Actual
+    current_role = user_data.get('role', 'LARVA')
+    config = ROLES_CONFIG.get(current_role, ROLES_CONFIG['LARVA'])
     
-    # 2. Regenerar Energía
+    # Asegurar que max_energy esté actualizada según el rol
+    user_data['max_energy'] = config['max_energy']
+    
+    # 2. Regeneración de Energía
     if elapsed > 0:
-        regen_amount = elapsed * config['regen']
-        user['energy'] = min(config['max_energy'], user['energy'] + int(regen_amount))
+        # Fórmula: Tiempo * Tasa de Regeneración del Rol
+        regen_amount = elapsed * config['regen_rate']
+        new_energy = user_data['energy'] + int(regen_amount)
+        # No exceder el máximo
+        user_data['energy'] = min(user_data['max_energy'], new_energy)
         
-    # 3. Decaer Oxígeno (Mecánica de Retención)
-    # Si pasa más de 1 hora (3600s), empieza a perder eficiencia.
+    # 3. Decaimiento de Oxígeno (Mecánica de Retención)
+    # Si pasan más de 3600 segundos (1 hora), el oxígeno empieza a bajar.
     if elapsed > 3600:
         hours_inactive = elapsed / 3600
-        decay = hours_inactive * OXYGEN_DECAY_RATE
-        # El oxígeno no baja de 10%
-        user['oxygen'] = max(10.0, user.get('oxygen', 100.0) - decay)
+        decay = hours_inactive * OXYGEN_DECAY_RATE_PER_HOUR
+        current_oxygen = user_data.get('oxygen', 100.0)
+        # El oxígeno no baja de 10% (para no desanimar totalmente)
+        user_data['oxygen'] = max(10.0, current_oxygen - decay)
         
-    # 4. Chequear Evolución de Rol
-    current_xp = user.get('role_xp', 0)
+    # 4. Evolución de Rol (Level Up)
+    # Verificamos si la XP actual califica para un rol superior
+    current_xp = user_data.get('role_xp', 0)
+    best_role = current_role
     
-    # Buscar el rol más alto posible para su XP
-    new_role = role_name
-    for r_name, r_conf in ROLES_CONFIG.items():
-        if current_xp >= r_conf['xp']:
-            new_role = r_name
-        else:
-            break
-            
-    if new_role != role_name:
-        user['role'] = new_role
-        # Bonus por subir de nivel: Energía llena
-        user['energy'] = ROLES_CONFIG[new_role]['max_energy']
-        user['max_energy'] = ROLES_CONFIG[new_role]['max_energy']
+    # Iteramos sobre la config para encontrar el rol más alto posible
+    for role_name, role_data in ROLES_CONFIG.items():
+        if current_xp >= role_data['xp_required']:
+            # Asumimos que el orden en el dict es jerárquico o verificamos XP
+            # Una forma simple es comparar XP requerida
+            if role_data['xp_required'] >= ROLES_CONFIG[best_role]['xp_required']:
+                best_role = role_name
+                
+    # Si subió de nivel
+    if best_role != current_role:
+        user_data['role'] = best_role
+        user_data['max_energy'] = ROLES_CONFIG[best_role]['max_energy']
+        # Bonus de Level Up: Restaurar Energía al Máximo
+        user_data['energy'] = user_data['max_energy']
         
-    # Guardar timestamps
-    user['last_update_ts'] = now
+    # Actualizar timestamp
+    user_data['last_update_ts'] = now
     
-    return user
+    return user_data
+
+def generate_captcha_code() -> str:
+    """Genera un código aleatorio simple para verificación."""
+    return f"HIVE-{random.randint(1000, 9999)}"
+
+def render_ascii_progressbar(current: int, total: int, length: int = 10) -> str:
+    """Renderiza una barra de progreso visual (ej. ████░░░░░░)."""
+    if total <= 0: total = 1
+    percent = max(0.0, min(float(current) / float(total), 1.0))
+    filled_length = int(length * percent)
+    empty_length = length - filled_length
+    return "█" * filled_length + "░" * empty_length
 
 # ==============================================================================
-# HANDLERS: FLUJO DE INICIO Y VERIFICACIÓN
+# 3. HANDLERS DE COMANDOS Y FLUJO DE INICIO
 # ==============================================================================
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Comando /start: Punto de entrada."""
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Comando /start.
+    Punto de entrada. Maneja referidos y decide si mostrar Captcha o Dashboard.
+    """
     user = update.effective_user
     args = context.args
-    referrer_id = int(args[0]) if args and args[0].isdigit() else None
     
-    # Crear usuario en DB
-    await db.create_user(user.id, user.first_name, user.username, referrer_id)
+    # Parsear referido si existe
+    referrer_id = None
+    if args and len(args) > 0:
+        if args[0].isdigit():
+            referrer_id = int(args[0])
+            
+    # Intentar crear usuario en DB
+    # create_user devuelve True si es nuevo, False si ya existe
+    is_new_user = await db.create_user(user.id, user.first_name, user.username, referrer_id)
     
-    # Generar Captcha Visual (Texto simple por ahora)
-    captcha = f"HIVE-{random.randint(100, 999)}"
-    context.user_data['captcha'] = captcha
+    # Recuperar datos del usuario
+    user_data = await db.get_user(user.id)
     
-    txt = (
-        f"🧬 **PROTOCOLO PANDORA: HIVE GENESIS**\n"
-        f"────────────────────────\n"
-        f"Saludos, **{user.first_name}**.\n\n"
+    # CASO 1: Usuario ya verificado (tiene email y actividad)
+    # Lo enviamos directo al Dashboard para no molestar.
+    if user_data and user_data.get('email') and not is_new_user:
+        await show_dashboard(update, context)
+        return
+
+    # CASO 2: Usuario Nuevo o No Verificado
+    # Iniciamos el protocolo de seguridad "HIVE GENESIS"
+    
+    captcha_code = generate_captcha_code()
+    context.user_data['captcha'] = captcha_code
+    context.user_data['awaiting_captcha'] = True
+    
+    welcome_text = (
+        f"🧬 **PROTOCOLO PANDORA: SECUENCIA DE INICIO**\n"
+        f"──────────────────────────────\n"
+        f"Identidad Detectada: **{user.first_name}**\n\n"
         "Has sido seleccionado para integrarte a la Colmena.\n"
-        "A diferencia de otros sistemas, aquí tu valor biológico importa.\n\n"
-        "1. **Mantén tu Oxígeno:** Si te desconectas, tu eficiencia cae.\n"
-        "2. **Crea Células:** La soledad es ineficiente. Únete a otros.\n"
-        "3. **Evoluciona:** De Larva a Génesis.\n\n"
-        "🛡️ **PROTOCOLO DE SEGURIDAD**\n"
-        f"Digita este código para sincronizarte:\n`{captcha}`"
+        "Aquí, el valor se mide en Bio-Ritmo y Sinergia.\n\n"
+        "🛡️ **VERIFICACIÓN DE SEGURIDAD**\n"
+        "El sistema requiere confirmar que eres un organismo biológico.\n\n"
+        f"Escribe el siguiente código de acceso:\n`{captcha_code}`"
     )
     
+    # Enviamos imagen si es posible, sino texto
     try:
-        await update.message.reply_photo(IMG_BEEBY, caption=txt, parse_mode="Markdown")
-    except:
-        await update.message.reply_text(txt, parse_mode="Markdown")
-
-async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Maneja todo el texto que envía el usuario (Captcha, Email, Comandos ocultos)."""
-    text = update.message.text.strip()
-    user = update.effective_user
-    
-    # 1. VERIFICACIÓN DE CAPTCHA
-    expected = context.user_data.get('captcha')
-    if expected and text == expected:
-        context.user_data['captcha'] = None # Limpiar
-        
-        kb = [[InlineKeyboardButton("✅ ACEPTAR CONEXIÓN NEURONAL", callback_data="accept_legal")]]
-        await update.message.reply_text(
-            "✅ **IDENTIDAD CONFIRMADA**\n\n"
-            "El sistema requiere acceso para monetizar tu actividad en la red.\n"
-            "¿Aceptas los términos del Enjambre?",
-            reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown"
+        await update.message.reply_photo(
+            photo=IMG_BEEBY,
+            caption=welcome_text,
+            parse_mode=ParseMode.MARKDOWN
         )
-        return
-        
-    # 2. VERIFICACIÓN DE EMAIL (Para pagos CPA)
-    if context.user_data.get('waiting_for_email'):
-        if "@" in text and "." in text:
-            await db.update_email(user.id, text)
-            context.user_data['waiting_for_email'] = False
-            
-            # Bono inmediato por completar registro
-            user_db = await db.get_user(user.id)
-            user_db['nectar'] += 100
-            await db.save_user(user.id, user_db)
-            
-            kb = [[InlineKeyboardButton("🚀 ENTRAR AL NÚCLEO", callback_data="go_dashboard")]]
-            await update.message.reply_text(
-                "🎉 **SINCRONIZACIÓN COMPLETA**\n\n"
-                "Has recibido **+100 Néctar** de bienvenida.\n"
-                "Tu viaje evolutivo comienza ahora.",
-                reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown"
-            )
-        else:
-            await update.message.reply_text("⚠️ Formato inválido. Ingresa un email real.")
-        return
+    except Exception:
+        await update.message.reply_text(
+            text=welcome_text,
+            parse_mode=ParseMode.MARKDOWN
+        )
 
-    # Si el usuario ya está registrado y escribe algo random, lo mandamos al dashboard
-    user_data = await db.get_user(user.id)
-    if user_data:
-        await show_dashboard(update, context)
+async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Comando /reset.
+    BORRA COMPLETAMENTE AL USUARIO. Útil para depuración y pruebas.
+    """
+    user_id = update.effective_user.id
+    
+    # Borrar de la base de datos
+    await db.delete_user(user_id)
+    
+    # Limpiar contexto local de Telegram
+    context.user_data.clear()
+    
+    await update.message.reply_text(
+        "🗑️ **SISTEMA FORMATEADO**\n\n"
+        "Tu registro biológico ha sido eliminado de la Colmena.\n"
+        "Eres un fantasma digital.\n\n"
+        "Escribe /start para renacer."
+    )
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando /help."""
+    help_text = (
+        "📚 **MANUAL DEL PROTOCOLO PANDORA**\n\n"
+        "1. **Minar (Tap):** Genera Néctar y XP. Tu ritmo importa.\n"
+        "2. **Oxígeno:** Baja si no juegas. Si baja, ganas menos.\n"
+        "3. **Roles:** Sube de nivel para tener más energía y mejores tareas.\n"
+        "4. **Células:** Únete a un grupo para multiplicar ganancias.\n\n"
+        "🔧 **Comandos:**\n"
+        "/start - Reiniciar interfaz\n"
+        "/reset - Borrar cuenta (Cuidado)\n"
+        "/invitar - Ver enlace de referido"
+    )
+    await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN)
+
+async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando /invitar directo."""
+    await team_menu(update, context)
 
 # ==============================================================================
-# HANDLERS: DASHBOARD PRINCIPAL (HUD)
+# 4. HANDLER DE MENSAJES DE TEXTO (CAPTCHA, EMAIL, CHAT)
+# ==============================================================================
+
+async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Procesa todo el texto que no es comando.
+    Maneja la máquina de estados: Captcha -> Email -> Dashboard.
+    """
+    text = update.message.text.strip()
+    user = update.effective_user
+    user_id = user.id
+    
+    # --- ESTADO 1: ESPERANDO CAPTCHA ---
+    if context.user_data.get('awaiting_captcha'):
+        expected_code = context.user_data.get('captcha')
+        
+        if text == expected_code:
+            # Captcha correcto
+            context.user_data['awaiting_captcha'] = False
+            context.user_data['captcha'] = None
+            
+            # Pasamos a pedir Aceptación Legal
+            kb = [[InlineKeyboardButton("✅ ACEPTAR VINCULACIÓN", callback_data="accept_legal")]]
+            
+            await update.message.reply_text(
+                "✅ **ADN VERIFICADO**\n\n"
+                "Para monetizar tu actividad biológica, debes aceptar los términos del Enjambre.\n"
+                "Esto vinculará tu cuenta de Telegram permanentemente.",
+                reply_markup=InlineKeyboardMarkup(kb),
+                parse_mode=ParseMode.MARKDOWN
+            )
+            return
+        else:
+            # Captcha incorrecto
+            await update.message.reply_text("❌ Código de acceso inválido. Intenta de nuevo.")
+            return
+
+    # --- ESTADO 2: ESPERANDO EMAIL ---
+    if context.user_data.get('waiting_for_email'):
+        # Validación simple de formato email
+        if "@" in text and "." in text and len(text) > 5:
+            # Guardar email en DB
+            await db.update_email(user_id, text)
+            context.user_data['waiting_for_email'] = False
+            
+            # Dar Bono de Bienvenida
+            user_data = await db.get_user(user_id)
+            if user_data:
+                user_data['nectar'] += 100.0
+                await db.save_user(user_id, user_data)
+            
+            # Mostrar botón para ir al Dashboard
+            kb = [[InlineKeyboardButton("🚀 ACCEDER AL NÚCLEO", callback_data="go_dashboard")]]
+            
+            await update.message.reply_text(
+                "🎉 **SINCRONIZACIÓN EXITOSA**\n\n"
+                "Has recibido **+100 Néctar** por completar el registro.\n"
+                "Tu organismo está listo para la evolución.\n\n"
+                "👇 Presiona el botón para entrar.",
+                reply_markup=InlineKeyboardMarkup(kb),
+                parse_mode=ParseMode.MARKDOWN
+            )
+            return
+        else:
+            await update.message.reply_text("⚠️ Formato de correo inválido. Por favor verifica.")
+            return
+
+    # --- ESTADO 3: FLUJO NORMAL ---
+    # Si el usuario escribe /start manualmente (algunos clientes no lo mandan como comando)
+    if text.upper() == "/START":
+        await start_command(update, context)
+        return
+        
+    # Si el usuario ya está logueado y escribe hola, etc, le mostramos el dashboard
+    user_data = await db.get_user(user_id)
+    if user_data:
+        # Solo mostramos dashboard si tiene email, sino lo pedimos
+        if user_data.get('email'):
+            await show_dashboard(update, context)
+        else:
+            # Caso raro: está en DB pero no tiene email. Lo forzamos.
+            context.user_data['waiting_for_email'] = True
+            await update.message.reply_text("⚠️ **ATENCIÓN**\nFalta vincular tu Email. Escríbelo ahora:")
+    else:
+        # No está en DB, mandar a start
+        await start_command(update, context)
+
+# ==============================================================================
+# 5. DASHBOARD PRINCIPAL (EL HUB)
 # ==============================================================================
 
 async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Muestra el estado completo del usuario."""
-    # Detectar si viene de botón o comando
+    """
+    Muestra la interfaz principal con todas las estadísticas.
+    Se adapta si viene de un mensaje de texto o de un callback query.
+    """
     if update.callback_query:
         user_id = update.callback_query.from_user.id
         message_func = update.callback_query.message.edit_text
@@ -282,395 +457,467 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Recuperar datos
     user_data = await db.get_user(user_id)
-    if not user_data: 
-        # Si no existe (raro), reiniciamos
-        await message_func("⚠️ Error de Sincronización. Escribe /start")
+    
+    # Manejo de error si el usuario no existe (ej. tras un reset manual)
+    if not user_data:
+        await message_func("⚠️ Error de Sincronización. Escribe /start para reiniciar.")
         return
 
-    # Check Ban
-    if user_data.get('ban_status'):
-        await message_func("🚫 **DESCONEXIÓN FORZADA**\nTu patrón ha sido marcado como hostil/bot.")
+    # Verificar estado de Ban
+    if user_data.get('ban_status', False):
+        await message_func("🚫 **ACCESO DENEGADO**\nTu patrón biológico ha sido marcado como hostil.")
         return
 
-    # ACTUALIZACIÓN BIOLÓGICA (Regeneración)
-    user_data = await process_biological_update(user_data)
+    # PROCESAR ACTUALIZACIÓN BIOLÓGICA (Regenerar energía, etc.)
+    user_data = await update_user_biology(user_data)
     await db.save_user(user_id, user_data)
     
-    # Preparar Datos Visuales
-    role = user_data['role']
-    oxygen = user_data.get('oxygen', 100.0)
+    # Preparar Variables para la Vista
+    role = user_data.get('role', 'LARVA')
+    energy = int(user_data.get('energy', 0))
+    max_energy = int(user_data.get('max_energy', 300))
+    oxygen = float(user_data.get('oxygen', 100.0))
+    nectar = float(user_data.get('nectar', 0.0))
+    usd = float(user_data.get('usd_balance', 0.0))
+    tokens_locked = float(user_data.get('tokens_locked', 0.0))
+    xp = int(user_data.get('role_xp', 0))
     
-    # Status de Oxígeno (Semáforo)
-    oxy_icon = "🟢"
-    if oxygen < 70: oxy_icon = "🟡"
-    if oxygen < 30: oxy_icon = "🔴"
+    # Iconos Dinámicos
+    oxygen_icon = "🟢" if oxygen > 75 else "🟡" if oxygen > 30 else "🔴"
+    progress_bar = render_ascii_progressbar(energy, max_energy)
     
     # Info de Célula
-    cell_text = "Sin Célula (x1.0)"
+    cell_info = "Sin Célula (x1.0)"
     if user_data.get('cell_id'):
         cell = await db.get_cell(user_data['cell_id'])
         if cell:
-            cell_text = f"{cell['name']} (x{cell['synergy_level']:.2f})"
+            synergy = cell.get('synergy_level', 1.0)
+            cell_info = f"{cell['name']} (x{synergy:.2f})"
             
-    # Barra de Energía
-    energy_bar = render_progressbar(user_data['energy'], user_data['max_energy'])
-    
-    txt = (
-        f"🧬 **PANDORA INTERFACE v2.0** | {role}\n"
-        f"──────────────────────\n"
-        f"🫁 **Oxígeno:** {oxygen:.1f}% {oxy_icon}\n"
-        f"⚡ **Energía:** `{energy_bar}` {int(user_data['energy'])}/{user_data['max_energy']}\n"
-        f"🦠 **Célula:** {cell_text}\n"
-        f"──────────────────────\n"
-        f"🪙 **Néctar:** `{user_data['nectar']:.2f}` (Líquido)\n"
-        f"🔒 **Hive:** `{user_data['tokens_locked']:.4f}` (Vesting)\n"
-        f"💵 **Saldo CPA:** `${user_data['usd_balance']:.2f}`\n"
-        f"📈 **XP:** {int(user_data['role_xp'])}"
+    # Construcción del Mensaje
+    dashboard_text = (
+        f"🧬 **NÚCLEO PANDORA** | Rango: **{role}**\n"
+        f"────────────────────────\n"
+        f"🫁 **Oxígeno:** {oxygen:.1f}% {oxygen_icon}\n"
+        f"⚡ **Energía:** `{progress_bar}` {energy}/{max_energy}\n"
+        f"🦠 **Célula:** {cell_info}\n"
+        f"────────────────────────\n"
+        f"🪙 **Néctar:** `{nectar:.2f}` (Líquido)\n"
+        f"🔒 **Hive:** `{tokens_locked:.4f}` (Futuro)\n"
+        f"💵 **Saldo USD:** `${usd:.2f}`\n"
+        f"📈 **XP Evolutiva:** {xp}\n"
+        f"────────────────────────\n"
+        f"💡 *Mantén tu oxígeno alto minando regularmente.*"
     )
     
-    kb = [
-        [InlineKeyboardButton("⛏️ SINTETIZAR (MINE)", callback_data="mine_action")],
-        [InlineKeyboardButton("🧠 TAREAS (EARN)", callback_data="tasks_hub")],
-        [InlineKeyboardButton("🦠 CÉLULA (SQUAD)", callback_data="cell_menu")],
-        [InlineKeyboardButton("🛒 TIENDA", callback_data="shop_menu"), InlineKeyboardButton("👥 RED", callback_data="team_menu")],
-        [InlineKeyboardButton("🔄 ACTUALIZAR", callback_data="go_dashboard")]
+    # Teclado Principal
+    keyboard = [
+        [InlineKeyboardButton("⛏️ MINAR (SINTETIZAR)", callback_data="mine_action")],
+        [InlineKeyboardButton("🧠 TAREAS (EARN)", callback_data="tasks_hub"), InlineKeyboardButton("🦠 CÉLULA (SQUAD)", callback_data="cell_menu")],
+        [InlineKeyboardButton("🛒 TIENDA", callback_data="shop_menu"), InlineKeyboardButton("👥 EQUIPO", callback_data="team_menu")],
+        [InlineKeyboardButton("🔄 REFRESCAR SISTEMA", callback_data="go_dashboard")]
     ]
     
     try:
-        await message_func(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
-    except Exception as e:
-        # A veces Telegram da error si el mensaje es idéntico al anterior. Lo ignoramos.
+        await message_func(dashboard_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    except Exception:
+        # Ignorar error si el mensaje es idéntico al anterior (Telegram API quirk)
         pass
 
 # ==============================================================================
-# HANDLERS: MINERÍA (EL NÚCLEO DE LA ADICCIÓN)
+# 6. MECÁNICA DE MINERÍA (TAP)
 # ==============================================================================
 
 async def mine_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Mecánica de 'Tap' evolucionada.
-    Combina:
-    1. Energía (Limitante)
-    2. Bio-Ritmo (Multiplicador de Habilidad/Anti-bot)
-    3. Sinergia (Multiplicador Social)
-    4. Oxígeno (Multiplicador de Retención)
+    Acción de minado principal.
+    Aplica el algoritmo Bio-Rítmico y Sinergia Celular.
     """
     query = update.callback_query
     user_id = query.from_user.id
+    
+    # 1. Recuperar y Actualizar Estado
     user_data = await db.get_user(user_id)
+    user_data = await update_user_biology(user_data)
     
-    # 1. Actualizar estado antes de calcular
-    user_data = await process_biological_update(user_data)
-    
-    # 2. Chequear Energía
+    # 2. Verificar Energía
     if user_data['energy'] < ENERGY_COST_PER_TAP:
-        await query.answer(f"⚡ Energía agotada. Espera o Recarga.", show_alert=True)
+        await query.answer("⚡ Energía Agotada. Descansa o recarga en la Tienda.", show_alert=True)
         return
-
+        
     # Consumir Energía
     user_data['energy'] -= ENERGY_COST_PER_TAP
     
-    # 3. Calcular Bio-Ritmo (Entropía)
+    # 3. Registrar Timestamp para Entropía
     now = time.time()
     trace = user_data.get('entropy_trace', [])
     trace.append(now)
-    # Guardamos solo los últimos 20 taps para análisis
-    if len(trace) > 20: trace.pop(0)
+    # Mantenemos solo los últimos 20 clics para no saturar memoria
+    if len(trace) > 20:
+        trace.pop(0)
     user_data['entropy_trace'] = trace
     
+    # 4. Calcular Multiplicadores
+    # A) Ritmo (Anti-bot)
     rhythm_mult, rhythm_msg = calculate_bio_rhythm(trace)
     
-    # 4. Calcular Sinergia de Célula
+    # B) Sinergia Celular
     synergy_mult = 1.0
     if user_data.get('cell_id'):
         cell = await db.get_cell(user_data['cell_id'])
         if cell:
             synergy_mult = cell.get('synergy_level', 1.0)
-            # Acumular XP para la célula (meta-game)
+            # También sumamos XP a la célula para leaderboards futuros
             cell['total_xp'] += 1
             await db.update_cell(cell['id'], cell)
             
-    # 5. Calcular Factor de Oxígeno
-    # Si el oxígeno es bajo, el usuario gana MENOS. Esto lo obliga a jugar.
-    oxygen_mult = user_data.get('oxygen', 100.0) / 100.0
+    # C) Oxígeno (Penalización por inactividad)
+    oxygen_level = user_data.get('oxygen', 100.0)
+    oxygen_mult = oxygen_level / 100.0
     
-    # 6. FÓRMULA FINAL DE RECOMPENSA
-    variability = random.uniform(0.95, 1.05) # Pequeña variación para sentirlo orgánico
+    # 5. Calcular Ganancia Final
+    # Base * Ritmo * Sinergia * Oxígeno * Variabilidad Random
+    variability = random.uniform(0.95, 1.05)
+    
     total_gain = BASE_MINING_REWARD * rhythm_mult * synergy_mult * oxygen_mult * variability
     
-    # Dividir ganancia: 40% Néctar (Usable ya), 60% Hive (Bloqueado/Airdrop)
+    # Split de Economía:
+    # 40% Néctar (Para gastar en upgrades/energía)
+    # 60% Hive Tokens (Bloqueados para Airdrop)
     nectar_gain = total_gain * 0.4
     locked_gain = total_gain * 0.6
     
     user_data['nectar'] += nectar_gain
     user_data['tokens_locked'] += locked_gain
     
-    # Ganar XP (Evolución)
-    # El ritmo humano (Flow) da más XP
+    # Ganancia de XP (Evolución)
+    # El XP depende puramente del ritmo (habilidad)
     xp_gain = 1.0 * rhythm_mult
     user_data['role_xp'] += xp_gain
     
-    # Recuperar Oxígeno por estar activo (Respirar)
-    user_data['oxygen'] = min(100.0, user_data['oxygen'] + 2.0)
+    # 6. Recuperar Oxígeno (Respiración Activa)
+    # Cada clic recupera un poco de oxígeno perdido
+    user_data['oxygen'] = min(100.0, oxygen_level + 2.0)
     
-    # Guardar todo
+    # Guardar cambios
     await db.save_user(user_id, user_data)
     
-    # Feedback al usuario
-    # No editamos el mensaje en cada tap para no saturar la API (Rate Limit),
-    # usamos query.answer para feedback instantáneo y editamos el texto a veces.
-    
+    # 7. Feedback al Usuario
+    # Usamos answer para feedback rápido
     await query.answer(f"+{nectar_gain:.2f} Néctar | {rhythm_msg}")
     
-    # Actualizar visualmente cada 5 taps aprox o si sube de nivel
+    # Aleatoriamente (20%) actualizamos todo el dashboard para mostrar progreso visual
     if random.random() < 0.2:
-        txt = (
-            f"⛏️ **SÍNTESIS EXITOSA**\n"
-            f"🌊 Ritmo: {rhythm_msg}\n"
-            f"🦠 Sinergia: x{synergy_mult:.2f}\n"
-            f"────────────────\n"
-            f"💎 **+{nectar_gain:.3f} Néctar**\n"
-            f"⚡ Energía: {int(user_data['energy'])}"
-        )
-        kb = [[InlineKeyboardButton("⛏️ SINTETIZAR", callback_data="mine_action")], [InlineKeyboardButton("🔙 VOLVER", callback_data="go_dashboard")]]
-        try: await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
-        except: pass
+        await show_dashboard(update, context)
 
 # ==============================================================================
-# HANDLERS: SISTEMA DE TIERS (CPA & MONETIZACIÓN)
+# 7. MENÚ DE TAREAS (TIERS 1, 2, 3)
 # ==============================================================================
 
 async def tasks_hub(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Selector principal de categorías de tareas."""
     query = update.callback_query
+    
     kb = [
-        [InlineKeyboardButton("🟢 TIER 1: RECOLECCIÓN (Fácil)", callback_data="tier_1")],
-        [InlineKeyboardButton("🟡 TIER 2: PROCESAMIENTO (Medio)", callback_data="tier_2")],
-        [InlineKeyboardButton("🔴 TIER 3: CÁMARA REAL (Difícil)", callback_data="tier_3")],
-        [InlineKeyboardButton("🔙 VOLVER", callback_data="go_dashboard")]
+        [InlineKeyboardButton("🟢 TIER 1: INCUBADORA (Fácil)", callback_data="tier_1")],
+        [InlineKeyboardButton("🟡 TIER 2: REFINERÍA (Medio)", callback_data="tier_2")],
+        [InlineKeyboardButton("🔴 TIER 3: BÓVEDA REAL (Difícil)", callback_data="tier_3")],
+        [InlineKeyboardButton("🔙 VOLVER AL NÚCLEO", callback_data="go_dashboard")]
     ]
+    
     await query.message.edit_text(
         "🧠 **MATRIZ DE TAREAS**\n\n"
         "Selecciona el nivel de complejidad.\n"
-        "Recuerda: Tiers más altos requieren Roles evolucionados.",
-        reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown"
+        "Recuerda: Los Tiers superiores requieren roles evolucionados.",
+        reply_markup=InlineKeyboardMarkup(kb),
+        parse_mode=ParseMode.MARKDOWN
     )
 
 async def tier_1_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Acceso: TODOS"""
+    """Menú Tier 1: Links básicos."""
     query = update.callback_query
-    # Lista de botones generada dinámicamente o estática
+    
     kb = [
-        [InlineKeyboardButton("📺 TIMEBUCKS", url=LINKS['VALIDATOR_MAIN']), InlineKeyboardButton("💰 ADBTC", url=LINKS['ADBTC'])],
-        [InlineKeyboardButton("🎲 FREEBITCOIN", url=LINKS['FREEBITCOIN']), InlineKeyboardButton("💰 FAUCETPAY", url=LINKS['FAUCETPAY'])],
+        [InlineKeyboardButton("📺 TIMEBUCKS (Videos)", url=LINKS['VALIDATOR_MAIN']), InlineKeyboardButton("💰 ADBTC (Clicks)", url=LINKS['ADBTC'])],
+        [InlineKeyboardButton("🎲 FREEBITCOIN", url=LINKS['FREEBITCOIN']), InlineKeyboardButton("🚰 FAUCETPAY", url=LINKS['FAUCETPAY'])],
         [InlineKeyboardButton("🪙 COINTIPLY", url=LINKS['COINTIPLY']), InlineKeyboardButton("🎮 GAMEHAG", url=LINKS['GAMEHAG'])],
         [InlineKeyboardButton("💸 FREECASH", url=LINKS['FREECASH']), InlineKeyboardButton("🌟 SWAGBUCKS", url=LINKS['SWAGBUCKS'])],
         [InlineKeyboardButton("🔙 ATRÁS", callback_data="tasks_hub")]
     ]
-    await query.message.edit_text("🟢 **TIER 1: RECOLECCIÓN**\nMicro-tareas rápidas.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+    
+    await query.message.edit_text(
+        "🟢 **TIER 1: INCUBADORA**\n"
+        "Recolección básica de recursos. Acceso libre para todas las Larvas.",
+        reply_markup=InlineKeyboardMarkup(kb),
+        parse_mode=ParseMode.MARKDOWN
+    )
 
 async def tier_2_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Acceso: OBRERO+"""
-    query = update.callback_query; user_id = query.from_user.id
-    user = await db.get_user(user_id)
+    """Menú Tier 2: Pasivos. Requiere Rol OBRERO."""
+    query = update.callback_query
+    user_id = query.from_user.id
+    user_data = await db.get_user(user_id)
     
     # Verificación de Rol
-    allowed_roles = ROLES_CONFIG['OBRERO']['tiers'] + ROLES_CONFIG['EXPLORADOR']['tiers'] # etc... simplificado:
-    current_tier_access = ROLES_CONFIG.get(user['role'], ROLES_CONFIG['LARVA'])['tiers']
+    allowed_roles = ROLES_CONFIG['OBRERO']['tier_access'] # [1, 2]
+    # Simplificación: Si el rol actual tiene acceso al tier 2
+    current_role = user_data.get('role', 'LARVA')
+    access_list = ROLES_CONFIG.get(current_role, ROLES_CONFIG['LARVA'])['tier_access']
     
-    if 2 not in current_tier_access and not user.get('is_premium'):
-        await query.answer("🔒 BLOQUEADO. Evoluciona a OBRERO para acceder.", show_alert=True)
+    if 2 not in access_list and not user_data.get('is_premium'):
+        await query.answer("🔒 ACCESO DENEGADO. Requiere Rol: OBRERO", show_alert=True)
         return
-
+        
     kb = [
         [InlineKeyboardButton("🐝 HONEYGAIN", url=LINKS['HONEYGAIN']), InlineKeyboardButton("📦 PACKETSTREAM", url=LINKS['PACKETSTREAM'])],
-        [InlineKeyboardButton("♟️ PAWNS", url=LINKS['PAWNS']), InlineKeyboardButton("🚦 TRAFFMONETIZER", url=LINKS['TRAFFMONETIZER'])],
+        [InlineKeyboardButton("♟️ PAWNS.APP", url=LINKS['PAWNS']), InlineKeyboardButton("🚦 TRAFFMONETIZER", url=LINKS['TRAFFMONETIZER'])],
         [InlineKeyboardButton("💼 PAIDWORK", url=LINKS['PAIDWORK']), InlineKeyboardButton("🌱 SPROUTGIGS", url=LINKS['SPROUTGIGS'])],
         [InlineKeyboardButton("🔙 ATRÁS", callback_data="tasks_hub")]
     ]
-    await query.message.edit_text("🟡 **TIER 2: PROCESAMIENTO**\nIngresos pasivos.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+    
+    await query.message.edit_text(
+        "🟡 **TIER 2: REFINERÍA**\n"
+        "Sistemas de ingreso pasivo y trabajo freelance.",
+        reply_markup=InlineKeyboardMarkup(kb),
+        parse_mode=ParseMode.MARKDOWN
+    )
 
 async def tier_3_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Acceso: EXPLORADOR+"""
-    query = update.callback_query; user_id = query.from_user.id
-    user = await db.get_user(user_id)
+    """Menú Tier 3: Finanzas. Requiere Rol EXPLORADOR."""
+    query = update.callback_query
+    user_id = query.from_user.id
+    user_data = await db.get_user(user_id)
     
-    current_tier_access = ROLES_CONFIG.get(user['role'], ROLES_CONFIG['LARVA'])['tiers']
+    current_role = user_data.get('role', 'LARVA')
+    access_list = ROLES_CONFIG.get(current_role, ROLES_CONFIG['LARVA'])['tier_access']
     
-    if 3 not in current_tier_access and not user.get('is_premium'):
-        await query.answer("🔒 BLOQUEADO. Evoluciona a EXPLORADOR para acceder.", show_alert=True)
+    if 3 not in access_list and not user_data.get('is_premium'):
+        await query.answer("🔒 ACCESO DENEGADO. Requiere Rol: EXPLORADOR", show_alert=True)
         return
 
     kb = [
-        [InlineKeyboardButton("🔥 BYBIT ($20)", url=LINKS['BYBIT']), InlineKeyboardButton("🏦 NEXO", url=LINKS['NEXO'])],
+        [InlineKeyboardButton("🔥 BYBIT ($20 Bonus)", url=LINKS['BYBIT']), InlineKeyboardButton("🏦 NEXO", url=LINKS['NEXO'])],
         [InlineKeyboardButton("💳 REVOLUT", url=LINKS['REVOLUT']), InlineKeyboardButton("🦉 WISE", url=LINKS['WISE'])],
         [InlineKeyboardButton("☁️ AIRTM", url=LINKS['AIRTM']), InlineKeyboardButton("🎰 BETFURY", url=LINKS['BETFURY'])],
-        [InlineKeyboardButton("✅ VERIFICAR TAREA MANUAL", callback_data="verify_manual")],
+        [InlineKeyboardButton("✅ VERIFICAR TAREA MANUAL", callback_data="verify_manual_task")],
         [InlineKeyboardButton("🔙 ATRÁS", callback_data="tasks_hub")]
     ]
-    await query.message.edit_text("🔴 **TIER 3: CÁMARA REAL**\nFinanzas de alto valor.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+    
+    await query.message.edit_text(
+        "🔴 **TIER 3: BÓVEDA REAL**\n"
+        "Alta rentabilidad financiera. Solo para la élite.",
+        reply_markup=InlineKeyboardMarkup(kb),
+        parse_mode=ParseMode.MARKDOWN
+    )
 
-async def verify_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await q.message.edit_text("🛰️ **ESCANEANDO BLOCKCHAIN...**")
+async def verify_manual_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Simulación de verificación manual."""
+    query = update.callback_query
+    
+    await query.message.edit_text("🛰️ **INICIANDO ESCANEO DE BLOCKCHAIN...**")
     await asyncio.sleep(2.0)
-    await q.message.edit_text(
+    
+    kb = [[InlineKeyboardButton("ENTENDIDO", callback_data="go_dashboard")]]
+    await query.message.edit_text(
         "📝 **SOLICITUD REGISTRADA**\n\n"
-        "Tu acción ha quedado en cola de verificación manual.\n"
-        "Si es válida, recibirás USD en tu saldo.",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("OK", callback_data="go_dashboard")]])
+        "Hemos detectado tu clic. El sistema validará la conversión (CPA) en las próximas 24 horas.\n"
+        "Si es exitoso, recibirás saldo en USD directamente.",
+        reply_markup=InlineKeyboardMarkup(kb),
+        parse_mode=ParseMode.MARKDOWN
     )
 
 # ==============================================================================
-# HANDLERS: CÉLULAS Y SOCIAL
+# 8. SISTEMA DE CÉLULAS (GUILDS)
 # ==============================================================================
 
 async def cell_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query; user_id = query.from_user.id
+    """Gestión de Células: Ver info, crear o unirse."""
+    query = update.callback_query
+    user_id = query.from_user.id
     user_data = await db.get_user(user_id)
     
+    # CASO A: Ya tiene célula
     if user_data.get('cell_id'):
-        # MODO: YA TENGO CÉLULA
         cell = await db.get_cell(user_data['cell_id'])
-        txt = (
-            f"🦠 **CÉLULA: {cell['name']}**\n"
-            f"────────────────\n"
-            f"👥 Miembros: {len(cell['members'])}\n"
-            f"🔥 Sinergia: x{cell['synergy_level']:.2f}\n"
-            f"🏆 XP Total: {int(cell['total_xp'])}\n"
-            f"🆔 **ID:** `{cell['id']}`\n\n"
-            "Comparte el ID con tus amigos para aumentar la Sinergia."
-        )
-        kb = [[InlineKeyboardButton("🔙 VOLVER", callback_data="go_dashboard")]]
-    else:
-        # MODO: SIN CÉLULA
-        txt = (
-            "⚠️ **ORGANISMO AISLADO**\n\n"
-            "No perteneces a ninguna célula.\n"
-            "Estás perdiendo el **Bono de Sinergia**.\n\n"
-            "Opciones:"
-        )
-        kb = [
-            [InlineKeyboardButton("➕ CREAR CÉLULA (100 Néctar)", callback_data="create_cell_act")],
-            [InlineKeyboardButton("🔙 VOLVER", callback_data="go_dashboard")]
-        ]
-        # Nota: Unirse a célula por ID requiere input de texto, se maneja en general_text_handler o comando aparte
-    
-    await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        if cell:
+            txt = (
+                f"🦠 **TU CÉLULA: {cell['name']}**\n"
+                f"────────────────\n"
+                f"👥 Miembros: {len(cell['members'])}\n"
+                f"🔥 Sinergia: x{cell['synergy_level']:.2f}\n"
+                f"🏆 XP Total: {int(cell['total_xp'])}\n"
+                f"🆔 **ID:** `{cell['id']}`\n\n"
+                "Comparte este ID con tus amigos. Si ellos se unen, tu multiplicador de sinergia aumenta."
+            )
+            kb = [[InlineKeyboardButton("🔙 VOLVER", callback_data="go_dashboard")]]
+            await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+            return
 
-async def create_cell_act(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query; user_id = query.from_user.id
+    # CASO B: No tiene célula
+    txt = (
+        "⚠️ **ORGANISMO AISLADO**\n\n"
+        "Actualmente estás trabajando solo (Multiplicador x1.0).\n"
+        "Las Células permiten multiplicar tus ganancias mediante Sinergia.\n\n"
+        f"**Costo de Creación:** {CELL_CREATION_COST} Néctar."
+    )
+    
+    kb = [
+        [InlineKeyboardButton(f"➕ CREAR CÉLULA ({CELL_CREATION_COST} Néctar)", callback_data="create_cell_action")],
+        # Nota: Unirse a célula requiere input de texto con el ID, lo manejamos via comando o chat
+        [InlineKeyboardButton("🔙 VOLVER", callback_data="go_dashboard")]
+    ]
+    
+    await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+async def create_cell_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Acción de crear célula."""
+    query = update.callback_query
+    user_id = query.from_user.id
     user_data = await db.get_user(user_id)
     
-    cost = 100
-    if user_data['nectar'] < cost:
-        await query.answer("❌ Néctar insuficiente.", show_alert=True)
+    if user_data['nectar'] < CELL_CREATION_COST:
+        await query.answer(f"❌ Néctar insuficiente. Necesitas {CELL_CREATION_COST}.", show_alert=True)
         return
         
-    user_data['nectar'] -= cost
-    name = f"Enjambre-{random.randint(1000,9999)}"
-    cell_id = await db.create_cell(user_id, name)
+    # Cobrar
+    user_data['nectar'] -= CELL_CREATION_COST
+    
+    # Crear
+    cell_name = f"Squad-{random.randint(1000, 9999)}"
+    cell_id = await db.create_cell(user_id, cell_name)
     user_data['cell_id'] = cell_id
     
     await db.save_user(user_id, user_data)
-    await query.answer("✅ Célula Creada")
+    
+    await query.answer("✅ Célula Biológica Creada")
+    # Redirigir al menú para verla
     await cell_menu(update, context)
 
-async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query; user_id = query.from_user.id
-    user_data = await db.get_user(user_id)
-    
-    refs = len(user_data.get('referrals', []))
-    link = f"https://t.me/{context.bot.username}?start={user_id}"
-    
-    txt = (
-        f"👥 **RED DE DESCENDENCIA**\n\n"
-        f"Hijos Directos: {refs}\n"
-        f"Poder de Enjambre: x{user_data.get('swarm_power', 1.0):.2f}\n\n"
-        f"🔗 **Tu Enlace:**\n`{link}`"
-    )
-    kb = [[InlineKeyboardButton("📤 COMPARTIR", url=f"https://t.me/share/url?url={link}")], [InlineKeyboardButton("🔙", callback_data="go_dashboard")]]
-    await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
-
 # ==============================================================================
-# HANDLERS: TIENDA
+# 9. TIENDA Y EQUIPO
 # ==============================================================================
 
 async def shop_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query; user_id = query.from_user.id
+    query = update.callback_query
+    user_id = query.from_user.id
     user_data = await db.get_user(user_id)
     
-    txt = f"🛒 **MERCADO ORGÁNICO**\nSaldo: {user_data['nectar']:.2f} Néctar"
+    txt = (
+        f"🛒 **MERCADO ORGÁNICO**\n"
+        f"Saldo Disponible: `{user_data['nectar']:.2f}` Néctar\n\n"
+        "Adquiere recursos para acelerar tu evolución."
+    )
+    
     kb = [
-        [InlineKeyboardButton("⚡ RECARGA ENERGÍA (200 Néctar)", callback_data="buy_energy")],
-        [InlineKeyboardButton("👑 MEMBRESÍA REINA ($10 USD)", callback_data="buy_premium")],
+        [InlineKeyboardButton(f"⚡ RECARGA COMPLETA ({COST_FULL_RECHARGE} Néctar)", callback_data="buy_energy_action")],
+        [InlineKeyboardButton("👑 EVOLUCIÓN ARTIFICIAL ($10 USD)", callback_data="buy_premium_info")],
         [InlineKeyboardButton("🔙 VOLVER", callback_data="go_dashboard")]
     ]
-    await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+    
+    await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
-async def buy_energy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query; user_id = query.from_user.id
+async def buy_energy_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
     user_data = await db.get_user(user_id)
     
     if user_data['nectar'] >= COST_FULL_RECHARGE:
         user_data['nectar'] -= COST_FULL_RECHARGE
-        # Recargar al máximo permitido por su rol
+        
+        # Recargar al máximo del rol actual
         config = ROLES_CONFIG.get(user_data['role'], ROLES_CONFIG['LARVA'])
         user_data['energy'] = config['max_energy']
         
         await db.save_user(user_id, user_data)
-        await query.answer("⚡ Energía Restaurada", show_alert=True)
+        
+        await query.answer("⚡ Inyección de Energía Exitosa", show_alert=True)
         await show_dashboard(update, context)
     else:
-        await query.answer("❌ Néctar insuficiente", show_alert=True)
+        await query.answer("❌ Saldo Insuficiente", show_alert=True)
 
-async def buy_premium_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def buy_premium_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.message.edit_text(
-        f"💎 **EVOLUCIÓN ARTIFICIAL (PREMIUM)**\n\n"
-        "Obtén el rol REINA, Acceso a todos los Tiers y Bonus x2.\n\n"
-        f"Envía $10 USD (TRC20) a:\n`{CRYPTO_WALLET_USDT}`\n\n"
-        "Luego envía el Hash de transacción aquí.",
-        parse_mode="Markdown"
+    
+    txt = (
+        f"💎 **MEMBRESÍA GÉNESIS (PREMIUM)**\n\n"
+        "Obtén acceso inmediato al Rol **REINA**:\n"
+        "• Energía x10\n"
+        "• Acceso a todos los Tiers\n"
+        "• Multiplicador x2.0 permanente\n\n"
+        f"Envía **$10 USD** (TRC20) a:\n`{CRYPTO_WALLET_USDT}`\n\n"
+        "Luego envía el Hash de transacción en el chat."
     )
-    # Aquí podríamos activar un flag en context para esperar el hash en general_text_handler
+    
+    kb = [[InlineKeyboardButton("🔙 VOLVER", callback_data="shop_menu")]]
+    await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    user_data = await db.get_user(user_id)
+    
+    refs_count = len(user_data.get('referrals', []))
+    link = f"https://t.me/{context.bot.username}?start={user_id}"
+    
+    txt = (
+        f"👥 **RED DE DESCENDENCIA**\n\n"
+        f"Hijos Directos: {refs_count}\n"
+        f"Poder de Enjambre: x{user_data.get('swarm_power', 1.0):.2f}\n\n"
+        "Ganas **50 Néctar** por cada nuevo usuario verificado.\n\n"
+        f"🔗 **Tu Enlace Genético:**\n`{link}`"
+    )
+    
+    kb = [
+        [InlineKeyboardButton("📤 COMPARTIR ENLACE", url=f"https://t.me/share/url?url={link}")],
+        [InlineKeyboardButton("🔙 VOLVER", callback_data="go_dashboard")]
+    ]
+    
+    await query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
 # ==============================================================================
-# DISPATCHER CENTRAL
+# 10. DISPATCHER CENTRAL DE BOTONES
 # ==============================================================================
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Enruta todos los clicks de botones."""
+    """
+    Controlador central que enruta todos los callbacks de botones.
+    """
     query = update.callback_query
     data = query.data
     
-    # Mapeo simple de acciones
+    # Mapeo de Acciones
     if data == "accept_legal":
         context.user_data['waiting_for_email'] = True
-        await query.message.edit_text("📧 Ingresa tu **EMAIL** para continuar:", parse_mode="Markdown")
+        await query.message.edit_text(
+            "📧 **VINCULACIÓN REQUERIDA**\n\n"
+            "Escribe tu dirección de **EMAIL** para activar la billetera interna y recibir pagos:",
+            parse_mode=ParseMode.MARKDOWN
+        )
         return
 
-    mapping = {
+    # Diccionario de Funciones
+    actions = {
         "go_dashboard": show_dashboard,
         "mine_action": mine_action,
         "tasks_hub": tasks_hub,
         "tier_1": tier_1_menu,
         "tier_2": tier_2_menu,
         "tier_3": tier_3_menu,
-        "verify_manual": verify_manual,
+        "verify_manual_task": verify_manual_task,
         "cell_menu": cell_menu,
-        "create_cell_act": create_cell_act,
+        "create_cell_action": create_cell_action,
         "shop_menu": shop_menu,
-        "buy_energy": buy_energy,
-        "buy_premium": buy_premium_flow,
+        "buy_energy_action": buy_energy_action,
+        "buy_premium_info": buy_premium_info,
         "team_menu": team_menu
     }
     
-    if data in mapping:
-        await mapping[data](update, context)
+    # Ejecutar acción correspondiente
+    if data in actions:
+        await actions[data](update, context)
     
-    # Siempre intentar responder al callback para que no se quede cargando
-    try: await query.answer()
-    except: pass
-
-async def help_command(u, c): await u.message.reply_text("PANDORA PROTOCOL V200.0 - SYSTEM HEALTHY")
-async def invite_command(u, c): await team_menu(u, c)
+    # Responder al callback para cerrar el relojito de carga
+    try:
+        await query.answer()
+    except Exception:
+        pass
