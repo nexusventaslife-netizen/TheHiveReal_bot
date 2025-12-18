@@ -8,8 +8,6 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 # Lee la URL de Redis del entorno, o usa una por defecto si falla
-# (Es importante que definas REDIS_URL en Render también si quieres máxima seguridad, 
-# pero aquí dejo la tuya como fallback para que no deje de funcionar)
 ENV_REDIS_URL = os.getenv("REDIS_URL", "rediss://default:AbEBAAIncDIxNTYwNjk5MzkwODc0OGE2YWUyNmJkMmI1N2M4MmNiM3AyNDUzMTM@brave-hawk-45313.upstash.io:6379")
 
 # Cliente Global
