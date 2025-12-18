@@ -8,11 +8,11 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from telegram.error import Conflict, NetworkError
 
-# Importamos la lógica COMPLETA
+# Importamos la lógica
 try:
     from bot_logic import start, help_command, general_text_handler, invite_command, reset_command, button_handler, broadcast_command
-except ImportError as e:
-    print(f"⚠️ CRÍTICO: No se encontró bot_logic.py: {e}")
+except ImportError:
+    print("⚠️ CRÍTICO: No se encontró bot_logic.py")
     # Funciones dummy por si acaso
     async def start(u,c): pass
     async def help_command(u,c): pass
@@ -93,7 +93,7 @@ async def health_check():
 async def startup_event():
     global bot_app
     
-    logger.info("🚀 INICIANDO SISTEMA HIVE V300.0 (FULL MERGE)...")
+    logger.info("🚀 INICIANDO SISTEMA HIVE V50.0...")
     
     await db.init_db()
     
@@ -122,10 +122,7 @@ async def startup_event():
             
             # Anti-Crash
             logger.info("🔪 Limpiando webhooks...")
-            try:
-                await bot_app.bot.delete_webhook(drop_pending_updates=True)
-            except: pass
-            
+            await bot_app.bot.delete_webhook(drop_pending_updates=True)
             asyncio.create_task(run_polling_safely())
             
         except Exception as e:
