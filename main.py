@@ -1,180 +1,180 @@
 import os
+import sys
 import logging
 import asyncio
-import httpx 
-from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
-from telegram import Update 
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters
-from telegram.error import Conflict, NetworkError
+import time
+from contextlib import asynccontextmanager
+from typing import Optional
 
-# Importamos la lógica masiva
+# Server & Network
+import uvicorn
+import httpx
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
+
+# Telegram Imports
+from telegram import Update
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, MessageHandler, 
+    CallbackQueryHandler, filters, Application
+)
+from telegram.error import Conflict, NetworkError, TimedOut
+
+# Internal Modules
+import database as db
+from loguru import logger
+
+# Importación Segura
 try:
     from bot_logic import (
-        start, help_command, general_text_handler, invite_command, 
-        button_handler
+        start_command, help_command, invite_command, reset_command,
+        button_handler, general_text_handler
     )
 except ImportError as e:
-    print(f"⚠️ CRÍTICO: Error importando bot_logic: {e}")
-    # Fallback para evitar crash en deploy
-    async def start(u,c): pass
-    async def help_command(u,c): pass
-    async def general_text_handler(u,c): pass
-    async def invite_command(u,c): pass
-    async def button_handler(u,c): pass
+    logger.critical(f"FATAL: No se pudo importar bot_logic: {e}")
+    sys.exit(1)
 
-import database as db
+# Configuración de Logging
+class InterceptHandler(logging.Handler):
+    def emit(self, record):
+        logger_opt = logger.opt(depth=6, exception=record.exc_info)
+        logger_opt.log(record.levelname, record.getMessage())
 
-# Configuración de Logs
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', 
-    level=logging.INFO
-)
-logger = logging.getLogger("HiveMain")
+logging.basicConfig(handlers=[InterceptHandler()], level=0)
 
-# TOKEN
+# Variables de Entorno
 TOKEN = os.getenv("TELEGRAM_TOKEN")
+PORT = int(os.getenv("PORT", 10000))
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-# SISTEMA DE GEO-DIRECCIONAMIENTO (CPA INTELIGENTE)
-OFFERS_BY_COUNTRY = {
-    "ES": "https://www.bybit.com/invite?ref=BBJWAX4", 
-    "MX": "https://www.bybit.com/invite?ref=BBJWAX4",
-    "AR": "https://app.airtm.com/ivt/jos3vkujiyj",      
-    "CO": "https://www.bybit.com/invite?ref=BBJWAX4",
-    "VE": "https://app.airtm.com/ivt/jos3vkujiyj",
-    "UY": "https://wise.com/invite/ahpc/josealejandrop73",
-    "DEFAULT": "https://freecash.com/r/XYN98"          
-}
+if not TOKEN:
+    logger.critical("TELEGRAM_TOKEN no configurado.")
+    sys.exit(1)
 
-app = FastAPI()
-bot_app = None
+bot_app: Optional[Application] = None
+start_time = time.time()
 
 # ==============================================================================
-# RUTAS WEB (FASTAPI)
+# LIFESPAN MANAGER (Ciclo de Vida)
 # ==============================================================================
 
-@app.get("/ingreso")
-async def entry_detect(request: Request):
-    """Punto de entrada para analytics futuros."""
-    return RedirectResponse(url="/")
-
-@app.get("/go")
-async def redirect_tasks(request: Request):
-    """
-    Ruta inteligente para ofertas CPA.
-    Detecta la IP del usuario, consulta una API de GeoIP y redirige
-    a la oferta que mejor paga para ese país.
-    """
-    client_ip = request.headers.get("x-forwarded-for") or request.client.host
-    # Limpieza de IP si hay proxys
-    if "," in str(client_ip): client_ip = str(client_ip).split(",")[0]
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Gestor de arranque y parada seguros."""
+    global bot_app
+    logger.info("🚀 INICIANDO SISTEMA HIVE V200.0 (HEAVY LOAD READY)...")
     
-    target_url = OFFERS_BY_COUNTRY["DEFAULT"]
-    
+    # 1. DB Connect
     try:
-        # Usamos httpx asíncrono para no bloquear el bot
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(f"http://ip-api.com/json/{client_ip}", timeout=2.0)
-            if resp.status_code == 200:
-                data = resp.json()
-                if data.get('status') == 'success':
-                    country = data.get('countryCode')
-                    target_url = OFFERS_BY_COUNTRY.get(country, OFFERS_BY_COUNTRY["DEFAULT"])
-                    logger.info(f"🌍 GEO-REDIRECT: {client_ip} ({country}) -> {target_url}")
+        await db.db.connect()
     except Exception as e:
-        logger.warning(f"⚠️ Fallo GeoIP: {e}")
+        logger.error(f"Error DB: {e}")
+    
+    # 2. Bot Connect
+    if TOKEN:
+        bot_app = ApplicationBuilder().token(TOKEN).build()
         
-    return RedirectResponse(url=target_url)
+        # Handlers
+        bot_app.add_handler(CommandHandler("start", start_command))
+        bot_app.add_handler(CommandHandler("help", help_command))
+        bot_app.add_handler(CommandHandler("invitar", invite_command))
+        bot_app.add_handler(CommandHandler("reset", reset_command))
+        bot_app.add_handler(CallbackQueryHandler(button_handler))
+        bot_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), general_text_handler))
+        
+        await bot_app.initialize()
+        await bot_app.start()
+        
+        # Webhook vs Polling
+        if WEBHOOK_URL:
+            logger.info(f"📡 Modo Webhook: {WEBHOOK_URL}")
+            await bot_app.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook")
+        else:
+            logger.info("📡 Modo Polling Asíncrono")
+            await bot_app.bot.delete_webhook(drop_pending_updates=True)
+            asyncio.create_task(polling_loop())
+            
+    yield
+    
+    # Shutdown
+    logger.info("🛑 APAGANDO...")
+    if bot_app:
+        await bot_app.stop()
+        await bot_app.shutdown()
+    await db.db.close()
+
+# ==============================================================================
+# SERVIDOR WEB FASTAPI
+# ==============================================================================
+
+app = FastAPI(lifespan=lifespan, docs_url=None)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
-async def read_index():
-    return HTMLResponse(content="""
-    <html>
-        <body style="background: black; color: #00ff00; font-family: monospace; text-align: center; padding-top: 20%;">
-            <h1>PANDORA HIVE V200.0</h1>
-            <p>SYSTEM STATUS: <span style="color: cyan;">OPTIMAL</span></p>
-            <p>HIVE MIND: CONNECTED</p>
-        </body>
-    </html>
+async def root():
+    uptime = int(time.time() - start_time)
+    return HTMLResponse(f"""
+    <body style="background:#000;color:#0f0;font-family:monospace;text-align:center;padding-top:100px;">
+        <h1>🧬 HIVE SYSTEM ONLINE</h1>
+        <p>UPTIME: {uptime}s</p>
+        <p>STATUS: OPTIMAL</p>
+    </body>
     """)
 
 @app.get("/health")
-async def health_check():
-    """Health check para que Render no mate el servicio."""
-    return {"status": "ok", "hive": "genesis", "version": "200.0"}
+async def health():
+    return {"status": "ok", "db": "connected" if db.db.r else "error"}
+
+@app.get("/go")
+async def cpa_redirect(request: Request):
+    """Geo-Redirección CPA Inteligente."""
+    # Aquí iría lógica GeoIP real
+    # Por defecto
+    return RedirectResponse("https://freecash.com/r/XYN98")
+
+@app.post("/webhook")
+async def webhook_handler(request: Request):
+    if not bot_app: return JSONResponse({"error": "No bot"}, status_code=500)
+    try:
+        data = await request.json()
+        update = Update.de_json(data, bot_app.bot)
+        await bot_app.process_update(update)
+        return {"ok": True}
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 # ==============================================================================
-# LIFECYCLE DE TELEGRAM
+# GESTOR DE POLLING (RESILIENTE)
 # ==============================================================================
 
-@app.on_event("startup")
-async def startup_event():
-    """Se ejecuta al iniciar el servidor."""
-    global bot_app
-    
-    logger.info("🚀 INICIANDO PROTOCOLO PANDORA V200.0 (ELITE BUILD)...")
-    
-    # 1. Iniciar Base de Datos
-    await db.init_db()
-    
-    # 2. Iniciar Bot
-    if TOKEN:
-        try:
-            bot_app = ApplicationBuilder().token(TOKEN).build()
-            
-            # Registrar Comandos
-            bot_app.add_handler(CommandHandler("start", start))
-            bot_app.add_handler(CommandHandler("help", help_command))
-            bot_app.add_handler(CommandHandler("invitar", invite_command))
-            
-            # Registrar Handlers Interactivos
-            bot_app.add_handler(CallbackQueryHandler(button_handler))
-            bot_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), general_text_handler))
-            
-            await bot_app.initialize()
-            await bot_app.start()
-            
-            # Limpieza y arranque de Polling
-            logger.info("🔪 Limpiando webhooks residuales...")
-            await bot_app.bot.delete_webhook(drop_pending_updates=True)
-            
-            # Ejecutar polling en background task
-            asyncio.create_task(run_polling_safely())
-            
-        except Exception as e:
-            logger.critical(f"🔥 ERROR FATAL INICIANDO TELEGRAM: {e}")
-    else:
-        logger.error("❌ FALTA TELEGRAM_TOKEN EN VARIABLES DE ENTORNO")
-
-async def run_polling_safely():
-    """Mantiene el bot vivo y reinicia en caso de errores de red."""
-    retry_delay = 5
+async def polling_loop():
+    """Bucle infinito de polling que no muere."""
     while True:
         try:
-            logger.info("📡 Conectando a la Matriz de Telegram...")
             await bot_app.updater.start_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
-            break 
+            # Mantener vivo mientras el updater corra
+            while bot_app.updater.running:
+                await asyncio.sleep(10)
+            break
         except Conflict:
-            logger.warning("⚠️ Conflicto de Webhook (Otra instancia activa). Esperando...")
-            await asyncio.sleep(retry_delay)
-            try: await bot_app.bot.delete_webhook() 
+            logger.warning("Conflicto de Webhook. Esperando...")
+            await asyncio.sleep(5)
+            try: await bot_app.bot.delete_webhook()
             except: pass
         except NetworkError:
-            logger.error(f"⚠️ Error de Red. Reintentando en {retry_delay}s...")
-            await asyncio.sleep(retry_delay)
-            retry_delay = min(retry_delay * 2, 60)
+            logger.error("Error de Red. Reintentando...")
+            await asyncio.sleep(5)
         except Exception as e:
-            logger.error(f"🔥 Error desconocido en Polling: {e}")
+            logger.critical(f"Error Polling: {e}")
             await asyncio.sleep(5)
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Limpieza al apagar."""
-    logger.info("🛑 APAGANDO SISTEMA...")
-    if bot_app:
-        if bot_app.updater.running:
-            await bot_app.updater.stop()
-        if bot_app.running:
-            await bot_app.stop()
-            await bot_app.shutdown()
-    await db.close_db()
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=PORT, log_level="info")
