@@ -3,7 +3,7 @@ import logging
 from typing import Optional, Dict, Any
 from redis.asyncio import Redis
 
-# Intentamos usar orjson para máxima velocidad, fallback a json normal
+# Intentamos usar orjson para velocidad
 try:
     import orjson
     HAS_ORJSON = True
