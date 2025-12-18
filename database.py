@@ -5,7 +5,7 @@ import redis.asyncio as redis
 from datetime import datetime
 
 # =============================================================================
-# CONFIGURACIÓN DE BASE DE DATOS (REDIS UPSTASH)
+# CONFIGURACIÓN DE BASE DE DATOS
 # =============================================================================
 logger = logging.getLogger("HiveDatabase")
 
@@ -16,11 +16,10 @@ ENV_REDIS_URL = os.getenv("REDIS_URL", "rediss://default:AbEBAAIncDIxNTYwNjk5Mzk
 r = None
 
 # =============================================================================
-# ESTRUCTURA MAESTRA DE USUARIO (V300.0 - FUSIÓN TOTAL)
+# ESTRUCTURA MAESTRA DE USUARIO (V300.0 - FULL)
 # =============================================================================
-# Aquí está TODO: Lo viejo (USD, Tareas) y lo nuevo (Roles, Células, Engine)
 DEFAULT_USER = {
-    # --- Identidad & Acceso ---
+    # --- Identidad ---
     "id": 0,
     "first_name": "",
     "username": "",
@@ -29,52 +28,42 @@ DEFAULT_USER = {
     "last_active": "",
     "last_update_ts": 0,
     
-    # --- Economía Vieja (Legacy) ---
-    "usd_balance": 0.00,        # Saldo en Dólares (Tasks)
-    "pending_usd": 0.00,        # Saldo pendiente de aprobación
+    # --- Economía ---
+    "nectar": 500.0,            # HIVE Líquido
+    "locked_balance": 0.0,      # HIVE Bloqueado (Vesting)
+    "usd_balance": 0.00,        # Saldo USD
     
-    # --- Economía Nueva (Pandora Hive) ---
-    "nectar": 500.0,            # HIVE Líquido (Moneda interna)
-    "locked_balance": 0.0,      # HIVE Bloqueado (Vesting/Hard Money)
-    "vesting_until": "",        # Fecha de liberación
+    # --- Gamificación (Pandora) ---
+    "role": "Larva",            # Roles: Larva, Obrero, Explorador, Guardián, Nodo, Reina
+    "role_decay": 0,
+    "hidden_progress": 0.0,     # XP Oculta
+    "behavior_score": 100.0,    # Score de comportamiento
     
-    # --- Gamificación & Roles (Jerarquía) ---
-    "role": "Larva",            # Larva -> Obrero -> Explorador -> Guardián -> Nodo -> Reina
-    "role_decay": 0,            # Contador de inactividad (Castigo)
-    "hidden_progress": 0.0,     # XP Oculta (Factor X)
-    "behavior_score": 100.0,    # Puntuación de comportamiento (0-100)
+    # --- Energía ---
+    "energy": 500,
+    "max_energy": 500,
     
-    # --- Energía & Minería ---
-    "energy": 500,              # Energía actual
-    "max_energy": 500,          # Capacidad máxima
-    "mining_level": 1,          # Nivel del pico/tap
+    # --- Social ---
+    "cell_id": None,
+    "cell_role": "Member",
     
-    # --- Social (Células/Guilds) ---
-    "cell_id": None,            # ID de la Célula a la que pertenece
-    "cell_role": "Member",      # Member / Leader
+    # --- Referidos ---
+    "referrals": [],
+    "referred_by": None,
     
-    # --- Sistema de Referidos (Viralidad) ---
-    "referrals": [],            # Lista de IDs referidos
-    "referred_by": None,        # Quién lo invitó
-    "ref_quality_score": 0,     # Calidad de los referidos (Si trabajan o no)
-    
-    # --- Anti-Fraude & Seguridad ---
-    "task_timestamps": [],      # Timestamps de tareas para detectar scripts
-    "fraud_score": 0,           # Nivel de riesgo
-    "ban_status": False,        # Si está baneado
-    
-    # --- Historial ---
-    "streak_days": 0,           # Racha de días consecutivos
-    "completed_tasks": 0,       # Total de tareas hechas
-    "is_premium": False         # Membresía Reina pagada
+    # --- Seguridad ---
+    "task_timestamps": [],
+    "fraud_score": 0,
+    "ban_status": False,
+    "streak_days": 0,
+    "is_premium": False
 }
 
 # =============================================================================
-# FUNCIONES DEL SISTEMA
+# FUNCIONES DE SISTEMA
 # =============================================================================
 
 async def init_db():
-    """Conecta a Redis al iniciar con reintentos inteligentes"""
     global r
     try:
         r = redis.from_url(
@@ -84,22 +73,19 @@ async def init_db():
             socket_connect_timeout=5.0
         )
         await r.ping()
-        
-        # Inicializar Estado Global de la Hive si no existe
+        # Inicializar Globales si no existen
         if not await r.exists("hive:global:level"):
-            await r.set("hive:global:level", 1)
-        if not await r.exists("hive:global:health"):
-            await r.set("hive:global:health", 100)
-        if not await r.exists("hive:global:work_total"):
-            await r.set("hive:global:work_total", 0.0)
-            
+            await r.mset({
+                "hive:global:level": 1,
+                "hive:global:health": 100,
+                "hive:global:work_total": 0.0
+            })
         logger.info("✅ BASE DE DATOS CONECTADA (Estructura Completa)")
     except Exception as e:
         logger.error(f"❌ FALLÓ CONEXIÓN REDIS: {e}")
         r = None
 
 async def close_db():
-    """Cierra la conexión al apagar"""
     global r
     if r:
         try:
@@ -113,7 +99,6 @@ async def close_db():
 # =============================================================================
 
 async def add_user(user_id, first_name, username, referred_by=None):
-    """Crea o actualiza un usuario asegurando que tenga TODOS los campos nuevos"""
     global r
     if not r: return False
     
@@ -135,10 +120,9 @@ async def add_user(user_id, first_name, username, referred_by=None):
                 "referred_by": referred_by,
                 "last_update_ts": datetime.now().timestamp()
             })
-            
             await r.set(key, json.dumps(new_user))
             
-            # Procesar Referido (Solo si es nuevo)
+            # Procesar Referido
             if referred_by and str(referred_by) != uid:
                 rid = str(referred_by)
                 ref_key = f"user:{rid}"
@@ -148,20 +132,20 @@ async def add_user(user_id, first_name, username, referred_by=None):
                         parent_data = json.loads(raw_parent)
                         if uid not in parent_data.get("referrals", []):
                             parent_data.setdefault("referrals", []).append(uid)
-                            # Bono pequeño por invitación
+                            # Bono pequeño
                             parent_data["nectar"] = float(parent_data.get("nectar", 0)) + 50.0
                             await r.set(ref_key, json.dumps(parent_data))
             
-            logger.info(f"🆕 Nuevo Usuario Registrado: {user_id}")
+            logger.info(f"🆕 Nuevo Usuario: {user_id}")
             return True
         else:
-            # USUARIO EXISTENTE (MIGRACIÓN SILENCIOSA)
-            # Esto asegura que si agregaste campos nuevos, los usuarios viejos los tengan
+            # USUARIO EXISTENTE (MIGRACIÓN SEGURA)
             raw_data = await r.get(key)
             if raw_data:
                 data = json.loads(raw_data)
                 data["last_active"] = datetime.now().isoformat()
                 
+                # Asegurar campos nuevos
                 changed = False
                 for k, v in DEFAULT_USER.items():
                     if k not in data:
@@ -170,7 +154,6 @@ async def add_user(user_id, first_name, username, referred_by=None):
                 
                 if changed:
                     await r.set(key, json.dumps(data))
-                    logger.info(f"♻️ Usuario {user_id} migrado a nueva estructura.")
             return False
             
     except Exception as e:
@@ -183,8 +166,7 @@ async def get_user(user_id):
     key = f"user:{user_id}"
     try:
         data = await r.get(key)
-        if data:
-            return json.loads(data)
+        if data: return json.loads(data)
     except Exception as e:
         logger.error(f"Error obteniendo usuario {user_id}: {e}")
     return None
@@ -204,10 +186,10 @@ async def update_email(user_id, email):
         await save_user(user_id, u)
 
 # =============================================================================
-# GESTIÓN DE CÉLULAS (NUEVO)
+# GESTIÓN DE CÉLULAS
 # =============================================================================
 
-async def create_cell(owner_id, cell_name):
+async def create_cell_db(owner_id, cell_name):
     global r
     if not r: return None
     cell_id = f"cell:{owner_id}:{int(datetime.now().timestamp())}"
@@ -217,12 +199,11 @@ async def create_cell(owner_id, cell_name):
         "name": cell_name,
         "members": [owner_id],
         "work_today": 0.0,
-        "synergy_level": 1.0,
-        "created_at": datetime.now().isoformat()
+        "synergy_level": 1.0
     }
     await r.set(cell_id, json.dumps(cell_data))
     
-    # Actualizar al dueño
+    # Actualizar dueño
     u = await get_user(owner_id)
     u['cell_id'] = cell_id
     u['cell_role'] = 'Leader'
@@ -237,27 +218,25 @@ async def get_cell(cell_id):
     return json.loads(data) if data else None
 
 # =============================================================================
-# GESTIÓN DE HIVE GLOBAL
+# HIVE GLOBAL
 # =============================================================================
 
 async def update_hive_global(work_amount):
     global r
     if not r: return
     try:
-        total = await r.incrbyfloat("hive:global:work_total", float(work_amount))
+        await r.incrbyfloat("hive:global:work_total", float(work_amount))
+        # Simple lógica de nivel
         lvl = float(await r.get("hive:global:level") or 1)
-        
-        # Lógica de Nivel Global
+        total = float(await r.get("hive:global:work_total") or 0)
         if total > lvl * 10000:
             await r.incr("hive:global:level")
-            await r.set("hive:global:health", 100)
     except: pass
 
 async def get_hive_global_stats():
     global r
-    if not r: return {"level": 1, "health": 100, "work_total": 0}
+    if not r: return {"level": 1, "health": 100}
     return {
         "level": await r.get("hive:global:level") or 1,
-        "health": await r.get("hive:global:health") or 100,
-        "work_total": await r.get("hive:global:work_total") or 0
+        "health": await r.get("hive:global:health") or 100
     }
