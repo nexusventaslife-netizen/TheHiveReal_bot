@@ -7,8 +7,9 @@ from datetime import datetime
 # --- CONFIGURACIÓN ---
 logger = logging.getLogger(__name__)
 
-# Lee la URL de Redis del entorno, o usa una por defecto si falla
-ENV_REDIS_URL = os.getenv("REDIS_URL", "rediss://default:AbEBAAIncDIxNTYwNjk5MzkwODc0OGE2YWUyNmJkMmI1N2M4MmNiM3AyNDUzMTM@brave-hawk-45313.upstash.io:6379")
+# Lee la URL de Redis del entorno. 
+# CRÍTICO: No poner valores por defecto con contraseñas aquí.
+ENV_REDIS_URL = os.getenv("REDIS_URL")
 
 # Cliente Global
 r = None
@@ -37,8 +38,14 @@ DEFAULT_USER = {
 # --- FUNCIONES DE SISTEMA ---
 
 async def init_db():
-    """Conecta a Redis al iniciar con reintentos inteligentes"""
+    """Conecta a Redis al iniciar validando que la URL exista"""
     global r
+    
+    if not ENV_REDIS_URL:
+        logger.critical("❌ ERROR FATAL: La variable de entorno 'REDIS_URL' no está configurada.")
+        r = None
+        return
+
     try:
         r = redis.from_url(
             ENV_REDIS_URL, 
@@ -47,7 +54,7 @@ async def init_db():
             socket_connect_timeout=5.0
         )
         await r.ping()
-        logger.info("✅ CONEXIÓN REDIS UPSTASH EXITOSA")
+        logger.info("✅ CONEXIÓN REDIS EXITOSA (Desde Environment)")
     except Exception as e:
         logger.error(f"❌ FALLÓ CONEXIÓN REDIS: {e}")
         r = None
@@ -67,7 +74,9 @@ async def close_db():
 async def add_user(user_id, first_name, username, referred_by=None):
     """Agrega usuario a Redis de forma segura"""
     global r
-    if not r: return False
+    if not r: 
+        logger.warning("⚠️ Intento de escritura sin conexión a Redis")
+        return False
     
     uid = str(user_id)
     key = f"user:{uid}"
