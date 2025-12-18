@@ -4,11 +4,12 @@ import time
 import asyncio
 import redis.asyncio as redis
 from datetime import datetime
-from typing import Optional, Dict, List, Any
+# AQUI ESTABA EL ERROR, AHORA ESTA Dict INCLUIDO
+from typing import Optional, Dict, List, Union, Any
 from loguru import logger
 
 # ==============================================================================
-# HIVE DATABASE CORE - V302 (FULL MONOLITH)
+# HIVE DATABASE CORE - V303 (FULL STABLE)
 # ==============================================================================
 
 class DatabaseManager:
@@ -18,46 +19,28 @@ class DatabaseManager:
         self._max_retries = 10
         self._retry_delay = 2
         
-        # --- ESQUEMA MAESTRO DEL NODO (USUARIO) ---
+        # --- ESQUEMA MAESTRO DEL NODO ---
         self.DEFAULT_NODE_SCHEMA = {
-            # 1. IDENTIDAD
-            "id": 0,
-            "first_name": "",
-            "username": "",
-            "email": None,              
-            "joined_at": "",
+            # IDENTIDAD
+            "id": 0, "first_name": "", "username": "", "email": None, "joined_at": "",
             
-            # 2. BIOLOGÍA (GAMEPLAY)
-            "caste": None,              # RECOLECTOR, GUARDIAN, EXPLORADOR
-            "polen": 500,               # Energía actual
-            "max_polen": 500,           # Capacidad máxima
-            "oxygen": 100.0,            # Salud
+            # BIOLOGÍA
+            "caste": None, "polen": 500, "max_polen": 500, "oxygen": 100.0,
             
-            # 3. ECONOMÍA (TOKENOMICS)
-            "honey": 0.0,               # Miel (Saldo Líquido)
-            "honey_vested": 0.0,        # Miel Futura (Airdrop)
-            "real_balance": 0.0,        # Saldo USD
+            # ECONOMÍA
+            "honey": 0.0, "honey_vested": 0.0, "real_balance": 0.0,
             
-            # 4. CRONOBIOLOGÍA
-            "last_pulse": 0,            # Última interacción
-            "last_regen": 0,            # Última regeneración
-            "zumbido_hoy": False,       # Participación diaria
+            # CRONOBIOLOGÍA
+            "last_pulse": 0, "last_regen": 0, "zumbido_hoy": False,
             
-            # 5. ESTRUCTURA SOCIAL
-            "cell_id": None,            # ID Enjambre
-            "referrals": [],            # Lista invitados
-            "padre_id": None,           # Quién me invitó
-            "swarm_power": 1.0,         # Multiplicador
+            # SOCIAL
+            "cell_id": None, "referrals": [], "padre_id": None, "swarm_power": 1.0,
             
-            # 6. SEGURIDAD
-            "entropy_trace": [],        # Anti-Bot
-            "verificado": False,        # Email Check
-            "banned": False,
-            "is_premium": False
+            # SEGURIDAD
+            "entropy_trace": [], "verificado": False, "banned": False, "is_premium": False
         }
 
     async def connect(self):
-        """Conexión robusta al Cluster Redis."""
         if not self.redis_url:
             logger.critical("❌ ERROR: REDIS_URL no encontrada.")
             raise ValueError("REDIS_URL missing")
@@ -82,7 +65,6 @@ class DatabaseManager:
         raise ConnectionError("FATAL: Redis no conecta.")
 
     async def _init_globals(self):
-        """Inicializa contadores globales."""
         async with self.r.pipeline() as pipe:
             pipe.setnx("hive:global:nodes", 0)
             pipe.setnx("hive:global:honey", 0.0)
@@ -91,12 +73,9 @@ class DatabaseManager:
     async def close(self):
         if self.r: await self.r.aclose()
 
-    # ==========================================================================
-    # GESTIÓN DE NODOS (USUARIOS)
-    # ==========================================================================
+    # --- GESTIÓN DE NODOS ---
 
     async def create_node(self, user_id: int, first_name: str, username: str, referrer_id: int = None) -> bool:
-        """Crea un nuevo usuario (Nodo)."""
         if not self.r: return False
         key = f"node:{user_id}"
         
@@ -104,12 +83,9 @@ class DatabaseManager:
 
         new_node = self.DEFAULT_NODE_SCHEMA.copy()
         new_node.update({
-            "id": user_id,
-            "first_name": first_name,
-            "username": username,
+            "id": user_id, "first_name": first_name, "username": username,
             "joined_at": datetime.utcnow().isoformat(),
-            "last_pulse": time.time(),
-            "last_regen": time.time(),
+            "last_pulse": time.time(), "last_regen": time.time(),
             "padre_id": referrer_id
         })
 
@@ -125,7 +101,6 @@ class DatabaseManager:
         return True
 
     async def get_node(self, user_id: int) -> Optional[Dict]:
-        """Obtiene datos del Nodo con autoreparación."""
         if not self.r: return None
         try:
             data = await self.r.get(f"node:{user_id}")
@@ -145,11 +120,9 @@ class DatabaseManager:
             return None
 
     async def save_node(self, user_id: int, data: Dict):
-        """Guarda estado del nodo."""
         if self.r: await self.r.set(f"node:{user_id}", json.dumps(data))
 
     async def update_email(self, user_id: int, email: str):
-        """Vincula email."""
         node = await self.get_node(user_id)
         if node:
             node["email"] = email
@@ -157,15 +130,11 @@ class DatabaseManager:
             await self.save_node(user_id, node)
 
     async def delete_node(self, user_id: int):
-        """Purga nodo."""
         if self.r: await self.r.delete(f"node:{user_id}")
 
-    # ==========================================================================
-    # GESTIÓN DE ENJAMBRES (CÉLULAS)
-    # ==========================================================================
+    # --- GESTIÓN DE ENJAMBRES ---
 
     async def create_cell(self, owner_id: int, name: str) -> Optional[str]:
-        """Crea Enjambre."""
         if not self.r: return None
         cell_id = f"cell:{owner_id}:{int(time.time())}"
         cell_data = {
@@ -177,18 +146,14 @@ class DatabaseManager:
         return cell_id
 
     async def get_cell(self, cell_id: str) -> Optional[Dict]:
-        """Obtiene Enjambre."""
         if not self.r or not cell_id: return None
         data = await self.r.get(cell_id)
         return json.loads(data) if data else None
 
     async def update_cell(self, cell_id: str, data: Dict):
-        """Guarda Enjambre."""
         if self.r: await self.r.set(cell_id, json.dumps(data))
 
-    # ==========================================================================
-    # MÉTRICAS
-    # ==========================================================================
+    # --- MÉTRICAS ---
 
     async def add_global_honey(self, amount: float):
         if self.r and amount > 0:
@@ -202,9 +167,7 @@ class DatabaseManager:
             res = await pipe.execute()
         return {"nodes": int(res[0] or 0), "honey": float(res[1] or 0)}
 
-    # ==========================================================================
-    # INTERNOS
-    # ==========================================================================
+    # --- INTERNOS ---
 
     async def _process_referral_bonus(self, padre_id: int, hijo_id: int):
         try:
