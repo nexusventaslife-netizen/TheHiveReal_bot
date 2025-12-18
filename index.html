@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>THE ONE HIVE | EVOLUTION</title>
+    <title>THE ONE HIVE | System Online</title>
     <style>
         body {
-            background-color: #050505;
+            background-color: #0d0d0d;
             color: #f1c40f;
             font-family: 'Courier New', Courier, monospace;
             display: flex;
@@ -18,29 +18,41 @@
         }
         .container {
             border: 2px solid #f1c40f;
-            padding: 3rem;
-            box-shadow: 0 0 25px rgba(241, 196, 15, 0.2);
-            background: rgba(0,0,0,0.8);
+            padding: 2rem;
+            box-shadow: 0 0 15px rgba(241, 196, 15, 0.3);
         }
         h1 {
-            font-size: 3rem;
+            font-size: 2.5rem;
             margin-bottom: 0.5rem;
             text-transform: uppercase;
-            text-shadow: 0 0 10px #f1c40f;
         }
-        p { font-size: 1.2rem; opacity: 0.9; }
-        .blink { animation: blinker 1s linear infinite; }
-        @keyframes blinker { 50% { opacity: 0; } }
-        a { color: #fff; text-decoration: none; border-bottom: 1px solid #fff; }
+        p {
+            font-size: 1.2rem;
+            opacity: 0.8;
+        }
+        .status {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 10px 20px;
+            background: #f1c40f;
+            color: #000;
+            font-weight: bold;
+            text-decoration: none;
+        }
+        .blink {
+            animation: blinker 1.5s linear infinite;
+        }
+        @keyframes blinker {
+            50% { opacity: 0; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>THE ONE HIVE</h1>
-        <p>STATUS: <span class="blink">OPERATIONAL</span></p>
-        <p>PROTOCOL: PANDORA V300.0</p>
-        <br>
-        <p>[ ACCESS SECURED ]</p>
+        <p>SYSTEM STATUS: <span class="blink">ONLINE</span></p>
+        <p>VERSION: 156.0 - FULL ARSENAL</p>
+        <a href="https://t.me/TheOneHiveBot" class="status">OPEN TELEGRAM NODE</a>
     </div>
 </body>
 </html>
