@@ -8,37 +8,40 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 # Lee la URL de Redis del entorno.
-# CRÍTICO: No poner valores por defecto con contraseñas aquí.
 ENV_REDIS_URL = os.getenv("REDIS_URL")
 
 # Cliente Global
 r = None
 
-# Estructura Base (ACTUALIZADA V156.0 + RLE DEFENSE)
+# Estructura Base (ACTUALIZADA V157.0 + SWARM RESONANCE)
 DEFAULT_USER = {
     "id": 0,
     "first_name": "",
     "username": "",
     "email": None,
-    "nectar": 500.0,      # Moneda Interna (HIVE) - Float para precisión
+    "nectar": 500.0,      # Moneda Interna (HIVE)
     "usd_balance": 0.00,  # Saldo Real
     "skills": [],         # Inventario
     "joined_at": "",
-    "referrals": [],
+    "referrals": [],      # Lista de IDs
     "referred_by": None,
     "last_active": "",
-    # --- ENGANCHE (ESTRATEGIA ANTI-HAMSTER) ---
+    # --- ENGANCHE ---
     "streak_days": 0,            
     "last_streak_date": "",      
     "energy": 100,               
+    "max_energy": 500,    # [NUEVO] Permitir upgrades de capacidad
     "lucky_tickets": 0,          
     "is_premium": False,
-    # --- RLE DEFENSE V1.0 (ANTI-FRAUDE) ---
-    "fraud_score": 0,           # Puntuación de riesgo (0-100)
-    "task_timestamps": [],      # Lista de últimos tiempos de tareas [ts1, ts2, ts3...]
-    "ip_address_hash": None,    # Hash de IP (vía WebApp/API futura)
-    "ban_status": False,        # True = Bloqueo activo
-    "tokens_locked": 0.0        # Tokens retenidos por sospecha o AFK
+    # --- RLE DEFENSE & SWARM ALGO ---
+    "fraud_score": 0,           
+    "task_timestamps": [],      
+    "ip_address_hash": None,    
+    "ban_status": False,        
+    "tokens_locked": 0.0,
+    # --- [NUEVO] METRICAS DISRUPTIVAS ---
+    "click_intervals": [],      # Para analizar ritmo humano
+    "resonance_level": 1.0      # Multiplicador basado en calidad de equipo
 }
 
 # --- FUNCIONES DE SISTEMA ---
@@ -60,7 +63,11 @@ async def init_db():
             socket_connect_timeout=5.0
         )
         await r.ping()
-        logger.info("✅ CONEXIÓN REDIS EXITOSA (Desde Environment)")
+        # [NUEVO] Inicializar variables globales si no existen
+        if not await r.exists("global:pulse_multiplier"):
+            await r.set("global:pulse_multiplier", "1.0")
+        
+        logger.info("✅ CONEXIÓN REDIS EXITOSA (V157.0)")
     except Exception as e:
         logger.error(f"❌ FALLÓ CONEXIÓN REDIS: {e}")
         r = None
@@ -129,7 +136,7 @@ async def add_user(user_id, first_name, username, referred_by=None):
                 data = json.loads(raw_data)
                 data["last_active"] = datetime.now().isoformat()
                 
-                # MIGRACIÓN SEGURA: Asegurar que los nuevos campos (Anti-Fraude) existan en usuarios viejos
+                # MIGRACIÓN SEGURA: Asegurar campos nuevos
                 updated = False
                 for k, v in DEFAULT_USER.items():
                     if k not in data:
@@ -170,5 +177,11 @@ async def get_user(user_id):
         logger.error(f"Error obteniendo usuario {user_id}: {e}")
     return None
 
-async def save_db(data=None):
-    pass
+# [NUEVO] Funciones Globales para Algoritmo Disruptivo
+async def get_global_pulse():
+    global r
+    if not r: return 1.0
+    try:
+        val = await r.get("global:pulse_multiplier")
+        return float(val) if val else 1.0
+    except: return 1.0
