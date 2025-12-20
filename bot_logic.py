@@ -16,14 +16,14 @@ import database as db
 from email_validator import validate_email, EmailNotValidError
 
 # ==============================================================================
-# CONFIGURACIÓN PANDORA V307 (RANGOS DINÁMICOS & HIVE TOKEN)
+# CONFIGURACIÓN PANDORA V308 (LEGAL OPT-IN)
 # ==============================================================================
 
 logger = logging.getLogger("HiveLogic")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 CRYPTO_WALLET_USDT = os.getenv("WALLET_USDT", "TRC20_WALLET_PENDING")
 
-# Assets Visuales (Banners)
+# Assets Visuales
 IMG_GENESIS = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
 IMG_DASHBOARD = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
 
@@ -37,43 +37,41 @@ CONST = {
     "BONO_REFERIDO": 500      # HIVE "Virtual" que descuenta para subir de rango
 }
 
-# --- SISTEMA DE RANGOS EVOLUTIVOS ---
-# La meta es HIVE acumulado.
-# Cada referido cuenta como 'BONO_REFERIDO' (500) HIVE virtuales para alcanzar la meta antes.
+# --- SISTEMA DE 5 RANGOS ---
 RANGOS_CONFIG = {
     "OBRERO": {
-        "meta_hive": 0,         # Inicio
+        "meta_hive": 0,         
         "max_energia": 500,     
         "bonus_tap": 1.0,       
         "icono": "🔨"
     },
     "EXPLORADOR": {
-        "meta_hive": 2000,      # Requiere 2000 HIVE (o menos si tienes referidos)
+        "meta_hive": 2000,      
         "max_energia": 1000,    
-        "bonus_tap": 1.2,       # +20% ganancia
+        "bonus_tap": 1.2,       
         "icono": "🔭"
     },
     "SOLDADO": {
         "meta_hive": 5000,      
         "max_energia": 1500,    
-        "bonus_tap": 1.5,       # +50% ganancia
+        "bonus_tap": 1.5,       
         "icono": "⚔️"
     },
     "GUARDIAN": {
         "meta_hive": 15000,     
         "max_energia": 2500,    
-        "bonus_tap": 2.0,       # x2 ganancia
+        "bonus_tap": 2.0,       
         "icono": "🛡️"
     },
     "REINA": {
-        "meta_hive": 50000,     # Nivel Máximo
+        "meta_hive": 50000,     
         "max_energia": 5000,    
-        "bonus_tap": 3.0,       # x3 ganancia
+        "bonus_tap": 3.0,       
         "icono": "👑"
     }
 }
 
-# --- MATRIZ DE 30 PLATAFORMAS (Recursos Externos) ---
+# --- MATRIZ DE 30 PLATAFORMAS ---
 FORRAJEO_DB = {
     "TIER_1": [
         {"name": "📺 Timebucks", "url": os.getenv("LINK_TIMEBUCKS", "https://timebucks.com/?refID=227501472")},
@@ -118,37 +116,27 @@ FORRAJEO_DB = {
 # ==============================================================================
 
 def render_bar(current: float, total: float, length: int = 10) -> str:
-    """Barra de Energía Visual."""
     if total <= 0: total = 1
     pct = max(0.0, min(current / total, 1.0))
     fill = int(length * pct)
     return "▰" * fill + "▱" * (length - fill)
 
 def calculate_progress_to_next_rank(hive: float, referrals: int) -> str:
-    """
-    Calcula cuánto falta para el siguiente rango considerando el descuento por referidos.
-    """
-    # HIVE "Virtual" = HIVE Real + (Referidos * Bono)
     poder_total = hive + (referrals * CONST["BONO_REFERIDO"])
-    
     niveles = list(RANGOS_CONFIG.values())
     siguiente = None
-    
     for nivel in niveles:
         if nivel["meta_hive"] > poder_total:
             siguiente = nivel
             break
-            
     if siguiente:
         falta = siguiente["meta_hive"] - poder_total
-        # Sugerencia dinámica
         ref_necesarios = math.ceil(falta / CONST["BONO_REFERIDO"])
         return f"Faltan {falta:.0f} HIVE (o {ref_necesarios} amigos) para {siguiente['icono']}"
-    
     return "👑 RANGO MÁXIMO ALCANZADO"
 
 # ==============================================================================
-# MOTORES LÓGICOS (BIO ENGINE ACTUALIZADO)
+# MOTORES LÓGICOS
 # ==============================================================================
 
 class BioEngine:
@@ -157,33 +145,25 @@ class BioEngine:
         now = time.time()
         elapsed = now - node.get("last_regen", now)
         
-        # 1. CÁLCULO DE RANGO DINÁMICO
-        # Rango basado en Trabajo (HIVE) + Viralidad (Referidos)
         saldo_real = node.get("honey", 0)
         num_refs = len(node.get("referrals", []))
-        
-        # El poder para subir de rango es la suma de tu HIVE + un bono por cada amigo
         poder_de_ascenso = saldo_real + (num_refs * CONST["BONO_REFERIDO"])
         
         rango_actual = "OBRERO"
         stats_actuales = RANGOS_CONFIG["OBRERO"]
         
-        # Buscar el rango más alto que cumple el criterio
         for nombre_rango, datos in RANGOS_CONFIG.items():
             if poder_de_ascenso >= datos["meta_hive"]:
                 rango_actual = nombre_rango
                 stats_actuales = datos
         
-        # Aplicar nuevo rango y sus stats
         node["caste"] = rango_actual
         node["max_polen"] = stats_actuales["max_energia"]
         
-        # 2. REGENERACIÓN DE ENERGÍA (DUAL: TIEMPO)
         if elapsed > 0:
             regen = elapsed * 0.8 
             node["polen"] = min(node["max_polen"], node["polen"] + int(regen))
             
-        # 3. SALUD (OXÍGENO)
         last_pulse = node.get("last_pulse", now)
         if (now - last_pulse) > 3600:
             decay = ((now - last_pulse) / 3600) * CONST["DECAY_OXIGENO"]
@@ -210,7 +190,7 @@ class SecurityEngine:
         return f"HIVE-{random.randint(1000, 9999)}"
 
 # ==============================================================================
-# FLUJO DE INICIO (ONBOARDING)
+# FLUJO DE INICIO CON OPT-IN LEGAL
 # ==============================================================================
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -221,7 +201,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await db.db.create_node(user.id, user.first_name, user.username, ref)
     node = await db.db.get_node(user.id)
     
-    # Si ya está registrado, vamos al Dashboard
     if node.get("email"):
         await show_dashboard(update, context)
         return
@@ -249,22 +228,28 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     
     if text.upper() == "/START": await start_command(update, context); return
 
-    # PASO 1: CAPTCHA
+    # PASO 1: CAPTCHA -> IR A TÉRMINOS
     if step == 'captcha_wait':
         if text == context.user_data.get('captcha'):
-            # Sin selección de casta manual. Todos empiezan como OBRERO.
-            context.user_data['step'] = 'email_wait'
+            context.user_data['step'] = 'terms_wait' # Nuevo paso intermedio
+            
+            # MENSAJE DE CONSENTIMIENTO
+            kb = [[InlineKeyboardButton("✅ ACEPTO Y CONTINÚO", callback_data="accept_terms")]]
             await update.message.reply_text(
-                "✅ **VERIFICACIÓN EXITOSA**\n\n"
-                "Para guardar tus $HIVE y progreso en la nube:\n"
-                "📧 **ESCRIBE TU EMAIL:**",
+                "📜 **PROTOCOLO DE COMUNICACIÓN**\n\n"
+                "Para vincular tu neuro-enlace, debes aceptar recibir:\n"
+                "• Actualizaciones críticas de la Colmena.\n"
+                "• Propaganda de aliados estratégicos.\n"
+                "• Información sobre recompensas y airdrops.\n\n"
+                "¿Aceptas las condiciones para proceder?",
+                reply_markup=InlineKeyboardMarkup(kb),
                 parse_mode=ParseMode.MARKDOWN
             )
         else:
             await update.message.reply_text("❌ Código incorrecto.")
         return
 
-    # PASO 2: EMAIL
+    # PASO 3: EMAIL (Viene después de aceptar términos)
     if step == 'email_wait':
         try:
             valid = validate_email(text)
@@ -273,8 +258,8 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             context.user_data['step'] = None
             
             node = await db.db.get_node(uid)
-            node['honey'] += 200.0 # Bono Bienvenida
-            node['caste'] = "OBRERO" # Rango Base
+            node['honey'] += 200.0
+            node['caste'] = "OBRERO"
             await db.db.save_node(uid, node)
             
             kb = [[InlineKeyboardButton("🚀 ENTRAR A LA COLMENA", callback_data="go_dash")]]
@@ -293,7 +278,7 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     if node and node.get("email"): await show_dashboard(update, context)
 
 # ==============================================================================
-# DASHBOARD (NÚCLEO DEL JUEGO)
+# DASHBOARD
 # ==============================================================================
 
 async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -308,20 +293,15 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not node: await msg("Cargando..."); return
     if not node.get("email"): context.user_data['step']='email_wait'; await msg("Falta Email"); return
 
-    # Recalcular Rango y Energía
     node = BioEngine.calculate_state(node)
     stats = await db.db.get_global_stats()
     await db.db.save_node(uid, node)
     
-    # Datos para mostrar
     rango = node['caste']
     info_rango = RANGOS_CONFIG.get(rango, RANGOS_CONFIG["OBRERO"])
     icono = info_rango["icono"]
-    
-    # Progreso al siguiente nivel (Gamificación)
     progreso_txt = calculate_progress_to_next_rank(node['honey'], len(node.get('referrals', [])))
     
-    # Barra de Energía
     polen = int(node['polen'])
     max_p = int(node['max_polen'])
     bar = render_bar(polen, max_p)
@@ -349,7 +329,6 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except: pass
 
 async def forage_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Acción de Minería / Trabajo."""
     q = update.callback_query; uid = q.from_user.id
     node = await db.db.get_node(uid)
     node = BioEngine.calculate_state(node)
@@ -360,14 +339,12 @@ async def forage_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     node['polen'] -= CONST['COSTO_POLEN']
     node['last_pulse'] = time.time()
     
-    # Anti-bot
     trace = node.get("entropy_trace", [])
     trace.append(time.time())
     if len(trace)>15: trace.pop(0)
     node["entropy_trace"] = trace
     mult, txt = SecurityEngine.analyze_entropy(trace)
     
-    # BONOS POR RANGO (Escalafón)
     rango_actual = node.get("caste", "OBRERO")
     bonus_rango = RANGOS_CONFIG.get(rango_actual, RANGOS_CONFIG["OBRERO"])["bonus_tap"]
     
@@ -377,7 +354,6 @@ async def forage_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
         c = await db.db.get_cell(node["enjambre_id"])
         if c: syn = c.get("synergy", 1.0)
         
-    # Fórmula Final de Ganancia
     yield_amt = CONST['RECOMPENSA_BASE'] * mult * bonus_rango * syn * oxy_mult
     node['honey'] += yield_amt
     node['oxygen'] = min(100.0, node['oxygen'] + 1.0)
@@ -386,11 +362,10 @@ async def forage_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await db.db.save_node(uid, node)
     
     await q.answer(f"+{yield_amt:.2f} HIVE ({txt})")
-    
     if random.random() < 0.2: await show_dashboard(update, context)
 
 # ==============================================================================
-# MENÚS SECUNDARIOS
+# MENÚS
 # ==============================================================================
 
 async def tasks_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -413,16 +388,10 @@ async def squad_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if node.get("enjambre_id"):
         cell = await db.db.get_cell(node["enjambre_id"])
-        txt = (
-            f"🐝 **TU ENJAMBRE: {cell['name']}**\n"
-            f"────────────────\n"
-            f"👥 Integrantes: {len(cell['members'])}\n"
-            f"🔥 Sinergia: x{cell['synergy']:.2f}\n"
-            f"🆔 ID: `{cell['id']}`"
-        )
+        txt = f"🐝 **TU ENJAMBRE: {cell['name']}**\n👥 Integrantes: {len(cell['members'])}\n🔥 Sinergia: x{cell['synergy']:.2f}\n🆔 ID: `{cell['id']}`"
         kb = [[InlineKeyboardButton("🔙 VOLVER", callback_data="go_dash")]]
     else:
-        txt = "⚠️ **SIN ENJAMBRE**\n\nTrabajar solo es duro.\nFunda un enjambre para aumentar la producción."
+        txt = "⚠️ **SIN ENJAMBRE**\n\nFunda un enjambre para aumentar la producción."
         kb = [[InlineKeyboardButton("➕ FUNDAR ENJAMBRE (100 HIVE)", callback_data="mk_cell")], [InlineKeyboardButton("🔙 VOLVER", callback_data="go_dash")]]
     await q.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
@@ -439,7 +408,6 @@ async def create_squad_logic(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def shop_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = [
-        # Opcion de Energía Dual (Pagar HIVE para recargar al instante)
         [InlineKeyboardButton("⚡ RECARGA INSTANTÁNEA (200 HIVE)", callback_data="buy_energy")],
         [InlineKeyboardButton("👑 PASE VIP ($10 USDT)", callback_data="buy_premium")],
         [InlineKeyboardButton("🔙 VOLVER", callback_data="go_dash")]
@@ -451,9 +419,9 @@ async def buy_energy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     node = await db.db.get_node(uid)
     if node['honey'] >= CONST['COSTO_RECARGA']:
         node['honey'] -= CONST['COSTO_RECARGA']
-        node['polen'] = node['max_polen'] # Recarga total pagada
+        node['polen'] = node['max_polen']
         await db.db.save_node(uid, node)
-        await q.answer("⚡ Energía Restaurada al 100%"); await show_dashboard(update, context)
+        await q.answer("⚡ Energía Restaurada"); await show_dashboard(update, context)
     else: await q.answer("❌ Te falta HIVE", show_alert=True)
 
 async def buy_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -463,17 +431,9 @@ async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; uid = q.from_user.id
     node = await db.db.get_node(uid)
     link = f"https://t.me/{context.bot.username}?start={uid}"
-    
     refs = len(node.get('referrals', []))
-    descuento_rango = refs * CONST["BONO_REFERIDO"]
-    
-    txt = (
-        f"👥 **EXPANSIÓN DE COLMENA**\n\n"
-        f"¡Trae nuevos nodos al sistema!\n"
-        f"🔗 **Enlace:**\n`{link}`\n\n"
-        f"📊 Invitados: **{refs}**\n"
-        f"🚀 Impulso de Rango: **+{descuento_rango} HIVE Virtuales**"
-    )
+    desc = refs * CONST["BONO_REFERIDO"]
+    txt = f"👥 **EXPANSIÓN**\n🔗 `{link}`\n📊 Invitados: **{refs}**\n🚀 Impulso Rango: **+{desc} HIVE Virtuales**"
     kb = [[InlineKeyboardButton("📤 COMPARTIR", url=f"https://t.me/share/url?url={link}")], [InlineKeyboardButton("🔙 VOLVER", callback_data="go_dash")]]
     await q.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
@@ -484,6 +444,16 @@ async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; d = q.data
     
+    # NUEVO HANDLER: Aceptar términos
+    if d == "accept_terms":
+        context.user_data['step'] = 'email_wait'
+        await q.message.edit_text(
+            "✅ **PERMISO CONCEDIDO**\n\n"
+            "Ahora sí, escribe tu **EMAIL** para guardar tu progreso en la red:",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
     actions = {
         "go_dash": show_dashboard, "forage": forage_action, "tasks": tasks_menu,
         "v_t1": lambda u,c: view_tier_generic(u, "TIER_1"),
@@ -504,5 +474,5 @@ async def reset_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("💀 NODO REINICIADO")
 
 async def invite_cmd(u, c): await team_menu(u, c)
-async def help_cmd(u, c): await u.message.reply_text("Pandora Protocol V307")
+async def help_cmd(u, c): await u.message.reply_text("Pandora Protocol V308")
 async def broadcast_cmd(u, c): pass
