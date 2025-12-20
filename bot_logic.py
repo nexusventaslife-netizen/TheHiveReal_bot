@@ -16,7 +16,7 @@ import database as db
 from email_validator import validate_email, EmailNotValidError
 
 # ==============================================================================
-# CONFIGURACIÓN PANDORA V308 (LEGAL OPT-IN)
+# CONFIGURACIÓN PANDORA V309 (TIER GATING + OPT-IN)
 # ==============================================================================
 
 logger = logging.getLogger("HiveLogic")
@@ -38,37 +38,13 @@ CONST = {
 }
 
 # --- SISTEMA DE 5 RANGOS ---
+# Importante: El orden numérico se usa para bloquear Tiers
 RANGOS_CONFIG = {
-    "OBRERO": {
-        "meta_hive": 0,         
-        "max_energia": 500,     
-        "bonus_tap": 1.0,       
-        "icono": "🔨"
-    },
-    "EXPLORADOR": {
-        "meta_hive": 2000,      
-        "max_energia": 1000,    
-        "bonus_tap": 1.2,       
-        "icono": "🔭"
-    },
-    "SOLDADO": {
-        "meta_hive": 5000,      
-        "max_energia": 1500,    
-        "bonus_tap": 1.5,       
-        "icono": "⚔️"
-    },
-    "GUARDIAN": {
-        "meta_hive": 15000,     
-        "max_energia": 2500,    
-        "bonus_tap": 2.0,       
-        "icono": "🛡️"
-    },
-    "REINA": {
-        "meta_hive": 50000,     
-        "max_energia": 5000,    
-        "bonus_tap": 3.0,       
-        "icono": "👑"
-    }
+    "OBRERO":     {"nivel": 1, "meta_hive": 0,      "max_energia": 500,  "bonus_tap": 1.0, "icono": "🔨"},
+    "EXPLORADOR": {"nivel": 2, "meta_hive": 2000,   "max_energia": 1000, "bonus_tap": 1.2, "icono": "🔭"},
+    "SOLDADO":    {"nivel": 3, "meta_hive": 5000,   "max_energia": 1500, "bonus_tap": 1.5, "icono": "⚔️"},
+    "GUARDIAN":   {"nivel": 4, "meta_hive": 15000,  "max_energia": 2500, "bonus_tap": 2.0, "icono": "🛡️"},
+    "REINA":      {"nivel": 5, "meta_hive": 50000,  "max_energia": 5000, "bonus_tap": 3.0, "icono": "👑"}
 }
 
 # --- MATRIZ DE 30 PLATAFORMAS ---
@@ -85,7 +61,7 @@ FORRAJEO_DB = {
         {"name": "🖱️ BTCClicks", "url": "https://btcclicks.com/?r=Pandora"},
         {"name": "🔥 FireFaucet", "url": "https://firefaucet.win/ref/Pandora"}
     ],
-    "TIER_2": [
+    "TIER_2": [ # REQUISITO: SOLDADO O VIP
         {"name": "🐝 Honeygain", "url": "https://join.honeygain.com/ALEJOE9F32"},
         {"name": "📦 PacketStream", "url": "https://packetstream.io/?psr=7hQT"},
         {"name": "♟️ Pawns.app", "url": "https://pawns.app/?r=18399810"},
@@ -97,7 +73,7 @@ FORRAJEO_DB = {
         {"name": "💻 LoadTeam", "url": "https://loadteam.com/signup?referral=pandora"},
         {"name": "🤖 2Captcha", "url": "https://2captcha.com?from=1234"}
     ],
-    "TIER_3": [
+    "TIER_3": [ # REQUISITO: GUARDIAN O VIP
         {"name": "🔥 ByBit ($20)", "url": "https://www.bybit.com/invite?ref=BBJWAX4"},
         {"name": "💳 Revolut", "url": "https://revolut.com/referral/?referral-code=alejandroperdbhx"},
         {"name": "🏦 Nexo", "url": "https://nexo.com/ref/rbkekqnarx?src=android-link"},
@@ -181,7 +157,7 @@ class SecurityEngine:
             cv = statistics.stdev(deltas) / statistics.mean(deltas)
         except: return 1.0, ""
         
-        if cv < 0.05: return 0.1, "🔴 BOT DETECTADO"
+        if cv < 0.05: return 0.1, "🔴 BOT"
         if 0.05 <= cv <= 0.35: return 1.3, "⚡ COMBO X1.3"
         return 1.0, "🟢 OK"
 
@@ -228,12 +204,10 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     
     if text.upper() == "/START": await start_command(update, context); return
 
-    # PASO 1: CAPTCHA -> IR A TÉRMINOS
     if step == 'captcha_wait':
         if text == context.user_data.get('captcha'):
-            context.user_data['step'] = 'terms_wait' # Nuevo paso intermedio
+            context.user_data['step'] = 'terms_wait' # Paso Legal
             
-            # MENSAJE DE CONSENTIMIENTO
             kb = [[InlineKeyboardButton("✅ ACEPTO Y CONTINÚO", callback_data="accept_terms")]]
             await update.message.reply_text(
                 "📜 **PROTOCOLO DE COMUNICACIÓN**\n\n"
@@ -249,7 +223,6 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             await update.message.reply_text("❌ Código incorrecto.")
         return
 
-    # PASO 3: EMAIL (Viene después de aceptar términos)
     if step == 'email_wait':
         try:
             valid = validate_email(text)
@@ -365,22 +338,55 @@ async def forage_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if random.random() < 0.2: await show_dashboard(update, context)
 
 # ==============================================================================
-# MENÚS
+# MENÚS CON LÓGICA DE BLOQUEO (TIER GATING)
 # ==============================================================================
 
 async def tasks_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = [
-        [InlineKeyboardButton("🟢 FÁCIL", callback_data="v_t1"), InlineKeyboardButton("🟡 MEDIO", callback_data="v_t2")],
-        [InlineKeyboardButton("🔴 DIFÍCIL (PRO)", callback_data="v_t3")],
+        [InlineKeyboardButton("🟢 FÁCIL (Libre)", callback_data="v_t1")],
+        [InlineKeyboardButton("🟡 MEDIO (🔒 Soldado+)", callback_data="v_t2")],
+        [InlineKeyboardButton("🔴 DIFÍCIL (🔒 Guardián+)", callback_data="v_t3")],
         [InlineKeyboardButton("🔙 VOLVER", callback_data="go_dash")]
     ]
     await update.callback_query.message.edit_text("📡 **MISIONES DE CAMPO**\nCompleta tareas para ganar HIVE:", reply_markup=InlineKeyboardMarkup(kb))
 
 async def view_tier_generic(update: Update, key: str):
-    links = FORRAJEO_DB.get(key, [])
-    kb = [[InlineKeyboardButton(f"{item['name']}", url=item["url"])] for item in links]
-    kb.append([InlineKeyboardButton("🔙 ATRÁS", callback_data="tasks")])
-    await update.callback_query.message.edit_text(f"📍 **TAREAS DISPONIBLES: {key}**", reply_markup=InlineKeyboardMarkup(kb))
+    """Muestra tareas, pero solo si cumples el requisito."""
+    q = update.callback_query; uid = q.from_user.id
+    node = await db.db.get_node(uid)
+    
+    # 1. Determinar Nivel del Usuario
+    rango_usuario = node.get("caste", "OBRERO")
+    nivel_usuario = RANGOS_CONFIG.get(rango_usuario, RANGOS_CONFIG["OBRERO"])["nivel"]
+    es_premium = node.get("is_premium", False)
+    
+    # 2. Determinar Requisito del Tier
+    # Tier 1 = Nivel 1 (Obrero)
+    # Tier 2 = Nivel 3 (Soldado)
+    # Tier 3 = Nivel 4 (Guardián)
+    
+    acceso_concedido = False
+    mensaje_error = ""
+    
+    if key == "TIER_1":
+        acceso_concedido = True
+    elif key == "TIER_2":
+        if nivel_usuario >= 3 or es_premium: acceso_concedido = True
+        else: mensaje_error = "🔒 **ACCESO DENEGADO**\n\nRequiere Rango: **SOLDADO** (o VIP).\nSigue trabajando o compra pase VIP."
+    elif key == "TIER_3":
+        if nivel_usuario >= 4 or es_premium: acceso_concedido = True
+        else: mensaje_error = "🔒 **ACCESO DENEGADO**\n\nRequiere Rango: **GUARDIÁN** (o VIP).\nSigue trabajando o compra pase VIP."
+
+    # 3. Mostrar Contenido o Error
+    if acceso_concedido:
+        links = FORRAJEO_DB.get(key, [])
+        kb = [[InlineKeyboardButton(f"{item['name']}", url=item["url"])] for item in links]
+        kb.append([InlineKeyboardButton("🔙 ATRÁS", callback_data="tasks")])
+        await q.message.edit_text(f"📍 **TAREAS DISPONIBLES: {key}**", reply_markup=InlineKeyboardMarkup(kb))
+    else:
+        await q.answer("🔒 Rango Insuficiente", show_alert=True)
+        # Opcional: Mostrar mensaje detallado
+        # await q.message.edit_text(mensaje_error, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙", callback_data="tasks")]]))
 
 async def squad_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; uid = q.from_user.id
@@ -444,12 +450,10 @@ async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; d = q.data
     
-    # NUEVO HANDLER: Aceptar términos
     if d == "accept_terms":
         context.user_data['step'] = 'email_wait'
         await q.message.edit_text(
-            "✅ **PERMISO CONCEDIDO**\n\n"
-            "Ahora sí, escribe tu **EMAIL** para guardar tu progreso en la red:",
+            "✅ **PERMISO CONCEDIDO**\n\nAhora sí, escribe tu **EMAIL**:",
             parse_mode=ParseMode.MARKDOWN
         )
         return
@@ -474,5 +478,5 @@ async def reset_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("💀 NODO REINICIADO")
 
 async def invite_cmd(u, c): await team_menu(u, c)
-async def help_cmd(u, c): await u.message.reply_text("Pandora Protocol V308")
+async def help_cmd(u, c): await u.message.reply_text("Pandora Protocol V309")
 async def broadcast_cmd(u, c): pass
