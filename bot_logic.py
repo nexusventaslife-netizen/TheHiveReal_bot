@@ -18,7 +18,7 @@ from email_validator import validate_email
 from database import db 
 
 # ==============================================================================
-# 🐝 THE ONE HIVE: V11.6 (STABLE DARK ENGINE - BUGFIXED)
+# 🐝 THE ONE HIVE: V12.0 (SCALE-LOCK / FINAL FREEZE)
 # ==============================================================================
 
 logger = logging.getLogger("HiveLogic")
@@ -26,6 +26,8 @@ ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 
 # VARIABLES DE DINERO
 CRYPTO_WALLET_USDT = os.getenv("WALLET_USDT", "TRC20_WALLET_PENDING")
+
+# 🔥 TU ENLACE DE PAYPAL (A FUEGO)
 LINK_PAYPAL_HARDCODED = "https://www.paypal.com/ncp/payment/L6ZRFT2ACGAQC"
 
 # --- IDENTIDAD VISUAL ---
@@ -55,263 +57,258 @@ RANGOS_CONFIG = {
 }
 
 # ==============================================================================
-# 🌐 MOTOR DE TRADUCCIÓN (DARK PSYCHOLOGY)
+# 🌐 MOTOR DE TRADUCCIÓN (AUTHORITY MODE)
 # ==============================================================================
 TEXTS = {
     "es": {
-        "intro_caption": "Se ha detectado tu nodo.\n\nEl ancho de banda de la Colmena es limitado.\nNo busques dinero rápido. Busca influencia.\n\nSolo los nodos que prueben su valor serán blindados.\nEl resto será purgado.",
-        "btn_enter": "👉 INICIAR PROTOCOLO",
-        "intro_step2": "**ADVERTENCIA:**\nEste sistema premia la participación, no las promesas.\nSin garantías. Sin inversiones.\n\nTu progreso depende de tu Enjambre.",
-        "btn_status": "👉 Acceder al Nodo",
+        "intro_caption": "Bienvenido a The One Hive.\n\nEsto no es un airdrop.\nEsto no es una inversión.\n\nEs un sistema vivo midiendo participación e influencia.\n\nEl acceso temprano sigue abierto.\nLas reglas se siguen ajustando.",
+        "btn_enter": "👉 Acceder al Sistema",
+        "intro_step2": "**AVISO DE RED:**\n\nTu progreso es relativo a la actividad de la red.\n\nLos nodos más activos son priorizados en esta fase.\nLa participación temprana importa.",
+        "btn_status": "👉 Verificar Nodo",
         "dash_header": "🏰 **THE ONE HIVE**",
-        "status_unsafe": "⚠️ NODO VULNERABLE (Sin Blindaje)",
-        "status_safe": "✅ NODO BLINDADO",
-        "lbl_energy": "⚡ Energía (Sinergia: x{syn:.2f})",
+        "status_unsafe": "⚠️ NODO ESTÁNDAR",
+        "status_safe": "✅ NODO VERIFICADO",
+        "lbl_energy": "⚡ Energía (IIL: x{iil:.2f})",
         "lbl_honey": "🍯 Néctar",
-        "lbl_feed": "📊 **Estado de Red:**",
-        "footer_msg": "📝 _Early access is still open._",
+        "lbl_feed": "📊 **Red:**",
+        "footer_msg": "📝 _Prioridad de red calculada en tiempo real._",
         "btn_mine": "⚡ EXTRACT (TAP)",
         "btn_tasks": "🟢 PANALES",
         "btn_rank": "🧬 EVOLUCIÓN",
-        "btn_squad": "🐝 ENJAMBRE",
-        "btn_team": "👥 EXPANDIR (x{syn:.2f})",
-        "btn_shop": "🛡️ ESTABILIZAR ($)",
-        "viral_1": "Esto no es un airdrop. Están midiendo influencia real. Entré antes del ajuste.\n\n{link}",
-        "viral_2": "No debería compartir esto. El sistema busca nodos orgánicos. Asegura tu posición.\n\n{link}",
-        "sys_event_1": "⚠️ **ALERTA:** Saturación de red al 95%",
-        "sys_event_2": "📉 Nodos inactivos marcados para purga",
-        "sys_event_3": "🔒 Acceso VIP cerrado en 2 min",
-        "feed_action_1": "validó nodo",
-        "feed_action_2": "sintetizó bloque",
-        "lock_msg": "🔒 ACCESO DENEGADO. Nivel {lvl} requerido.",
-        "protect_title": "⚠️ **ACCIÓN PROTEGIDA: {reason}**",
-        "protect_body": "El sistema requiere validación para proteger tu progreso.\nCopia tu llave:",
-        "email_prompt": "🛡️ **BLINDAJE DE NODO**\n\nIngresa tu EMAIL para asegurar tu posición antes de la purga:",
-        "email_success": "✅ **NODO BLINDADO**",
-        "shop_title": "🛡️ **ESTABILIZACIÓN DE NODO**",
-        "shop_body": "La aceleración es opcional.\nEsto no es una inversión.\n\nBeneficios de Estabilización (30 Días):\n✅ Inmunidad a la degradación.\n✅ Prioridad de Red.\n✅ Acceso al Panal Rojo.",
-        "btn_buy_prem": "🛡️ ACTIVAR (30 DÍAS) - ${price}",
+        "btn_squad": "🐝 CONEXIONES",
+        "btn_team": "👥 EXPANDIR",
+        "btn_shop": "🛡️ PRIORIDAD ($)",
+        "viral_1": "El acceso temprano sigue abierto. Un sistema vivo se está formando. Los que entran antes entienden.\n\n{link}",
+        "viral_2": "No todos deberían entrar. El acceso temprano sigue abierto.\n\n{link}",
+        "sys_event_1": "⚠️ Prioridad reasignada a nodos activos",
+        "sys_event_2": "⏳ Ventana de expansión abierta",
+        "sys_event_3": "🔒 Capacidad de fase alcanzando límite",
+        "feed_action_1": "aseguró posición",
+        "feed_action_2": "expandió conexión",
+        "lock_msg": "🔒 FASE RESTRINGIDA. Nivel {lvl} requerido.",
+        "protect_title": "⚠️ **ASEGURA TU NODO: {reason}**",
+        "protect_body": "Al registrar un email:\n• Preservas tu progreso\n• Recibes actualizaciones del sistema\n• Obtienes notificaciones de acceso temprano\n\nNo vendemos cuentas.",
+        "email_prompt": "🛡️ **REGISTRO DE NODO**\n\nIngresa tu EMAIL para asegurar persistencia:",
+        "email_success": "✅ **NODO ASEGURADO**",
+        "shop_title": "🛡️ **ACCESO PRIORITARIO MENSUAL**",
+        "shop_body": "Esta suscripción mejora la velocidad y el acceso.\nNo garantiza ganancias.\n\nIncluye (30 Días):\n✅ Regeneración de energía más rápida\n✅ Acceso a tareas avanzadas\n✅ Ubicación prioritaria en actualizaciones",
+        "btn_buy_prem": "🛡️ PRIORIDAD (30 DÍAS) - ${price}",
         "btn_buy_energy": "🔋 RECARGA ({cost} HIVE)",
-        "pay_txt": "🛡️ **PROTOCOLO DE ESTABILIZACIÓN**\n\nEl pase dura 30 días exactos.\n\n🔹 **Opción A: Cripto (USDT)**\n`{wallet}`\n\n🔹 **Opción B: PayPal**\nBotón abajo.\n\n⚠️ Envía comprobante al admin.",
+        "pay_txt": "🛡️ **ACCESO PRIORITARIO (30 DÍAS)**\n\nEl pase dura 30 días exactos.\n\n🔹 **Opción A: Cripto (USDT)**\n`{wallet}`\n\n🔹 **Opción B: PayPal**\nBotón abajo.",
         "btn_paypal": "💳 Pagar con PayPal",
-        "team_title": "👥 **EXPANSIÓN VIRAL**",
-        "team_body": "Tu velocidad de minado depende de tu equipo.\n\n**+5% Velocidad** por cada nodo activo.\nSin equipo, mueres lento.\n\n🔗 Tu Llave de Acceso:\n`{link}`",
-        "tasks_title": "📡 **ZONAS DE RECOLECCIÓN**",
+        "team_title": "👥 **EXPANSIÓN DE RED**",
+        "team_body": "Nodos con conexiones activas avanzan más rápido.\nEl sistema detecta expansión real, no spam.\n\n🔗 Tu Enlace de Nodo:\n`{link}`",
+        "tasks_title": "📡 **ZONAS DE ACTIVIDAD**",
         "tasks_body": "Selecciona el Panal según tu rango:\n\n🟢 **PANAL VERDE:** Nivel 0+\n🟡 **PANAL DORADO:** Explorador\n🔴 **PANAL ROJO:** Guardián",
         "btn_back": "🔙 VOLVER",
         "green_hive": "PANAL VERDE",
         "gold_hive": "PANAL DORADO",
         "red_hive": "PANAL ROJO",
-        "squad_none_title": "⚠️ NODO AISLADO",
-        "squad_none_body": "Un nodo aislado mina lento.\nForma una estructura para sobrevivir.",
-        "btn_create_squad": "➕ FORMAR ({cost} HIVE)",
-        "squad_active": "🐝 **ENJAMBRE ACTIVO**\n👥 Miembros: {members}\n🔥 Sinergia: ACTIVA",
-        "no_balance": "❌ HIVE Insuficiente",
-        "degraded_msg": "⚠️ **NODO DEGRADADO**\nTu eficiencia ha bajado un 20% por falta de expansión. Invita para restaurar."
+        "squad_none_title": "⚠️ NODO INDIVIDUAL",
+        "squad_none_body": "Los nodos individuales tienen menor prioridad.\nConecta con otros para escalar.",
+        "btn_create_squad": "➕ CONECTAR ({cost} HIVE)",
+        "squad_active": "🐝 **CONEXIÓN ACTIVA**\n👥 Nodos: {members}\n🔥 IIL Boost: ACTIVO",
+        "no_balance": "❌ HIVE Insuficiente"
     },
     "en": {
-        "intro_caption": "Node detected.\n\nHive bandwidth is limited.\nDo not seek quick money. Seek influence.\n\nOnly nodes that prove their worth will be shielded.\nThe rest will be purged.",
-        "btn_enter": "👉 INITIATE PROTOCOL",
-        "intro_step2": "**WARNING:**\nThis system rewards participation, not promises.\nNo guarantees. No investments.\n\nYour progress depends on your Swarm.",
-        "btn_status": "👉 Access Node",
+        "intro_caption": "Welcome to The One Hive.\n\nThis is not an airdrop.\nThis is not an investment.\n\nIt’s a live system measuring participation and influence.\n\nEarly access is still open.\nRules are still adjusting.",
+        "btn_enter": "👉 Access System",
+        "intro_step2": "**NETWORK NOTICE:**\n\nYour progress is relative to network activity.\n\nMore active nodes are being prioritized in this phase.\nEarly participation matters.",
+        "btn_status": "👉 Verify Node",
         "dash_header": "🏰 **THE ONE HIVE**",
-        "status_unsafe": "⚠️ VULNERABLE NODE (Unshielded)",
-        "status_safe": "✅ SHIELDED NODE",
-        "lbl_energy": "⚡ Energy (Synergy: x{syn:.2f})",
+        "status_unsafe": "⚠️ STANDARD NODE",
+        "status_safe": "✅ VERIFIED NODE",
+        "lbl_energy": "⚡ Energy (IIL: x{iil:.2f})",
         "lbl_honey": "🍯 Nectar",
-        "lbl_feed": "📊 **Network Status:**",
-        "footer_msg": "📝 _Early access is still open._",
+        "lbl_feed": "📊 **Network:**",
+        "footer_msg": "📝 _Network priority calculated in real-time._",
         "btn_mine": "⚡ EXTRACT (TAP)",
         "btn_tasks": "🟢 HIVES",
         "btn_rank": "🧬 EVOLUTION",
-        "btn_squad": "🐝 SQUAD",
-        "btn_team": "👥 EXPAND (x{syn:.2f})",
-        "btn_shop": "🛡️ STABILIZE ($)",
-        "viral_1": "This is not an airdrop. They measure real influence. I got in before the adjustment.\n\n{link}",
-        "viral_2": "I shouldn't share this. The system seeks organic nodes. Secure your spot.\n\n{link}",
-        "sys_event_1": "⚠️ **ALERT:** Network saturation at 95%",
-        "sys_event_2": "📉 Inactive nodes marked for purge",
-        "sys_event_3": "🔒 VIP access closing in 2 min",
-        "feed_action_1": "validated node",
-        "feed_action_2": "synthesized block",
-        "lock_msg": "🔒 ACCESS DENIED. Level {lvl} required.",
-        "protect_title": "⚠️ **RESTRICTED ACTION: {reason}**",
-        "protect_body": "System requires validation to secure your progress.\nCopy your key:",
-        "email_prompt": "🛡️ **NODE SHIELDING**\n\nEnter EMAIL to secure position before purge:",
-        "email_success": "✅ **NODE SHIELDED**",
-        "shop_title": "🛡️ **NODE STABILIZATION**",
-        "shop_body": "Acceleration is optional.\nThis is not an investment.\n\nStabilization Benefits (30 Days):\n✅ Degradation immunity.\n✅ Network Priority.\n✅ Red Hive Access.",
-        "btn_buy_prem": "🛡️ ACTIVATE (30 DAYS) - ${price}",
-        "btn_buy_energy": "🔋 EMERGENCY RECHARGE ({cost} HIVE)",
-        "pay_txt": "🛡️ **STABILIZATION PROTOCOL**\n\nPass valid for 30 days.\n\n🔹 **Option A: Crypto (USDT)**\n`{wallet}`\n\n🔹 **Option B: PayPal**\nButton below.\n\n⚠️ Send proof to admin.",
+        "btn_squad": "🐝 CONNECTIONS",
+        "btn_team": "👥 EXPAND",
+        "btn_shop": "🛡️ PRIORITY ($)",
+        "viral_1": "Early access is open. A live system is forming. Those who enter early understand.\n\n{link}",
+        "viral_2": "Not everyone should enter. Early access is still open.\n\n{link}",
+        "sys_event_1": "⚠️ Priority reassigned to active nodes",
+        "sys_event_2": "⏳ Expansion window open",
+        "sys_event_3": "🔒 Phase capacity reaching limit",
+        "feed_action_1": "secured position",
+        "feed_action_2": "expanded connection",
+        "lock_msg": "🔒 RESTRICTED PHASE. Level {lvl} required.",
+        "protect_title": "⚠️ **SECURE YOUR NODE: {reason}**",
+        "protect_body": "By registering an email you:\n• Preserve your progress\n• Receive system updates\n• Get early access notifications\n\nWe do not sell accounts.",
+        "email_prompt": "🛡️ **NODE REGISTRATION**\n\nEnter EMAIL to ensure persistence:",
+        "email_success": "✅ **NODE SECURED**",
+        "shop_title": "🛡️ **MONTHLY PRIORITY ACCESS**",
+        "shop_body": "This subscription enhances speed and access.\nIt does not guarantee earnings.\n\nIncludes (30 Days):\n✅ Faster energy regeneration\n✅ Access to advanced task tiers\n✅ Priority placement in updates",
+        "btn_buy_prem": "🛡️ PRIORITY (30 DAYS) - ${price}",
+        "btn_buy_energy": "🔋 RECHARGE ({cost} HIVE)",
+        "pay_txt": "🛡️ **PRIORITY ACCESS (30 DAYS)**\n\nPass valid for 30 days.\n\n🔹 **Option A: Crypto (USDT)**\n`{wallet}`\n\n🔹 **Option B: PayPal**\nButton below.",
         "btn_paypal": "💳 Pay with PayPal",
-        "team_title": "👥 **VIRAL EXPANSION**",
-        "team_body": "Your mining speed depends on your team.\n\n**+5% Speed** per active node.\nWithout a team, you die slow.\n\n🔗 Your Access Key:\n`{link}`",
-        "tasks_title": "📡 **COLLECTION ZONES**",
+        "team_title": "👥 **NETWORK EXPANSION**",
+        "team_body": "Nodes with active connections advance faster.\nThe system detects real expansion, not spam.\n\n🔗 Your Node Link:\n`{link}`",
+        "tasks_title": "📡 **ACTIVITY ZONES**",
         "tasks_body": "Select Hive by rank:\n\n🟢 **GREEN HIVE:** Level 0+\n🟡 **GOLD HIVE:** Explorer\n🔴 **RED HIVE:** Guardian",
         "btn_back": "🔙 BACK",
         "green_hive": "GREEN HIVE",
         "gold_hive": "GOLD HIVE",
         "red_hive": "RED HIVE",
-        "squad_none_title": "⚠️ ISOLATED NODE",
-        "squad_none_body": "An isolated node mines slowly.\nForm a structure to survive.",
-        "btn_create_squad": "➕ FORM ({cost} HIVE)",
-        "squad_active": "🐝 **ACTIVE SWARM**\n👥 Members: {members}\n🔥 Synergy: ACTIVA",
-        "no_balance": "❌ Insufficient HIVE",
-        "degraded_msg": "⚠️ **NODE DEGRADED**\nEfficiency dropped 20% due to inactivity. Invite to restore."
+        "squad_none_title": "⚠️ INDIVIDUAL NODE",
+        "squad_none_body": "Individual nodes have lower priority.\nConnect with others to scale.",
+        "btn_create_squad": "➕ CONNECT ({cost} HIVE)",
+        "squad_active": "🐝 **ACTIVE CONNECTION**\n👥 Nodes: {members}\n🔥 IIL Boost: ACTIVE",
+        "no_balance": "❌ Insufficient HIVE"
     },
     "ru": {
-        "intro_caption": "Узел обнаружен.\n\nПропускная способность Улья ограничена.\nНе ищите быстрых денег. Ищите влияния.\n\nТолько узлы, доказавшие свою ценность, будут защищены.\nОстальные будут удалены.",
-        "btn_enter": "👉 ЗАПУСТИТЬ ПРОТОКОЛ",
-        "intro_step2": "**ВНИМАНИЕ:**\nЭта система вознаграждает участие, а не обещания.\nНикаких гарантий. Никаких инвестиций.\n\nВаш прогресс зависит от вашего Роя.",
-        "btn_status": "👉 Доступ к узлу",
+        "intro_caption": "Добро пожаловать в The One Hive.\n\nЭто не аирдроп.\nЭто не инвестиция.\n\nЭто живая система, измеряющая участие и влияние.",
+        "btn_enter": "👉 Доступ к Системе",
+        "intro_step2": "**УВЕДОМЛЕНИЕ СЕТИ:**\n\nВаш прогресс зависит от активности сети.\n\nАктивные узлы имеют приоритет.",
+        "btn_status": "👉 Проверить Узел",
         "dash_header": "🏰 **THE ONE HIVE**",
-        "status_unsafe": "⚠️ УЗЕЛ УЯЗВИМ (Без защиты)",
-        "status_safe": "✅ УЗЕЛ ЗАЩИЩЕН",
-        "lbl_energy": "⚡ Энергия (Синергия: x{syn:.2f})",
+        "status_unsafe": "⚠️ СТАНДАРТНЫЙ УЗЕЛ",
+        "status_safe": "✅ ПРОВЕРЕННЫЙ УЗЕЛ",
+        "lbl_energy": "⚡ Энергия (IIL: x{iil:.2f})",
         "lbl_honey": "🍯 Нектар",
-        "lbl_feed": "📊 **Состояние сети:**",
-        "footer_msg": "📝 _Доступ ограничен._",
-        "btn_mine": "⚡ ДОБЫВАТЬ (TAP)",
+        "lbl_feed": "📊 **Сеть:**",
+        "footer_msg": "📝 _Приоритет рассчитывается в реальном времени._",
+        "btn_mine": "⚡ ИЗВЛЕЧЬ (TAP)",
         "btn_tasks": "🟢 ЗАДАНИЯ",
         "btn_rank": "🧬 ЭВОЛЮЦИЯ",
-        "btn_squad": "🐝 ОТРЯД",
-        "btn_team": "👥 РАСШИРЕНИЕ (x{syn:.2f})",
-        "btn_shop": "🛡️ СТАБИЛИЗАЦИЯ ($)",
-        "viral_1": "Это не аирдроп. Они измеряют реальное влияние. Я зашел до перерасчета.\n\n{link}",
-        "viral_2": "Я не должен этим делиться. Система ищет органические узлы.\n\n{link}",
-        "sys_event_1": "⚠️ **ТРЕВОГА:** Нагрузка сети 95%",
-        "sys_event_2": "📉 Неактивные узлы помечены на удаление",
-        "sys_event_3": "🔒 VIP доступ закрывается через 2 мин",
-        "feed_action_1": "подтвердил узел",
-        "feed_action_2": "синтезировал блок",
-        "lock_msg": "🔒 ДОСТУП ЗАПРЕЩЕН. Требуется уровень {lvl}.",
-        "protect_title": "⚠️ **ОГРАНИЧЕННОЕ ДЕЙСТВИЕ: {reason}**",
-        "protect_body": "Система требует валидации для сохранения прогресса.\nСкопируйте ключ:",
-        "email_prompt": "🛡️ **ЗАЩИТА УЗЛА**\n\nВведите EMAIL для закрепления позиции перед чисткой:",
+        "btn_squad": "🐝 СВЯЗИ",
+        "btn_team": "👥 РАСШИРЕНИЕ",
+        "btn_shop": "🛡️ ПРИОРИТЕТ ($)",
+        "viral_1": "Ранний доступ открыт. Те, кто заходят раньше, понимают.\n\n{link}",
+        "viral_2": "Не всем стоит заходить. Ранний доступ открыт.\n\n{link}",
+        "sys_event_1": "⚠️ Приоритет переназначен активным узлам",
+        "sys_event_2": "⏳ Окно расширения открыто",
+        "sys_event_3": "🔒 Емкость фазы на пределе",
+        "feed_action_1": "закрепил позицию",
+        "feed_action_2": "расширил связь",
+        "lock_msg": "🔒 ФАЗА ОГРАНИЧЕНА. Требуется уровень {lvl}.",
+        "protect_title": "⚠️ **ЗАЩИТИТЕ УЗЕЛ: {reason}**",
+        "protect_body": "Регистрируя email:\n• Сохраняете прогресс\n• Получаете обновления\n\nМы не продаем аккаунты.",
+        "email_prompt": "🛡️ **РЕГИСТРАЦИЯ УЗЛА**\n\nВведите EMAIL для гарантии сохранения:",
         "email_success": "✅ **УЗЕЛ ЗАЩИЩЕН**",
-        "shop_title": "🛡️ **СТАБИЛИЗАЦИЯ УЗЛА**",
-        "shop_body": "Ускорение необязательно.\nЭто не инвестиция.\n\nПреимущества (30 Дней):\n✅ Иммунитет к деградации.\n✅ Приоритет сети.\n✅ Доступ к Красному Улью.",
-        "btn_buy_prem": "🛡️ АКТИВИРОВАТЬ (30 ДНЕЙ) - ${price}",
-        "btn_buy_energy": "🔋 АВАРИЙНАЯ ЗАРЯДКА ({cost} HIVE)",
-        "pay_txt": "🛡️ **ПРОТОКОЛ СТАБИЛИЗАЦИИ**\n\nПропуск действует 30 дней.\n\n🔹 **Опция A: Крипто (USDT)**\n`{wallet}`\n\n🔹 **Опция B: PayPal**\nКнопка ниже.",
+        "shop_title": "🛡️ **МЕСЯЧНЫЙ ПРИОРИТЕТ**",
+        "shop_body": "Подписка улучшает скорость и доступ.\nНе гарантирует заработок.\n\nВключает (30 Дней):\n✅ Быстрая регенерация\n✅ Доступ к задачам",
+        "btn_buy_prem": "🛡️ ПРИОРИТЕТ (30 ДНЕЙ) - ${price}",
+        "btn_buy_energy": "🔋 ЗАРЯДКА ({cost} HIVE)",
+        "pay_txt": "🛡️ **ПРИОРИТЕТНЫЙ ДОСТУП**\n\nПропуск на 30 дней.\n\n🔹 **Опция A: USDT**\n`{wallet}`\n\n🔹 **Опция B: PayPal**\nКнопка ниже.",
         "btn_paypal": "💳 Оплата PayPal",
-        "team_title": "👥 **ВИРУСНОЕ РАСШИРЕНИЕ**",
-        "team_body": "Скорость добычи зависит от команды.\n\n**+5% Скорость** за активный узел.\nБез команды вы медленно умрете.\n\n🔗 Ваш ключ доступа:\n`{link}`",
-        "tasks_title": "📡 **ЗОНЫ СБОРА**",
+        "team_title": "👥 **РАСШИРЕНИЕ СЕТИ**",
+        "team_body": "Узлы с активными связями продвигаются быстрее.\nСистема видит реальное расширение.\n\n🔗 Ссылка Узла:\n`{link}`",
+        "tasks_title": "📡 **ЗОНЫ АКТИВНОСТИ**",
         "tasks_body": "Выберите Улей по рангу:\n\n🟢 **ЗЕЛЕНЫЙ:** Уровень 0+\n🟡 **ЗОЛОТОЙ:** Исследователь\n🔴 **КРАСНЫЙ:** Страж",
         "btn_back": "🔙 НАЗАД",
         "green_hive": "ЗЕЛЕНЫЙ УЛЕЙ",
         "gold_hive": "ЗОЛОТОЙ УЛЕЙ",
         "red_hive": "КРАСНЫЙ УЛЕЙ",
-        "squad_none_title": "⚠️ ИЗОЛИРОВАННЫЙ УЗЕЛ",
-        "squad_none_body": "Одиночный узел майнит медленно.\nСоздайте структуру.",
-        "btn_create_squad": "➕ СОЗДАТЬ ({cost} HIVE)",
-        "squad_active": "🐝 **АКТИВНЫЙ ОТРЯД**\n👥 Участников: {members}\n🔥 Синергия: АКТИВНА",
-        "no_balance": "❌ Недостаточно HIVE",
-        "degraded_msg": "⚠️ **УЗЕЛ ДЕГРАДИРОВАЛ**\nЭффективность упала на 20% из-за неактивности."
+        "squad_none_title": "⚠️ ИНДИВИДУАЛЬНЫЙ УЗЕЛ",
+        "squad_none_body": "Индивидуальные узлы имеют низкий приоритет.\nПодключайтесь к другим.",
+        "btn_create_squad": "➕ ПОДКЛЮЧИТЬ ({cost} HIVE)",
+        "squad_active": "🐝 **АКТИВНАЯ СВЯЗЬ**\n👥 Узлы: {members}\n🔥 IIL Boost: АКТИВЕН",
+        "no_balance": "❌ Недостаточно HIVE"
     },
     "zh": {
-        "intro_caption": "检测到节点。\n\n蜂巢带宽有限。\n不要寻求快钱。寻求影响力。\n\n只有证明价值的节点才会被保护。\n其余将被清除。",
-        "btn_enter": "👉 启动协议",
-        "intro_step2": "**警告：**\n此系统奖励参与，而非承诺。\n无保证。无投资。\n\n你的进度取决于你的蜂群。",
-        "btn_status": "👉 访问节点",
+        "intro_caption": "欢迎来到 The One Hive。\n\n这不是空投。\n这不是投资。\n\n这是一个衡量参与度和影响力的实时系统。",
+        "btn_enter": "👉 访问系统",
+        "intro_step2": "**网络通知：**\n\n您的进度与网络活动相关。\n\n在此阶段优先考虑更活跃的节点。",
+        "btn_status": "👉 验证节点",
         "dash_header": "🏰 **THE ONE HIVE**",
-        "status_unsafe": "⚠️ 脆弱节点 (未保护)",
-        "status_safe": "✅ 已保护节点",
-        "lbl_energy": "⚡ 能量 (协同: x{syn:.2f})",
+        "status_unsafe": "⚠️ 标准节点",
+        "status_safe": "✅ 已验证节点",
+        "lbl_energy": "⚡ 能量 (IIL: x{iil:.2f})",
         "lbl_honey": "🍯 花蜜",
-        "lbl_feed": "📊 **网络状态:**",
-        "footer_msg": "📝 _早期访问仍开放。_",
+        "lbl_feed": "📊 **网络:**",
+        "footer_msg": "📝 _实时计算网络优先级。_",
         "btn_mine": "⚡ 提取 (TAP)",
         "btn_tasks": "🟢 任务",
         "btn_rank": "🧬 进化",
-        "btn_squad": "🐝 小队",
-        "btn_team": "👥 扩张 (x{syn:.2f})",
-        "btn_shop": "🛡️ 稳定 ($)",
-        "viral_1": "这不是空投。他们在衡量真实影响力。我在调整前进来的。\n\n{link}",
-        "viral_2": "我不该分享这个。系统寻找有机节点。确保你的位置。\n\n{link}",
-        "sys_event_1": "⚠️ **警报：** 网络饱和度 95%",
-        "sys_event_2": "📉 不活跃节点标记为清除",
-        "sys_event_3": "🔒 VIP 访问 2 分钟后关闭",
-        "feed_action_1": "验证节点",
-        "feed_action_2": "合成区块",
-        "lock_msg": "🔒 访问被拒绝。需要等级 {lvl}。",
-        "protect_title": "⚠️ **受限操作: {reason}**",
-        "protect_body": "系统需要验证以保护您的进度。\n复制您的密钥:",
-        "email_prompt": "🛡️ **节点防护**\n\n输入 EMAIL 以在清除前锁定位置:",
-        "email_success": "✅ **节点已防护**",
-        "shop_title": "🛡️ **节点稳定化**",
-        "shop_body": "加速是可选的。\n这不是投资。\n\n稳定化福利 (30天):\n✅ 免疫退化。\n✅ 网络优先。\n✅ 访问红区。",
-        "btn_buy_prem": "🛡️ 激活 (30天) - ${price}",
-        "btn_buy_energy": "🔋 紧急充电 ({cost} HIVE)",
-        "pay_txt": "🛡️ **稳定化协议**\n\n通行证有效期30天。\n\n🔹 **选项 A: 加密货币 (USDT)**\n`{wallet}`\n\n🔹 **选项 B: PayPal**\n下方按钮。",
+        "btn_squad": "🐝 连接",
+        "btn_team": "👥 扩张",
+        "btn_shop": "🛡️ 优先 ($)",
+        "viral_1": "早期访问已开放。那些早进入的人明白。\n\n{link}",
+        "viral_2": "不是每个人都应该进入。早期访问仍然开放。\n\n{link}",
+        "sys_event_1": "⚠️ 优先级重新分配给活跃节点",
+        "sys_event_2": "⏳ 扩张窗口开启",
+        "sys_event_3": "🔒 阶段容量接近极限",
+        "feed_action_1": "锁定位置",
+        "feed_action_2": "扩展连接",
+        "lock_msg": "🔒 受限阶段。需要等级 {lvl}。",
+        "protect_title": "⚠️ **保护您的节点: {reason}**",
+        "protect_body": "注册邮箱以：\n• 保留进度\n• 接收系统更新\n\n我们不出售账户。",
+        "email_prompt": "🛡️ **节点注册**\n\n输入 EMAIL 以确保持久性:",
+        "email_success": "✅ **节点已保护**",
+        "shop_title": "🛡️ **每月优先访问**",
+        "shop_body": "此订阅提高速度和访问权限。\n不保证收益。\n\n包括 (30天):\n✅ 更快的能量再生\n✅ 访问高级任务",
+        "btn_buy_prem": "🛡️ 优先 (30天) - ${price}",
+        "btn_buy_energy": "🔋 充电 ({cost} HIVE)",
+        "pay_txt": "🛡️ **优先访问 (30天)**\n\n通行证有效期30天。\n\n🔹 **选项 A: USDT**\n`{wallet}`\n\n🔹 **选项 B: PayPal**\n下方按钮。",
         "btn_paypal": "💳 PayPal 支付",
-        "team_title": "👥 **病毒式扩张**",
-        "team_body": "你的挖掘速度取决于你的团队。\n\n每有一个活跃节点 **+5% 速度**。\n没有团队，你会慢慢死亡。\n\n🔗 你的访问密钥:\n`{link}`",
-        "tasks_title": "📡 **采集区**",
+        "team_title": "👥 **网络扩张**",
+        "team_body": "具有活跃连接的节点进步更快。\n系统检测真实扩张，而非垃圾邮件。\n\n🔗 您的节点链接:\n`{link}`",
+        "tasks_title": "📡 **活动区域**",
         "tasks_body": "按等级选择:\n\n🟢 **绿区:** 等级 0+\n🟡 **金区:** 探索者\n🔴 **红区:** 守卫者",
         "btn_back": "🔙 返回",
         "green_hive": "绿色蜂巢",
         "gold_hive": "金色蜂巢",
         "red_hive": "红色蜂巢",
-        "squad_none_title": "⚠️ 孤立节点",
-        "squad_none_body": "孤立节点挖掘缓慢。\n形成一个结构以生存。",
-        "btn_create_squad": "➕ 组建 ({cost} HIVE)",
-        "squad_active": "🐝 **活跃蜂群**\n👥 成员: {members}\n🔥 协同: 活跃",
-        "no_balance": "❌ HIVE 不足",
-        "degraded_msg": "⚠️ **节点退化**\n由于不活跃，效率下降 20%。邀请以恢复。"
+        "squad_none_title": "⚠️ 个体节点",
+        "squad_none_body": "个体节点优先级较低。\n与他人连接以扩展。",
+        "btn_create_squad": "➕ 连接 ({cost} HIVE)",
+        "squad_active": "🐝 **活跃连接**\n👥 节点: {members}\n🔥 IIL Boost: 活跃",
+        "no_balance": "❌ HIVE 不足"
     },
     "pt": {
-        "intro_caption": "Nó detectado.\n\nA largura de banda da Colmeia é limitada.\nNão busque dinheiro rápido. Busque influência.\n\nApenas nós que provarem valor serão blindados.\nO resto será expurgado.",
-        "btn_enter": "👉 INICIAR PROTOCOL",
-        "intro_step2": "**AVISO:**\nEste sistema recompensa participação, não promessas.\nSem garantias. Sem investimentos.\n\nSeu progresso depende do seu Enxame.",
-        "btn_status": "👉 Acessar Nó",
+        "intro_caption": "Bem-vindo ao The One Hive.\n\nIsto não é um airdrop.\nIsto não é investimento.\n\nÉ um sistema vivo medindo participação e influência.",
+        "btn_enter": "👉 Acessar Sistema",
+        "intro_step2": "**AVISO DE REDE:**\n\nSeu progresso é relativo à atividade da rede.\n\nNós mais ativos são priorizados nesta fase.",
+        "btn_status": "👉 Verificar Nó",
         "dash_header": "🏰 **THE ONE HIVE**",
-        "status_unsafe": "⚠️ NÓ VULNERÁVEL (Sem Blindagem)",
-        "status_safe": "✅ NÓ BLINDADO",
-        "lbl_energy": "⚡ Energia (Sinergia: x{syn:.2f})",
+        "status_unsafe": "⚠️ NÓ PADRÃO",
+        "status_safe": "✅ NÓ VERIFICADO",
+        "lbl_energy": "⚡ Energia (IIL: x{iil:.2f})",
         "lbl_honey": "🍯 Néctar",
-        "lbl_feed": "📊 **Status da Rede:**",
-        "footer_msg": "📝 _Acesso antecipado aberto._",
+        "lbl_feed": "📊 **Rede:**",
+        "footer_msg": "📝 _Prioridade de rede calculada em tempo real._",
         "btn_mine": "⚡ EXTRAIR (TAP)",
         "btn_tasks": "🟢 FAVOS",
         "btn_rank": "🧬 EVOLUÇÃO",
-        "btn_squad": "🐝 ENXAME",
-        "btn_team": "👥 EXPANDIR (x{syn:.2f})",
-        "btn_shop": "🛡️ ESTABILIZAR ($)",
-        "viral_1": "Isso não é airdrop. Estão medindo influência real. Entrei antes do ajuste.\n\n{link}",
-        "viral_2": "Não deveria compartilhar. O sistema busca nós orgânicos. Garanta sua vaga.\n\n{link}",
-        "sys_event_1": "⚠️ **ALERTA:** Saturação de rede em 95%",
-        "sys_event_2": "📉 Nós inativos marcados para expurgo",
-        "sys_event_3": "🔒 Acesso VIP fechando em 2 min",
-        "feed_action_1": "validou nó",
-        "feed_action_2": "sintetizou bloco",
-        "lock_msg": "🔒 ACESSO NEGADO. Nível {lvl} necessário.",
-        "protect_title": "⚠️ **AÇÃO RESTRITA: {reason}**",
-        "protect_body": "O sistema requer validação para proteger seu progresso.\nCopie sua chave:",
-        "email_prompt": "🛡️ **BLINDAGEM DE NÓ**\n\nDigite EMAIL para segurar posição antes do expurgo:",
-        "email_success": "✅ **NÓ BLINDADO**",
-        "shop_title": "🛡️ **ESTABILIZAÇÃO DE NÓ**",
-        "shop_body": "Aceleração é opcional.\nNão é investimento.\n\nBenefícios (30 Dias):\n✅ Imunidade à degradação.\n✅ Prioridade de Rede.\n✅ Acesso ao Favo Vermelho.",
-        "btn_buy_prem": "🛡️ ATIVAR (30 DIAS) - ${price}",
-        "btn_buy_energy": "🔋 RECARGA DE EMERGÊNCIA ({cost} HIVE)",
-        "pay_txt": "🛡️ **PROTOCOLO DE ESTABILIZAÇÃO**\n\nPasse válido por 30 dias.\n\n🔹 **Opção A: Cripto (USDT)**\n`{wallet}`\n\n🔹 **Opção B: PayPal**\nBotão abaixo.",
+        "btn_squad": "🐝 CONEXÕES",
+        "btn_team": "👥 EXPANDIR",
+        "btn_shop": "🛡️ PRIORIDADE ($)",
+        "viral_1": "Acesso antecipado aberto. Um sistema vivo está se formando. Quem entra cedo entende.\n\n{link}",
+        "viral_2": "Nem todos devem entrar. Acesso antecipado ainda aberto.\n\n{link}",
+        "sys_event_1": "⚠️ Prioridade reatribuída a nós ativos",
+        "sys_event_2": "⏳ Janela de expansão aberta",
+        "sys_event_3": "🔒 Capacidade da fase atingindo limite",
+        "feed_action_1": "assegurou posição",
+        "feed_action_2": "expandiu conexão",
+        "lock_msg": "🔒 FASE RESTRITA. Nível {lvl} necessário.",
+        "protect_title": "⚠️ **SEGURE SEU NÓ: {reason}**",
+        "protect_body": "Ao registrar um email:\n• Preserva seu progresso\n• Recebe atualizações\n\nNão vendemos contas.",
+        "email_prompt": "🛡️ **REGISTRO DE NÓ**\n\nDigite EMAIL para garantir persistência:",
+        "email_success": "✅ **NÓ ASSEGURADO**",
+        "shop_title": "🛡️ **ACESSO PRIORITÁRIO MENSAL**",
+        "shop_body": "Esta assinatura melhora velocidade e acesso.\nNão garante ganhos.\n\nInclui (30 Dias):\n✅ Regeneração mais rápida\n✅ Acesso a tarefas avançadas",
+        "btn_buy_prem": "🛡️ PRIORIDADE (30 DIAS) - ${price}",
+        "btn_buy_energy": "🔋 RECARGA ({cost} HIVE)",
+        "pay_txt": "🛡️ **ACESSO PRIORITÁRIO (30 DIAS)**\n\nPasse válido por 30 dias.\n\n🔹 **Opção A: Cripto (USDT)**\n`{wallet}`\n\n🔹 **Opção B: PayPal**\nBotão abaixo.",
         "btn_paypal": "💳 Pagar com PayPal",
-        "team_title": "👥 **EXPANSÃO VIRAL**",
-        "team_body": "Sua velocidade depende do seu time.\n\n**+5% Velocidade** por nó ativo.\nSem time, você morre lento.\n\n🔗 Sua Chave de Acesso:\n`{link}`",
-        "tasks_title": "📡 **ZONAS DE COLETA**",
+        "team_title": "👥 **EXPANSÃO DE REDE**",
+        "team_body": "Nós com conexões ativas avançam mais rápido.\nO sistema detecta expansão real, não spam.\n\n🔗 Seu Link de Nó:\n`{link}`",
+        "tasks_title": "📡 **ZONAS DE ATIVIDADE**",
         "tasks_body": "Selecione o Favo:\n\n🟢 **VERDE:** Nível 0+\n🟡 **DOURADO:** Explorador\n🔴 **VERMELHO:** Guardião",
         "btn_back": "🔙 VOLTAR",
         "green_hive": "FAVO VERDE",
         "gold_hive": "FAVO DOURADO",
         "red_hive": "FAVO VERMELHO",
-        "squad_none_title": "⚠️ NÓ ISOLADO",
-        "squad_none_body": "Um nó isolado minera lentamente.\nForme uma estrutura.",
-        "btn_create_squad": "➕ FORMAR ({cost} HIVE)",
-        "squad_active": "🐝 **ENXAME ATIVO**\n👥 Membros: {members}\n🔥 Sinergia: ATIVA",
-        "no_balance": "❌ Saldo Insuficiente",
-        "degraded_msg": "⚠️ **NÓ DEGRADADO**\nEficiência caiu 20% por inatividade. Convide para restaurar."
+        "squad_none_title": "⚠️ NÓ INDIVIDUAL",
+        "squad_none_body": "Nós individuais têm menor prioridade.\nConecte-se com outros para escalar.",
+        "btn_create_squad": "➕ CONECTAR ({cost} HIVE)",
+        "squad_active": "🐝 **CONEXÃO ATIVA**\n👥 Nós: {members}\n🔥 IIL Boost: ATIVO",
+        "no_balance": "❌ Saldo Insuficiente"
     }
 }
 
@@ -396,19 +393,34 @@ async def smart_edit(update: Update, text: str, reply_markup: InlineKeyboardMark
             logger.error(f"Error SmartEdit Rescue: {e2}")
 
 # ==============================================================================
-# BIO ENGINE (BUGFIXED & DARK MODE)
+# BIO ENGINE (FACTOR X: IIL IMPLEMENTATION)
 # ==============================================================================
 
 class BioEngine:
     @staticmethod
+    def calculate_iil(balance: float, refs_count: int, joined_at: float) -> float:
+        """
+        Calcula el Índice de Influencia Latente (IIL)
+        IIL = (log(1 + actividad) * 0.4) + (log(1 + referidos) * 0.4) + (dias * 0.2)
+        """
+        days_alive = (time.time() - joined_at) / 86400
+        if days_alive < 0: days_alive = 0
+        
+        # Logaritmos para suavizar el crecimiento (Scale-Lock)
+        act_score = math.log1p(balance) * 0.4
+        ref_score = math.log1p(refs_count) * 0.4
+        time_score = days_alive * 0.2
+        
+        iil = 1.0 + act_score + ref_score + time_score
+        return iil
+
+    @staticmethod
     def calculate_state(node: Dict) -> Dict:
         now = time.time()
         
-        # FIX: Validate 'last_regen' type
+        # Validación de tipos
         last_regen = node.get("last_regen", now)
-        if not isinstance(last_regen, (int, float)):
-            last_regen = now
-            
+        if not isinstance(last_regen, (int, float)): last_regen = now
         elapsed = now - last_regen
         
         balance = node.get("honey", 0.0)
@@ -417,11 +429,17 @@ class BioEngine:
         refs_list = node.get("referrals") or []
         refs_count = len(refs_list)
         
-        # PODER TOTAL Y RANGO
-        poder_total = balance + (refs_count * CONST["BONO_REFERIDO"])
+        # Recuperar joined_at para Factor X
+        joined_at = node.get("joined_at", now)
+        if isinstance(joined_at, str): joined_at = now
         
-        # SINERGIA: 5% por amigo
-        squad_multiplier = 1.0 + (refs_count * CONST["SQUAD_MULTIPLIER"])
+        # CÁLCULO DEL FACTOR X (IIL)
+        iil_score = BioEngine.calculate_iil(balance, refs_count, joined_at)
+        
+        # El IIL afecta la regeneración (Sinergia oculta)
+        # No mostramos el cálculo, solo el resultado
+        
+        poder_total = balance + (refs_count * CONST["BONO_REFERIDO"])
         
         rango = "LARVA"
         stats = RANGOS_CONFIG["LARVA"]
@@ -434,38 +452,23 @@ class BioEngine:
         if "max_polen" not in node: node["max_polen"] = 500
         node["max_polen"] = stats["max_energia"]
         
-        # APLICAR CASTIGO POR INACTIVIDAD (24H SIN INVITAR -> -20%)
-        # FIX: Validate 'last_invite_time' / 'joined_at' type
-        joined_at = node.get("joined_at", now)
-        # Si joined_at es string (isoformat), usamos now para evitar crash
-        if isinstance(joined_at, str): joined_at = now
-            
-        last_invite = node.get("last_invite_time", joined_at)
-        if isinstance(last_invite, str): last_invite = now
-            
-        hours_since_invite = (now - last_invite) / 3600
-        
-        penalty_factor = 1.0
-        # Regla: Si pasaron 24h y tiene menos de 5 referidos
-        if hours_since_invite > 24 and refs_count < 5: 
-             penalty_factor = 0.8
-             node["degraded"] = True
-        else:
-             node["degraded"] = False
-
-        # REGENERACIÓN FINAL
+        # REGENERACIÓN BASADA EN IIL (FACTOR X)
         if elapsed > 0:
-            regen_base = elapsed * 0.8 
-            # Fórmula: Base * Sinergia * Penalización
-            regen_final = regen_base * squad_multiplier * penalty_factor
+            base_regen_rate = 0.8
+            # La velocidad depende del IIL. Más influencia = Más velocidad.
+            # Scale-Lock: Nadie pierde, pero los nuevos son lentos si no tienen IIL.
+            final_regen_rate = base_regen_rate * (iil_score * 0.5) 
+            if final_regen_rate < 0.1: final_regen_rate = 0.1 # Mínimo vital
+            
+            regen_amount = elapsed * final_regen_rate
             
             current_polen = node.get("polen", 0)
             if not isinstance(current_polen, (int, float)): current_polen = 0
             
-            node["polen"] = min(node["max_polen"], current_polen + int(regen_final))
+            node["polen"] = min(node["max_polen"], current_polen + int(regen_amount))
             
         node["last_regen"] = now
-        node["synergy"] = squad_multiplier * penalty_factor
+        node["iil"] = iil_score # Guardamos IIL para mostrarlo (sin explicarlo)
         return node
 
 class SecurityEngine:
@@ -493,7 +496,7 @@ async def request_email_protection(update: Update, context: ContextTypes.DEFAULT
 # STARTUP
 # ==============================================================================
 async def on_startup(application: Application):
-    logger.info("🚀 INICIANDO SISTEMA HIVE V11.6 (STABLE DARK)")
+    logger.info("🚀 INICIANDO SISTEMA HIVE V12.0 (SCALE-LOCK)")
     await db.connect() 
 
 async def on_shutdown(application: Application):
@@ -523,7 +526,7 @@ async def intro_step_2(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = q.from_user
     lang = user.language_code
     
-    await q.answer("Authenticating Node...")
+    await q.answer("Verifying Network Status...")
     try: await context.bot.send_chat_action(chat_id=q.message.chat_id, action=ChatAction.TYPING)
     except: pass
     await asyncio.sleep(1.0)
@@ -563,7 +566,7 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 node['honey'] += 15.0 
                 await db.save_node(uid, node)
             
-            kb = [[InlineKeyboardButton("🟢 ACCESS NODE", callback_data="go_dash")]]
+            kb = [[InlineKeyboardButton("🟢 ACCESS SYSTEM", callback_data="go_dash")]]
             await update.message.reply_text(get_text(lang, "email_success"), reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
         except: await update.message.reply_text("⚠️ Email Error")
         return
@@ -599,16 +602,12 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         polen = int(node['polen'])
         max_p = int(node['max_polen'])
-        syn = node.get("synergy", 1.0)
+        # Factor X (IIL) mostrado en la UI
+        iil = node.get("iil", 1.0)
         bar = render_bar(polen, max_p)
         
-        # AVISO DE DEGRADACIÓN
-        degraded_alert = ""
-        if node.get("degraded", False):
-             degraded_alert = f"\n\n{get_text(lang, 'degraded_msg')}"
-
         header = get_text(lang, "dash_header")
-        lbl_e = get_text(lang, "lbl_energy", syn=syn)
+        lbl_e = get_text(lang, "lbl_energy", iil=iil)
         lbl_h = get_text(lang, "lbl_honey")
         lbl_f = get_text(lang, "lbl_feed")
         footer = get_text(lang, "footer_msg")
@@ -617,7 +616,7 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         txt = (
             f"{header} | {info['icono']} **{rango}**\n"
             f"────────────────\n"
-            f"{status_msg}{degraded_alert}\n\n"
+            f"{status_msg}\n\n"
             f"{lbl_e}: `{bar}`\n"
             f"{lbl_h}: `{node['honey']:.4f}`\n\n"
             f"{lbl_f}\n{live}\n\n"
@@ -628,7 +627,7 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb = [
             [InlineKeyboardButton(get_text(lang, "btn_mine"), callback_data="forage")],
             [InlineKeyboardButton(get_text(lang, "btn_tasks"), callback_data="tasks"), InlineKeyboardButton(get_text(lang, "btn_rank"), callback_data="rank_info")],
-            [InlineKeyboardButton(get_text(lang, "btn_squad"), callback_data="squad"), InlineKeyboardButton(get_text(lang, "btn_team", syn=syn), callback_data="team")],
+            [InlineKeyboardButton(get_text(lang, "btn_squad"), callback_data="squad"), InlineKeyboardButton(get_text(lang, "btn_team"), callback_data="team")],
             [InlineKeyboardButton(get_text(lang, "btn_shop"), callback_data="shop")]
         ]
         await smart_edit(update, txt, InlineKeyboardMarkup(kb))
@@ -687,15 +686,15 @@ async def forage_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
         node = BioEngine.calculate_state(node)
         
         if node['polen'] < CONST['COSTO_POLEN']:
-            await q.answer("⚡ Low Energy. Expand Squad to fix.", show_alert=True); return
+            await q.answer("⚡ Low Energy. Increase IIL.", show_alert=True); return
 
         node['polen'] -= CONST['COSTO_POLEN']
         node['last_pulse'] = time.time()
         yield_amt = CONST['RECOMPENSA_BASE'] * RANGOS_CONFIG[node['caste']]['bonus_tap']
         
-        # PENALIZACIÓN EN EL MINADO TAMBIÉN
-        if node.get("degraded", False):
-             yield_amt *= 0.8
+        # El IIL afecta marginalmente el rendimiento de minado también
+        iil = node.get("iil", 1.0)
+        yield_amt *= (iil * 0.2) + 0.8 # Pequeño boost por IIL
         
         node['honey'] += yield_amt
         
@@ -801,9 +800,7 @@ async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await request_email_protection(update, context, "INVITE")
         return
     link = f"https://t.me/{context.bot.username}?start={uid}"
-    viral_key = random.choice(["viral_1", "viral_2"])
-    share_txt = get_text(lang, viral_key, link=link)
-    share_url = f"https://t.me/share/url?url={share_txt}"
+    share_url = f"https://t.me/share/url?url={link}"
     
     txt = get_text(lang, "team_body", bonus=CONST['BONO_REFERIDO'], link=link)
     title = get_text(lang, "team_title")
@@ -839,5 +836,5 @@ async def reset_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("💀")
 
 async def invite_cmd(u, c): await team_menu(u, c)
-async def help_cmd(u, c): await u.message.reply_text("V11.6 Stable Dark")
+async def help_cmd(u, c): await u.message.reply_text("V12.0 SCALE-LOCK")
 async def broadcast_cmd(u, c): pass
