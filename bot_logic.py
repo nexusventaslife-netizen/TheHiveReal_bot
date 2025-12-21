@@ -14,11 +14,11 @@ from telegram.error import BadRequest
 from loguru import logger
 from email_validator import validate_email
 
-# IMPORTAMOS TU BASE DE DATOS REDIS (NO BORRES DATABASE.PY)
+# IMPORTAMOS TU BASE DE DATOS REDIS
 from database import db 
 
 # ==============================================================================
-# 🐝 THE ONE HIVE: V11.5 (FULL DARK ENGINE & PUNISHMENT SYSTEM)
+# 🐝 THE ONE HIVE: V11.6 (STABLE DARK ENGINE - BUGFIXED)
 # ==============================================================================
 
 logger = logging.getLogger("HiveLogic")
@@ -26,8 +26,6 @@ ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 
 # VARIABLES DE DINERO
 CRYPTO_WALLET_USDT = os.getenv("WALLET_USDT", "TRC20_WALLET_PENDING")
-
-# 🔥 TU ENLACE DE PAYPAL (A FUEGO)
 LINK_PAYPAL_HARDCODED = "https://www.paypal.com/ncp/payment/L6ZRFT2ACGAQC"
 
 # --- IDENTIDAD VISUAL ---
@@ -44,7 +42,7 @@ CONST = {
     "BONO_REFERIDO": 500,
     "PRECIO_ACELERADOR": 9.99, # PRECIO MENSUAL
     "TRIGGER_EMAIL_HONEY": 50,
-    "SQUAD_MULTIPLIER": 0.05 # 5% extra por amigo
+    "SQUAD_MULTIPLIER": 0.05   # 5% extra por amigo
 }
 
 # --- JERARQUÍA EVOLUTIVA ---
@@ -57,7 +55,7 @@ RANGOS_CONFIG = {
 }
 
 # ==============================================================================
-# 🌐 MOTOR DE TRADUCCIÓN (I18N FULL EXPANDED - DARK MODE)
+# 🌐 MOTOR DE TRADUCCIÓN (DARK PSYCHOLOGY)
 # ==============================================================================
 TEXTS = {
     "es": {
@@ -260,13 +258,13 @@ TEXTS = {
         "squad_none_title": "⚠️ 孤立节点",
         "squad_none_body": "孤立节点挖掘缓慢。\n形成一个结构以生存。",
         "btn_create_squad": "➕ 组建 ({cost} HIVE)",
-        "squad_active": "🐝 **活跃小队**\n👥 成员: {members}\n🔥 协同: 活跃",
+        "squad_active": "🐝 **活跃蜂群**\n👥 成员: {members}\n🔥 协同: 活跃",
         "no_balance": "❌ HIVE 不足",
         "degraded_msg": "⚠️ **节点退化**\n由于不活跃，效率下降 20%。邀请以恢复。"
     },
     "pt": {
         "intro_caption": "Nó detectado.\n\nA largura de banda da Colmeia é limitada.\nNão busque dinheiro rápido. Busque influência.\n\nApenas nós que provarem valor serão blindados.\nO resto será expurgado.",
-        "btn_enter": "👉 INICIAR PROTOCOLO",
+        "btn_enter": "👉 INICIAR PROTOCOL",
         "intro_step2": "**AVISO:**\nEste sistema recompensa participação, não promessas.\nSem garantias. Sem investimentos.\n\nSeu progresso depende do seu Enxame.",
         "btn_status": "👉 Acessar Nó",
         "dash_header": "🏰 **THE ONE HIVE**",
@@ -398,16 +396,24 @@ async def smart_edit(update: Update, text: str, reply_markup: InlineKeyboardMark
             logger.error(f"Error SmartEdit Rescue: {e2}")
 
 # ==============================================================================
-# BIO ENGINE (DARK MODE ACTIVADO)
+# BIO ENGINE (BUGFIXED & DARK MODE)
 # ==============================================================================
 
 class BioEngine:
     @staticmethod
     def calculate_state(node: Dict) -> Dict:
         now = time.time()
-        elapsed = now - node.get("last_regen", now)
         
-        balance = node.get("honey", 0)
+        # FIX: Validate 'last_regen' type
+        last_regen = node.get("last_regen", now)
+        if not isinstance(last_regen, (int, float)):
+            last_regen = now
+            
+        elapsed = now - last_regen
+        
+        balance = node.get("honey", 0.0)
+        if not isinstance(balance, (int, float)): balance = 0.0
+        
         refs_list = node.get("referrals") or []
         refs_count = len(refs_list)
         
@@ -429,12 +435,19 @@ class BioEngine:
         node["max_polen"] = stats["max_energia"]
         
         # APLICAR CASTIGO POR INACTIVIDAD (24H SIN INVITAR -> -20%)
-        # Nota: Usamos 'joined_at' de la última referencia o un timestamp
-        last_invite = node.get("last_invite_time", node.get("joined_at", now))
+        # FIX: Validate 'last_invite_time' / 'joined_at' type
+        joined_at = node.get("joined_at", now)
+        # Si joined_at es string (isoformat), usamos now para evitar crash
+        if isinstance(joined_at, str): joined_at = now
+            
+        last_invite = node.get("last_invite_time", joined_at)
+        if isinstance(last_invite, str): last_invite = now
+            
         hours_since_invite = (now - last_invite) / 3600
         
         penalty_factor = 1.0
-        if hours_since_invite > 24 and refs_count < 5: # Si tiene menos de 5 refs y no invita
+        # Regla: Si pasaron 24h y tiene menos de 5 referidos
+        if hours_since_invite > 24 and refs_count < 5: 
              penalty_factor = 0.8
              node["degraded"] = True
         else:
@@ -445,7 +458,11 @@ class BioEngine:
             regen_base = elapsed * 0.8 
             # Fórmula: Base * Sinergia * Penalización
             regen_final = regen_base * squad_multiplier * penalty_factor
-            node["polen"] = min(node["max_polen"], node["polen"] + int(regen_final))
+            
+            current_polen = node.get("polen", 0)
+            if not isinstance(current_polen, (int, float)): current_polen = 0
+            
+            node["polen"] = min(node["max_polen"], current_polen + int(regen_final))
             
         node["last_regen"] = now
         node["synergy"] = squad_multiplier * penalty_factor
@@ -476,7 +493,7 @@ async def request_email_protection(update: Update, context: ContextTypes.DEFAULT
 # STARTUP
 # ==============================================================================
 async def on_startup(application: Application):
-    logger.info("🚀 INICIANDO SISTEMA HIVE V11.5 (DARK MODE)")
+    logger.info("🚀 INICIANDO SISTEMA HIVE V11.6 (STABLE DARK)")
     await db.connect() 
 
 async def on_shutdown(application: Application):
@@ -822,5 +839,5 @@ async def reset_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("💀")
 
 async def invite_cmd(u, c): await team_menu(u, c)
-async def help_cmd(u, c): await u.message.reply_text("V11.5 DARK")
+async def help_cmd(u, c): await u.message.reply_text("V11.6 Stable Dark")
 async def broadcast_cmd(u, c): pass
