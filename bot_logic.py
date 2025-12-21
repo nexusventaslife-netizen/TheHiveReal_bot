@@ -4,29 +4,37 @@ import random
 import time
 import math
 import os
-from typing import Dict, Optional
+import ujson as json
+from typing import Tuple, List, Dict, Any, Optional
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode, ChatAction
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, Application
 from telegram.error import BadRequest
 from loguru import logger
-import database as db 
 from email_validator import validate_email
 
+# IMPORTAMOS TU BASE DE DATOS REDIS (NO BORRES DATABASE.PY)
+from database import db 
+
 # ==============================================================================
-# 🐝 THE ONE HIVE: V10.0 (GLOBAL EMPIRE - REDIS EDITION)
+# 🐝 THE ONE HIVE: V10.4 (FULL GLOBAL + PAYPAL HARDCODED)
 # ==============================================================================
 
 logger = logging.getLogger("HiveLogic")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
+
+# VARIABLES DE DINERO
 CRYPTO_WALLET_USDT = os.getenv("WALLET_USDT", "TRC20_WALLET_PENDING")
+
+# 🔥 TU ENLACE DE PAYPAL (A FUEGO)
+LINK_PAYPAL_HARDCODED = "https://www.paypal.com/ncp/payment/L6ZRFT2ACGAQC"
 
 # --- IDENTIDAD VISUAL ---
 IMG_GENESIS = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
 IMG_DASHBOARD = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
 
-# --- CONSTANTES DE ECONOMÍA (BITCOIN STRATEGY) ---
+# --- CONSTANTES DE ECONOMÍA ---
 CONST = {
     "COSTO_POLEN": 10,        
     "RECOMPENSA_BASE": 0.05,
@@ -34,7 +42,7 @@ CONST = {
     "COSTO_ENJAMBRE": 100,    
     "COSTO_RECARGA": 50,      
     "BONO_REFERIDO": 500,
-    "PRECIO_ACELERADOR": 9.99,
+    "PRECIO_ACELERADOR": 9.99, # PRECIO MENSUAL
     "TRIGGER_EMAIL_HONEY": 50
 }
 
@@ -48,9 +56,8 @@ RANGOS_CONFIG = {
 }
 
 # ==============================================================================
-# 🌐 MOTOR DE TRADUCCIÓN (I18N ENGINE)
+# 🌐 MOTOR DE TRADUCCIÓN (I18N FULL EXPANDED)
 # ==============================================================================
-
 TEXTS = {
     "es": {
         "intro_caption": "Bienvenido a The One Hive.\n\nNo es un juego. No es un airdrop.\nEs un sistema activo de extracción de valor.\n\nExplorá. El sistema se adapta.",
@@ -82,11 +89,12 @@ TEXTS = {
         "protect_body": "El sistema requiere validación para proteger tu progreso.\nCopia tu llave:",
         "email_prompt": "✅ Ingresa tu **EMAIL**:",
         "email_success": "✅ **NODO BLINDADO**",
-        "shop_title": "🛡️ **ESTABILIZACIÓN (PREMIUM)**",
-        "shop_body": "Protege tu nodo contra degradación y gana prioridad.",
-        "btn_buy_prem": "🛡️ ESTABILIZAR NODO (${price})",
+        "shop_title": "🛡️ **ESTABILIZACIÓN MENSUAL**",
+        "shop_body": "Los nodos gratuitos se degradan. La suscripción mantiene tu eficiencia al 100%.",
+        "btn_buy_prem": "🛡️ SUSCRIPCIÓN (${price}/mes)",
         "btn_buy_energy": "🔋 RECARGA ({cost} HIVE)",
-        "pay_txt": "🛡️ **ACTIVAR**\n\nEnvía ${price} USDT (TRC20) a:\n`{wallet}`",
+        "pay_txt": "🛡️ **ACTIVAR SUSCRIPCIÓN (30 DÍAS)**\n\nBeneficios:\n✅ Regeneración x2\n✅ Prioridad de Red\n✅ Acceso Panal Rojo\n\n🔹 **Opción A: Cripto (USDT TRC20)**\n`{wallet}`\n\n🔹 **Opción B: PayPal**\nBotón abajo.\n\n⚠️ Envía comprobante al admin.",
+        "btn_paypal": "💳 Pagar con PayPal",
         "team_title": "👥 **EXPANSIÓN**",
         "team_body": "1 Ref = {bonus} Pts.\n\n🔗 `{link}`",
         "tasks_title": "📡 **ZONAS DE RECOLECCIÓN**",
@@ -131,11 +139,12 @@ TEXTS = {
         "protect_body": "System requires validation to secure your progress.\nCopy your key:",
         "email_prompt": "✅ Enter your **EMAIL**:",
         "email_success": "✅ **NODE ARMORED**",
-        "shop_title": "🛡️ **STABILIZATION (PREMIUM)**",
-        "shop_body": "Protect your node against degradation and gain priority.",
-        "btn_buy_prem": "🛡️ STABILIZE NODE (${price})",
+        "shop_title": "🛡️ **MONTHLY STABILIZATION**",
+        "shop_body": "Free nodes degrade over time. Subscription keeps efficiency at 100%.",
+        "btn_buy_prem": "🛡️ SUBSCRIBE (${price}/mo)",
         "btn_buy_energy": "🔋 RECHARGE ({cost} HIVE)",
-        "pay_txt": "🛡️ **ACTIVATE**\n\nSend ${price} USDT (TRC20) to:\n`{wallet}`",
+        "pay_txt": "🛡️ **ACTIVATE SUBSCRIPTION (30 DAYS)**\n\nBenefits:\n✅ Regen x2\n✅ Network Priority\n✅ Red Hive Access\n\n🔹 **Option A: Crypto (USDT TRC20)**\n`{wallet}`\n\n🔹 **Option B: PayPal**\nButton below.\n\n⚠️ Send proof to admin.",
+        "btn_paypal": "💳 Pay with PayPal",
         "team_title": "👥 **EXPANSION**",
         "team_body": "1 Ref = {bonus} Pts.\n\n🔗 `{link}`",
         "tasks_title": "📡 **COLLECTION ZONES**",
@@ -180,11 +189,12 @@ TEXTS = {
         "protect_body": "Система требует валидации для сохранения прогресса.\nСкопируйте ключ:",
         "email_prompt": "✅ Введите ваш **EMAIL**:",
         "email_success": "✅ **УЗЕЛ БРОНИРОВАН**",
-        "shop_title": "🛡️ **СТАБИЛИЗАЦИЯ (PREMIUM)**",
-        "shop_body": "Защитите узел от деградации и получите приоритет.",
-        "btn_buy_prem": "🛡️ СТАБИЛИЗИРОВАТЬ (${price})",
+        "shop_title": "🛡️ **МЕСЯЧНАЯ ПОДПИСКА**",
+        "shop_body": "Бесплатные узлы деградируют. Подписка держит эффективность на 100%.",
+        "btn_buy_prem": "🛡️ ПОДПИСКА (${price}/мес)",
         "btn_buy_energy": "🔋 ЗАРЯДКА ({cost} HIVE)",
-        "pay_txt": "🛡️ **АКТИВАЦИЯ**\n\nОтправьте ${price} USDT (TRC20) на:\n`{wallet}`",
+        "pay_txt": "🛡️ **АКТИВАЦИЯ (30 ДНЕЙ)**\n\n🔹 **USDT TRC20**\n`{wallet}`\n\n🔹 **PayPal**\nКнопка ниже.",
+        "btn_paypal": "💳 PayPal",
         "team_title": "👥 **РАСШИРЕНИЕ**",
         "team_body": "1 Реф = {bonus} Очков.\n\n🔗 `{link}`",
         "tasks_title": "📡 **ЗОНЫ СБОРА**",
@@ -229,11 +239,12 @@ TEXTS = {
         "protect_body": "系统需要验证以保护您的进度。\n复制您的密钥:",
         "email_prompt": "✅ 输入您的 **EMAIL**:",
         "email_success": "✅ **节点已加固**",
-        "shop_title": "🛡️ **稳定化 (PREMIUM)**",
-        "shop_body": "防止节点退化并获得优先权。",
-        "btn_buy_prem": "🛡️ 稳定节点 (${price})",
+        "shop_title": "🛡️ **每月订阅**",
+        "shop_body": "免费节点会退化。订阅保持 100% 效率。",
+        "btn_buy_prem": "🛡️ 订阅 (${price}/月)",
         "btn_buy_energy": "🔋 充电 ({cost} HIVE)",
-        "pay_txt": "🛡️ **激活**\n\n发送 ${price} USDT (TRC20) 到:\n`{wallet}`",
+        "pay_txt": "🛡️ **激活 (30 天)**\n\n🔹 **USDT TRC20**\n`{wallet}`\n\n🔹 **PayPal**\n下方按钮。",
+        "btn_paypal": "💳 PayPal 支付",
         "team_title": "👥 **扩张**",
         "team_body": "1 推荐 = {bonus} 分。\n\n🔗 `{link}`",
         "tasks_title": "📡 **采集区**",
@@ -278,11 +289,12 @@ TEXTS = {
         "protect_body": "O sistema requer validação para proteger seu progresso.\nCopie sua chave:",
         "email_prompt": "✅ Digite seu **EMAIL**:",
         "email_success": "✅ **NÓ BLINDADO**",
-        "shop_title": "🛡️ **ESTABILIZAÇÃO (PREMIUM)**",
-        "shop_body": "Proteja seu nó contra degradação e ganhe prioridade.",
-        "btn_buy_prem": "🛡️ ESTABILIZAR NÓ (${price})",
+        "shop_title": "🛡️ **ASSINATURA MENSAL**",
+        "shop_body": "Nós gratuitos degradam. A assinatura mantém 100% de eficiência.",
+        "btn_buy_prem": "🛡️ ASSINAR (${price}/mês)",
         "btn_buy_energy": "🔋 RECARGA ({cost} HIVE)",
-        "pay_txt": "🛡️ **ATIVAR**\n\nEnvie ${price} USDT (TRC20) para:\n`{wallet}`",
+        "pay_txt": "🛡️ **ATIVAR (30 DIAS)**\n\n🔹 **USDT TRC20**\n`{wallet}`\n\n🔹 **PayPal**\nBotão abaixo.",
+        "btn_paypal": "💳 Pagar com PayPal",
         "team_title": "👥 **EXPANSÃO**",
         "team_body": "1 Ref = {bonus} Pts.\n\n🔗 `{link}`",
         "tasks_title": "📡 **ZONAS DE COLETA**",
@@ -355,19 +367,6 @@ def render_bar(current: float, total: float, length: int = 10) -> str:
     fill = int(length * pct)
     return "▰" * fill + "▱" * (length - fill)
 
-def calculate_evolution_progress(hive: float, referrals: int, lang: str) -> str:
-    poder = hive + (referrals * CONST["BONO_REFERIDO"])
-    niveles = list(RANGOS_CONFIG.values())
-    siguiente = None
-    for nivel in niveles:
-        if nivel["meta_hive"] > poder:
-            siguiente = nivel
-            break
-    if siguiente:
-        falta = siguiente["meta_hive"] - poder
-        return f"-{falta:,.0f} pts" 
-    return "MAX"
-
 def generate_live_feed(lang: str) -> str:
     eventos = [
         get_text(lang, "sys_event_1"), get_text(lang, "sys_event_2"), 
@@ -403,7 +402,6 @@ class BioEngine:
         elapsed = now - node.get("last_regen", now)
         
         balance = node.get("honey", 0)
-        # Adaptación para Redis (lista de referidos puede ser nula)
         refs_list = node.get("referrals") or []
         refs = len(refs_list)
         poder_total = balance + (refs * CONST["BONO_REFERIDO"])
@@ -416,6 +414,7 @@ class BioEngine:
                 stats = data
         
         node["caste"] = rango 
+        if "max_polen" not in node: node["max_polen"] = 500
         node["max_polen"] = stats["max_energia"]
         
         if elapsed > 0:
@@ -447,6 +446,16 @@ async def request_email_protection(update: Update, context: ContextTypes.DEFAULT
     await smart_edit(update, txt, InlineKeyboardMarkup([]))
 
 # ==============================================================================
+# STARTUP
+# ==============================================================================
+async def on_startup(application: Application):
+    logger.info("🚀 INICIANDO SISTEMA HIVE V10.4")
+    await db.connect() 
+
+async def on_shutdown(application: Application):
+    await db.close()
+
+# ==============================================================================
 # FLUJOS PRINCIPALES
 # ==============================================================================
 
@@ -456,8 +465,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     ref_id = int(args[0]) if args and args[0].isdigit() else None
     
-    # Crear nodo en Redis
-    try: await db.db.create_node(user.id, user.first_name, user.username, ref_id)
+    try: await db.create_node(user.id, user.first_name, user.username, ref_id)
     except: pass
     
     txt = get_text(lang, "intro_caption")
@@ -474,7 +482,7 @@ async def intro_step_2(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer("...")
     try: await context.bot.send_chat_action(chat_id=q.message.chat_id, action=ChatAction.TYPING)
     except: pass
-    await asyncio.sleep(1.5)
+    await asyncio.sleep(1.0)
     try: await q.message.delete()
     except: pass
 
@@ -503,14 +511,13 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         try:
             valid = validate_email(text)
             email = valid.normalized
-            await db.db.update_email(uid, email)
+            await db.update_email(uid, email)
             context.user_data['step'] = None
             
-            # Obtener y actualizar bono
-            node = await db.db.get_node(uid)
+            node = await db.get_node(uid)
             if node:
                 node['honey'] += 15.0 
-                await db.db.save_node(uid, node)
+                await db.save_node(uid, node)
             
             kb = [[InlineKeyboardButton("🟢 ->", callback_data="go_dash")]]
             await update.message.reply_text(get_text(lang, "email_success"), reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
@@ -518,7 +525,7 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     try:
-        node = await db.db.get_node(uid)
+        node = await db.get_node(uid)
         if node: await show_dashboard(update, context)
     except: pass
 
@@ -533,15 +540,14 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             lang = update.effective_user.language_code
             user = update.effective_user
         
-        # Asegurar existencia en Redis
-        try: await db.db.create_node(uid, user.first_name, user.username)
+        try: await db.create_node(uid, user.first_name, user.username)
         except: pass
         
-        node = await db.db.get_node(uid)
-        if not node: return # Safety check
+        node = await db.get_node(uid)
+        if not node: return 
 
         node = BioEngine.calculate_state(node)
-        await db.db.save_node(uid, node)
+        await db.save_node(uid, node)
         
         rango = node['caste']
         info = RANGOS_CONFIG.get(rango, RANGOS_CONFIG["LARVA"])
@@ -596,7 +602,7 @@ async def tasks_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def view_tier_generic(update: Update, key: str, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; uid = q.from_user.id
     lang = q.from_user.language_code
-    node = await db.db.get_node(uid)
+    node = await db.get_node(uid)
     
     if (key == "v_t2" or key == "v_t3") and not node.get("email"):
         await request_email_protection(update, context, "TIER ACCESS")
@@ -627,8 +633,7 @@ async def view_tier_generic(update: Update, key: str, context: ContextTypes.DEFA
 async def forage_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         q = update.callback_query; uid = q.from_user.id
-        node = await db.db.get_node(uid)
-        
+        node = await db.get_node(uid)
         node = BioEngine.calculate_state(node)
         
         if node['polen'] < CONST['COSTO_POLEN']:
@@ -639,7 +644,7 @@ async def forage_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
         yield_amt = CONST['RECOMPENSA_BASE'] * RANGOS_CONFIG[node['caste']]['bonus_tap']
         node['honey'] += yield_amt
         
-        await db.db.save_node(uid, node)
+        await db.save_node(uid, node)
         await q.answer(f"✅ +{yield_amt:.4f}")
         if random.random() < 0.2: await show_dashboard(update, context)
     except Exception: pass
@@ -650,14 +655,12 @@ async def rank_info_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def squad_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; uid = q.from_user.id
     lang = q.from_user.language_code
-    node = await db.db.get_node(uid)
+    node = await db.get_node(uid)
     
-    if node.get("enjambre_id"): # En Redis, este campo puede ser string o None
-        # Necesitamos cargar la célula
-        cell_id = node.get("enjambre_id")
-        # NOTA: get_cell en tu DB espera cell_id string
-        cell = await db.db.get_cell(cell_id) if cell_id else None
-        
+    cell_id = node.get("cell_id") or node.get("enjambre_id")
+    
+    if cell_id:
+        cell = await db.get_cell(cell_id)
         if cell:
             members_count = len(cell.get('members', []))
             txt = get_text(lang, "squad_active", members=members_count)
@@ -665,7 +668,6 @@ async def squad_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await smart_edit(update, txt, InlineKeyboardMarkup(kb))
             return
 
-    # Si no tiene squad:
     txt = f"{get_text(lang, 'squad_none_title')}\n\n{get_text(lang, 'squad_none_body')}"
     kb = [
         [InlineKeyboardButton(get_text(lang, "btn_create_squad", cost=CONST['COSTO_ENJAMBRE']), callback_data="mk_cell")],
@@ -676,7 +678,7 @@ async def squad_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def create_squad_logic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; uid = q.from_user.id
     lang = q.from_user.language_code
-    node = await db.db.get_node(uid)
+    node = await db.get_node(uid)
     
     if not node.get("email"):
         await request_email_protection(update, context, "SQUAD")
@@ -685,13 +687,13 @@ async def create_squad_logic(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if node['honey'] >= CONST['COSTO_ENJAMBRE']:
         node['honey'] -= CONST['COSTO_ENJAMBRE']
         
-        # Crear en Redis
-        cell_name = f"Cluster-{random.randint(100,999)}"
-        cell_id = await db.db.create_cell(uid, cell_name)
+        cell_name = f"Hive-{random.randint(100,999)}"
+        cell_id = await db.create_cell(uid, cell_name)
         
         if cell_id:
             node['enjambre_id'] = cell_id
-            await db.db.save_node(uid, node)
+            node['cell_id'] = cell_id
+            await db.save_node(uid, node)
             await q.answer("✅"); await squad_menu(update, context)
         else:
             await q.answer("❌ Error DB", show_alert=True)
@@ -702,7 +704,7 @@ async def create_squad_logic(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def shop_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; uid = q.from_user.id
     lang = q.from_user.language_code
-    node = await db.db.get_node(uid)
+    node = await db.get_node(uid)
     if not node.get("email"):
         await request_email_protection(update, context, "SHOP")
         return
@@ -717,47 +719,48 @@ async def shop_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def buy_energy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; uid = q.from_user.id
     lang = q.from_user.language_code
-    node = await db.db.get_node(uid)
+    node = await db.get_node(uid)
     if node['honey'] >= CONST['COSTO_RECARGA']:
         node['honey'] -= CONST['COSTO_RECARGA']
         node['polen'] = node['max_polen']
-        await db.db.save_node(uid, node)
+        await db.save_node(uid, node)
         await q.answer("⚡ OK"); await show_dashboard(update, context)
     else: await q.answer(get_text(lang, "no_balance"), show_alert=True)
 
+# PAGO CON PAYPAL HARDCODED
 async def buy_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = update.callback_query.from_user.language_code
+    q = update.callback_query
+    lang = q.from_user.language_code
+    
     txt = get_text(lang, "pay_txt", price=CONST['PRECIO_ACELERADOR'], wallet=CRYPTO_WALLET_USDT)
-    await smart_edit(update, txt, InlineKeyboardMarkup([]))
+    
+    kb = [
+        # USA LA VARIABLE LINK_PAYPAL_HARDCODED
+        [InlineKeyboardButton(get_text(lang, "btn_paypal"), url=LINK_PAYPAL_HARDCODED)],
+        [InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="shop")]
+    ]
+    await smart_edit(update, txt, InlineKeyboardMarkup(kb))
 
 async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; uid = q.from_user.id
     lang = q.from_user.language_code
-    node = await db.db.get_node(uid)
+    node = await db.get_node(uid)
     if not node.get("email"):
         await request_email_protection(update, context, "INVITE")
         return
-    
     link = f"https://t.me/{context.bot.username}?start={uid}"
-    
     viral_key = random.choice(["viral_1", "viral_2"])
     share_txt = get_text(lang, viral_key, link=link)
     share_url = f"https://t.me/share/url?url={share_txt}"
     
     txt = get_text(lang, "team_body", bonus=CONST['BONO_REFERIDO'], link=link)
     title = get_text(lang, "team_title")
-    
     kb = [[InlineKeyboardButton("📤 SHARE", url=share_url)], [InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="go_dash")]]
     await smart_edit(update, f"{title}\n\n{txt}", InlineKeyboardMarkup(kb))
-
-# ==============================================================================
-# ROUTER
-# ==============================================================================
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; d = q.data
     lang = q.from_user.language_code
-    
     if d == "accept_terms":
         context.user_data['step'] = 'email_wait'
         await smart_edit(update, get_text(lang, "email_prompt"), InlineKeyboardMarkup([]))
@@ -774,16 +777,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "shop": shop_menu, "buy_energy": buy_energy, "buy_premium": buy_premium, 
         "team": team_menu
     }
-    
     if d in actions: await actions[d](update, context)
     try: await q.answer()
     except: pass
 
 async def reset_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await db.db.delete_node(update.effective_user.id)
+    await db.delete_node(update.effective_user.id)
     context.user_data.clear()
     await update.message.reply_text("💀")
 
 async def invite_cmd(u, c): await team_menu(u, c)
-async def help_cmd(u, c): await u.message.reply_text("V10.0 Redis Global")
+async def help_cmd(u, c): await u.message.reply_text("V10.4 FULL")
 async def broadcast_cmd(u, c): pass
