@@ -3,21 +3,19 @@ import asyncio
 import random
 import time
 import math
-import statistics
 import os
-import ujson as json
-from typing import Tuple, List, Dict, Any, Optional
+from typing import Dict, Optional
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode, ChatAction
 from telegram.ext import ContextTypes
 from telegram.error import BadRequest
 from loguru import logger
 import database as db 
-from email_validator import validate_email, EmailNotValidError
+from email_validator import validate_email
 
 # ==============================================================================
-# 🐝 THE ONE HIVE: V10.0 (GLOBAL EMPIRE - MULTI-LANGUAGE SYSTEM)
+# 🐝 THE ONE HIVE: V10.0 (GLOBAL EMPIRE - REDIS EDITION)
 # ==============================================================================
 
 logger = logging.getLogger("HiveLogic")
@@ -96,7 +94,12 @@ TEXTS = {
         "btn_back": "🔙 VOLVER",
         "green_hive": "PANAL VERDE",
         "gold_hive": "PANAL DORADO",
-        "red_hive": "PANAL ROJO"
+        "red_hive": "PANAL ROJO",
+        "squad_none_title": "⚠️ NODO AISLADO",
+        "squad_none_body": "Un nodo aislado mina lento.\nForma una estructura para sobrevivir.",
+        "btn_create_squad": "➕ FORMAR ({cost} HIVE)",
+        "squad_active": "🐝 **ENJAMBRE ACTIVO**\n👥 Miembros: {members}\n🔥 Sinergia: ACTIVA",
+        "no_balance": "❌ HIVE Insuficiente"
     },
     "en": {
         "intro_caption": "Welcome to The One Hive.\n\nNot a game. Not an airdrop.\nIt's an active value extraction system.\n\nExplore. The system adapts.",
@@ -140,7 +143,12 @@ TEXTS = {
         "btn_back": "🔙 BACK",
         "green_hive": "GREEN HIVE",
         "gold_hive": "GOLD HIVE",
-        "red_hive": "RED HIVE"
+        "red_hive": "RED HIVE",
+        "squad_none_title": "⚠️ ISOLATED NODE",
+        "squad_none_body": "An isolated node mines slowly.\nForm a structure to survive.",
+        "btn_create_squad": "➕ FORM ({cost} HIVE)",
+        "squad_active": "🐝 **ACTIVE SWARM**\n👥 Members: {members}\n🔥 Synergy: ACTIVE",
+        "no_balance": "❌ Insufficient HIVE"
     },
     "ru": {
         "intro_caption": "Добро пожаловать в The One Hive.\n\nЭто не игра. Это не аирдроп.\nЭто активная система извлечения ценности.\n\nИсследуйте.",
@@ -184,7 +192,12 @@ TEXTS = {
         "btn_back": "🔙 НАЗАД",
         "green_hive": "ЗЕЛЕНЫЙ УЛЕЙ",
         "gold_hive": "ЗОЛОТОЙ УЛЕЙ",
-        "red_hive": "КРАСНЫЙ УЛЕЙ"
+        "red_hive": "КРАСНЫЙ УЛЕЙ",
+        "squad_none_title": "⚠️ ИЗОЛИРОВАННЫЙ УЗЕЛ",
+        "squad_none_body": "Одиночный узел майнит медленно.\nСоздайте структуру.",
+        "btn_create_squad": "➕ СОЗДАТЬ ({cost} HIVE)",
+        "squad_active": "🐝 **АКТИВНЫЙ ОТРЯД**\n👥 Участников: {members}\n🔥 Синергия: АКТИВНА",
+        "no_balance": "❌ Недостаточно HIVE"
     },
     "zh": {
         "intro_caption": "欢迎来到 The One Hive。\n\n这不是游戏。这不是空投。\n这是一个主动价值提取系统。\n\n探索。系统会适应。",
@@ -228,7 +241,12 @@ TEXTS = {
         "btn_back": "🔙 返回",
         "green_hive": "绿色蜂巢",
         "gold_hive": "金色蜂巢",
-        "red_hive": "红色蜂巢"
+        "red_hive": "红色蜂巢",
+        "squad_none_title": "⚠️ 孤立节点",
+        "squad_none_body": "孤立节点挖掘缓慢。\n形成一个结构以生存。",
+        "btn_create_squad": "➕ 组建 ({cost} HIVE)",
+        "squad_active": "🐝 **活跃小队**\n👥 成员: {members}\n🔥 协同: 活跃",
+        "no_balance": "❌ HIVE 不足"
     },
     "pt": {
         "intro_caption": "Bem-vindo ao The One Hive.\n\nNão é um jogo. Não é airdrop.\nÉ um sistema de extração de valor ativo.\n\nExplore. O sistema se adapta.",
@@ -272,23 +290,20 @@ TEXTS = {
         "btn_back": "🔙 VOLTAR",
         "green_hive": "FAVO VERDE",
         "gold_hive": "FAVO DOURADO",
-        "red_hive": "FAVO VERMELHO"
+        "red_hive": "FAVO VERMELHO",
+        "squad_none_title": "⚠️ NÓ ISOLADO",
+        "squad_none_body": "Um nó isolado minera lentamente.\nForme uma estrutura.",
+        "btn_create_squad": "➕ FORMAR ({cost} HIVE)",
+        "squad_active": "🐝 **COLMEIA ATIVA**\n👥 Membros: {members}\n🔥 Sinergia: ATIVA",
+        "no_balance": "❌ Saldo Insuficiente"
     }
 }
 
 def get_text(lang_code: str, key: str, **kwargs) -> str:
-    """Recupera texto traducido. Fallback a inglés."""
-    # Normalizar códigos (ej: es-AR -> es)
     if lang_code and len(lang_code) > 2:
         lang_code = lang_code[:2]
-    
-    # Seleccionar diccionario
-    lang_dict = TEXTS.get(lang_code, TEXTS["en"]) # Default EN
-    
-    # Recuperar valor
+    lang_dict = TEXTS.get(lang_code, TEXTS["en"])
     text = lang_dict.get(key, TEXTS["en"].get(key, f"MISSING_{key}"))
-    
-    # Formatear si hay variables
     if kwargs:
         try:
             return text.format(**kwargs)
@@ -350,7 +365,6 @@ def calculate_evolution_progress(hive: float, referrals: int, lang: str) -> str:
             break
     if siguiente:
         falta = siguiente["meta_hive"] - poder
-        # Aquí también se podría traducir la frase de progreso, pero el número es universal
         return f"-{falta:,.0f} pts" 
     return "MAX"
 
@@ -378,22 +392,6 @@ async def smart_edit(update: Update, text: str, reply_markup: InlineKeyboardMark
         except Exception as e2:
             logger.error(f"Error SmartEdit Rescue: {e2}")
 
-async def request_email_protection(update: Update, context: ContextTypes.DEFAULT_TYPE, reason: str):
-    user = update.effective_user
-    lang = user.language_code
-    
-    code = SecurityEngine.generate_access_code()
-    context.user_data['captcha'] = code
-    context.user_data['step'] = 'captcha_wait'
-    context.user_data['pending_action'] = reason
-    
-    txt = (
-        f"{get_text(lang, 'protect_title', reason=reason)}\n\n"
-        f"{get_text(lang, 'protect_body')}\n"
-        f"`{code}`"
-    )
-    await smart_edit(update, txt, InlineKeyboardMarkup([]))
-
 # ==============================================================================
 # BIO ENGINE
 # ==============================================================================
@@ -405,7 +403,9 @@ class BioEngine:
         elapsed = now - node.get("last_regen", now)
         
         balance = node.get("honey", 0)
-        refs = len(node.get("referrals", []))
+        # Adaptación para Redis (lista de referidos puede ser nula)
+        refs_list = node.get("referrals") or []
+        refs = len(refs_list)
         poder_total = balance + (refs * CONST["BONO_REFERIDO"])
         
         rango = "LARVA"
@@ -430,17 +430,34 @@ class SecurityEngine:
     def generate_access_code() -> str:
         return f"HIVE-{random.randint(1000, 9999)}"
 
+async def request_email_protection(update: Update, context: ContextTypes.DEFAULT_TYPE, reason: str):
+    user = update.effective_user
+    lang = user.language_code
+    
+    code = SecurityEngine.generate_access_code()
+    context.user_data['captcha'] = code
+    context.user_data['step'] = 'captcha_wait'
+    context.user_data['pending_action'] = reason
+    
+    txt = (
+        f"{get_text(lang, 'protect_title', reason=reason)}\n\n"
+        f"{get_text(lang, 'protect_body')}\n"
+        f"`{code}`"
+    )
+    await smart_edit(update, txt, InlineKeyboardMarkup([]))
+
 # ==============================================================================
-# FLUJOS PRINCIPALES (CON IDIOMA)
+# FLUJOS PRINCIPALES
 # ==============================================================================
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     lang = user.language_code
     args = context.args
-    ref = int(args[0]) if args and args[0].isdigit() else None
+    ref_id = int(args[0]) if args and args[0].isdigit() else None
     
-    try: await db.db.create_node(user.id, user.first_name, user.username, ref)
+    # Crear nodo en Redis
+    try: await db.db.create_node(user.id, user.first_name, user.username, ref_id)
     except: pass
     
     txt = get_text(lang, "intro_caption")
@@ -488,9 +505,12 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             email = valid.normalized
             await db.db.update_email(uid, email)
             context.user_data['step'] = None
+            
+            # Obtener y actualizar bono
             node = await db.db.get_node(uid)
-            node['honey'] += 15.0 
-            await db.db.save_node(uid, node)
+            if node:
+                node['honey'] += 15.0 
+                await db.db.save_node(uid, node)
             
             kb = [[InlineKeyboardButton("🟢 ->", callback_data="go_dash")]]
             await update.message.reply_text(get_text(lang, "email_success"), reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
@@ -507,15 +527,19 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update.callback_query: 
             uid = update.callback_query.from_user.id
             lang = update.callback_query.from_user.language_code
+            user = update.callback_query.from_user
         else: 
             uid = update.effective_user.id
             lang = update.effective_user.language_code
+            user = update.effective_user
         
-        user = update.effective_user
-        try: await db.db.create_node(user.id, user.first_name, user.username, None)
+        # Asegurar existencia en Redis
+        try: await db.db.create_node(uid, user.first_name, user.username)
         except: pass
         
         node = await db.db.get_node(uid)
+        if not node: return # Safety check
+
         node = BioEngine.calculate_state(node)
         await db.db.save_node(uid, node)
         
@@ -621,36 +645,59 @@ async def forage_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception: pass
 
 async def rank_info_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Ya está implementado en la lógica general, reutilizamos dashboard info si es simple
-    # Pero para mantener "Full Code", aquí está la versión simplificada del estado
     await show_dashboard(update, context) 
 
 async def squad_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; uid = q.from_user.id
     lang = q.from_user.language_code
     node = await db.db.get_node(uid)
-    if node.get("enjambre_id"):
-        cell = await db.db.get_cell(node["enjambre_id"])
-        txt = f"🐝 **{cell['name']}**\n👥 {len(cell['members'])}"
-        kb = [[InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="go_dash")]]
-    else:
-        txt = "⚠️ NO SQUAD"
-        kb = [[InlineKeyboardButton(f"➕ ({CONST['COSTO_ENJAMBRE']} HIVE)", callback_data="mk_cell")], [InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="go_dash")]]
+    
+    if node.get("enjambre_id"): # En Redis, este campo puede ser string o None
+        # Necesitamos cargar la célula
+        cell_id = node.get("enjambre_id")
+        # NOTA: get_cell en tu DB espera cell_id string
+        cell = await db.db.get_cell(cell_id) if cell_id else None
+        
+        if cell:
+            members_count = len(cell.get('members', []))
+            txt = get_text(lang, "squad_active", members=members_count)
+            kb = [[InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="go_dash")]]
+            await smart_edit(update, txt, InlineKeyboardMarkup(kb))
+            return
+
+    # Si no tiene squad:
+    txt = f"{get_text(lang, 'squad_none_title')}\n\n{get_text(lang, 'squad_none_body')}"
+    kb = [
+        [InlineKeyboardButton(get_text(lang, "btn_create_squad", cost=CONST['COSTO_ENJAMBRE']), callback_data="mk_cell")],
+        [InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="go_dash")]
+    ]
     await smart_edit(update, txt, InlineKeyboardMarkup(kb))
 
 async def create_squad_logic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; uid = q.from_user.id
+    lang = q.from_user.language_code
     node = await db.db.get_node(uid)
+    
     if not node.get("email"):
         await request_email_protection(update, context, "SQUAD")
         return
+        
     if node['honey'] >= CONST['COSTO_ENJAMBRE']:
         node['honey'] -= CONST['COSTO_ENJAMBRE']
-        cid = await db.db.create_cell(uid, f"Cluster-{random.randint(100,999)}")
-        node['enjambre_id'] = cid
-        await db.db.save_node(uid, node)
-        await q.answer("✅"); await squad_menu(update, context)
-    else: await q.answer("❌ HIVE", show_alert=True)
+        
+        # Crear en Redis
+        cell_name = f"Cluster-{random.randint(100,999)}"
+        cell_id = await db.db.create_cell(uid, cell_name)
+        
+        if cell_id:
+            node['enjambre_id'] = cell_id
+            await db.db.save_node(uid, node)
+            await q.answer("✅"); await squad_menu(update, context)
+        else:
+            await q.answer("❌ Error DB", show_alert=True)
+            
+    else: 
+        await q.answer(get_text(lang, "no_balance"), show_alert=True)
 
 async def shop_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; uid = q.from_user.id
@@ -669,13 +716,14 @@ async def shop_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def buy_energy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; uid = q.from_user.id
+    lang = q.from_user.language_code
     node = await db.db.get_node(uid)
     if node['honey'] >= CONST['COSTO_RECARGA']:
         node['honey'] -= CONST['COSTO_RECARGA']
         node['polen'] = node['max_polen']
         await db.db.save_node(uid, node)
         await q.answer("⚡ OK"); await show_dashboard(update, context)
-    else: await q.answer("❌ HIVE", show_alert=True)
+    else: await q.answer(get_text(lang, "no_balance"), show_alert=True)
 
 async def buy_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = update.callback_query.from_user.language_code
@@ -692,7 +740,6 @@ async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     link = f"https://t.me/{context.bot.username}?start={uid}"
     
-    # Seleccionar texto viral basado en idioma (si no hay traducción específica viral, usar EN)
     viral_key = random.choice(["viral_1", "viral_2"])
     share_txt = get_text(lang, viral_key, link=link)
     share_url = f"https://t.me/share/url?url={share_txt}"
@@ -738,5 +785,5 @@ async def reset_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("💀")
 
 async def invite_cmd(u, c): await team_menu(u, c)
-async def help_cmd(u, c): await u.message.reply_text("V10.0 Global")
+async def help_cmd(u, c): await u.message.reply_text("V10.0 Redis Global")
 async def broadcast_cmd(u, c): pass
