@@ -3,32 +3,31 @@ import asyncio
 import random
 import time
 import math
+import statistics
 import os
 import ujson as json
 from typing import Tuple, List, Dict, Any, Optional
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.constants import ParseMode, ChatAction
 from telegram.ext import ContextTypes, Application
 from telegram.error import BadRequest
 from loguru import logger
-from email_validator import validate_email
+from email_validator import validate_email, EmailNotValidError
 
-# IMPORTAMOS TU BASE DE DATOS REDIS (NO BORRES DATABASE.PY)
+# IMPORTAMOS TU BASE DE DATOS REDIS
 from database import db 
 
 # ==============================================================================
-# 🐝 THE ONE HIVE: V10.4 (FULL GLOBAL + PAYPAL HARDCODED)
+# 🐝 THE ONE HIVE: V10.5 (LEGAL SHIELD + PAYPAL FIXED)
 # ==============================================================================
 
 logger = logging.getLogger("HiveLogic")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
-
-# VARIABLES DE DINERO
 CRYPTO_WALLET_USDT = os.getenv("WALLET_USDT", "TRC20_WALLET_PENDING")
 
-# 🔥 TU ENLACE DE PAYPAL (A FUEGO)
-LINK_PAYPAL_HARDCODED = "https://www.paypal.com/ncp/payment/L6ZRFT2ACGAQC"
+# --- ENLACE DE PAGO OFICIAL ---
+LINK_PAYPAL = "https://www.paypal.com/ncp/payment/L6ZRFT2ACGAQC"
 
 # --- IDENTIDAD VISUAL ---
 IMG_GENESIS = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
@@ -56,14 +55,18 @@ RANGOS_CONFIG = {
 }
 
 # ==============================================================================
-# 🌐 MOTOR DE TRADUCCIÓN (I18N FULL EXPANDED)
+# 🌐 MOTOR DE TRADUCCIÓN (I18N + LEGAL SHIELD)
 # ==============================================================================
 TEXTS = {
     "es": {
-        "intro_caption": "Bienvenido a The One Hive.\n\nNo es un juego. No es un airdrop.\nEs un sistema activo de extracción de valor.\n\nExplorá. El sistema se adapta.",
+        # A. MENSAJE DE BIENVENIDA (MEJORADO)
+        "intro_caption": "Bienvenido a The One Hive.\n\nEsto no es un airdrop.\nEsto no es una inversión.\n\nEs un sistema vivo.\nLa participación crea progreso.\n\nEl acceso temprano sigue abierto.",
         "btn_enter": "👉 Entrar a la Colmena",
-        "intro_step2": "La colmena no crece de golpe.\nCrece por constancia.\n\nAlgunos entran temprano.\nOtros llegan cuando ya está llena.",
+        
+        # B. ANTES DEL DASHBOARD (AVISO)
+        "intro_step2": "⚠️ **Aviso:**\nEste sistema recompensa la participación, no promesas.\nSin garantías. Sin inversiones.\n\nLa colmena no crece de golpe. Crece por constancia.",
         "btn_status": "👉 Ver mi estado",
+        
         "dash_header": "🏰 **THE ONE HIVE**",
         "status_unsafe": "⚠️ NODO NO PROTEGIDO",
         "status_safe": "✅ NODO SEGURO",
@@ -89,12 +92,15 @@ TEXTS = {
         "protect_body": "El sistema requiere validación para proteger tu progreso.\nCopia tu llave:",
         "email_prompt": "✅ Ingresa tu **EMAIL**:",
         "email_success": "✅ **NODO BLINDADO**",
+        
+        # C. BLINDAJE EN COMPRAS
         "shop_title": "🛡️ **ESTABILIZACIÓN MENSUAL**",
-        "shop_body": "Los nodos gratuitos se degradan. La suscripción mantiene tu eficiencia al 100%.",
-        "btn_buy_prem": "🛡️ SUSCRIPCIÓN (${price}/mes)",
+        "shop_body": "La aceleración es opcional.\nEsto no es una inversión.\n\nBeneficios (30 Días):\n✅ Regeneración x2\n✅ Prioridad de Red\n✅ Acceso VIP",
+        "btn_buy_prem": "🛡️ ACTIVAR (30 DÍAS) - ${price}",
         "btn_buy_energy": "🔋 RECARGA ({cost} HIVE)",
-        "pay_txt": "🛡️ **ACTIVAR SUSCRIPCIÓN (30 DÍAS)**\n\nBeneficios:\n✅ Regeneración x2\n✅ Prioridad de Red\n✅ Acceso Panal Rojo\n\n🔹 **Opción A: Cripto (USDT TRC20)**\n`{wallet}`\n\n🔹 **Opción B: PayPal**\nBotón abajo.\n\n⚠️ Envía comprobante al admin.",
+        "pay_txt": "🛡️ **ACTIVAR SUSCRIPCIÓN (30 DÍAS)**\n\n⚠️ La aceleración es opcional.\nEsto no es un producto financiero.\n\n🔹 **Opción A: Cripto (USDT)**\n`{wallet}`\n\n🔹 **Opción B: PayPal**\nUsa el botón abajo.",
         "btn_paypal": "💳 Pagar con PayPal",
+        
         "team_title": "👥 **EXPANSIÓN**",
         "team_body": "1 Ref = {bonus} Pts.\n\n🔗 `{link}`",
         "tasks_title": "📡 **ZONAS DE RECOLECCIÓN**",
@@ -110,10 +116,14 @@ TEXTS = {
         "no_balance": "❌ HIVE Insuficiente"
     },
     "en": {
-        "intro_caption": "Welcome to The One Hive.\n\nNot a game. Not an airdrop.\nIt's an active value extraction system.\n\nExplore. The system adapts.",
+        # A. WELCOME (IMPROVED)
+        "intro_caption": "Welcome to The One Hive.\n\nThis is not an airdrop.\nThis is not an investment.\n\nIt’s a living system.\nParticipation creates progression.\n\nEarly access is still open.",
         "btn_enter": "👉 Enter the Hive",
-        "intro_step2": "The Hive grows by consistency, not spikes.\n\nSome enter early.\nOthers arrive when it's full.",
+        
+        # B. BEFORE DASHBOARD (NOTICE)
+        "intro_step2": "⚠️ **Notice:**\nThis system rewards participation, not promises.\nNo guarantees. No investments.\n\nThe Hive grows by consistency, not spikes.",
         "btn_status": "👉 Check Status",
+        
         "dash_header": "🏰 **THE ONE HIVE**",
         "status_unsafe": "⚠️ UNSECURED NODE",
         "status_safe": "✅ SECURE NODE",
@@ -139,12 +149,15 @@ TEXTS = {
         "protect_body": "System requires validation to secure your progress.\nCopy your key:",
         "email_prompt": "✅ Enter your **EMAIL**:",
         "email_success": "✅ **NODE ARMORED**",
+        
+        # C. LEGAL SHIELD IN UPGRADES
         "shop_title": "🛡️ **MONTHLY STABILIZATION**",
-        "shop_body": "Free nodes degrade over time. Subscription keeps efficiency at 100%.",
+        "shop_body": "Acceleration is optional.\nThis is not an investment.\n\nBenefits (30 Days):\n✅ Regen x2\n✅ Network Priority\n✅ VIP Access",
         "btn_buy_prem": "🛡️ SUBSCRIBE (${price}/mo)",
         "btn_buy_energy": "🔋 RECHARGE ({cost} HIVE)",
-        "pay_txt": "🛡️ **ACTIVATE SUBSCRIPTION (30 DAYS)**\n\nBenefits:\n✅ Regen x2\n✅ Network Priority\n✅ Red Hive Access\n\n🔹 **Option A: Crypto (USDT TRC20)**\n`{wallet}`\n\n🔹 **Option B: PayPal**\nButton below.\n\n⚠️ Send proof to admin.",
+        "pay_txt": "🛡️ **ACTIVATE SUBSCRIPTION (30 DAYS)**\n\n⚠️ Acceleration is optional.\nThis is not an investment or financial product.\n\n🔹 **Option A: Crypto (USDT)**\n`{wallet}`\n\n🔹 **Option B: PayPal**\nButton below.",
         "btn_paypal": "💳 Pay with PayPal",
+        
         "team_title": "👥 **EXPANSION**",
         "team_body": "1 Ref = {bonus} Pts.\n\n🔗 `{link}`",
         "tasks_title": "📡 **COLLECTION ZONES**",
@@ -160,9 +173,9 @@ TEXTS = {
         "no_balance": "❌ Insufficient HIVE"
     },
     "ru": {
-        "intro_caption": "Добро пожаловать в The One Hive.\n\nЭто не игра. Это не аирдроп.\nЭто активная система извлечения ценности.\n\nИсследуйте.",
+        "intro_caption": "Добро пожаловать в The One Hive.\n\nЭто не аирдроп.\nЭто не инвестиция.\n\nЭто живая система.\nУчастие создает прогресс.",
         "btn_enter": "👉 Войти в Улей",
-        "intro_step2": "Улей растет благодаря постоянству.\n\nКто-то заходит рано.\nДругие приходят, когда уже поздно.",
+        "intro_step2": "⚠️ **Уведомление:**\nСистема вознаграждает участие, а не обещания.\nНикаких гарантий. Никаких инвестиций.",
         "btn_status": "👉 Мой статус",
         "dash_header": "🏰 **THE ONE HIVE**",
         "status_unsafe": "⚠️ УЗЕЛ НЕ ЗАЩИЩЕН",
@@ -190,11 +203,11 @@ TEXTS = {
         "email_prompt": "✅ Введите ваш **EMAIL**:",
         "email_success": "✅ **УЗЕЛ БРОНИРОВАН**",
         "shop_title": "🛡️ **МЕСЯЧНАЯ ПОДПИСКА**",
-        "shop_body": "Бесплатные узлы деградируют. Подписка держит эффективность на 100%.",
+        "shop_body": "Ускорение необязательно.\nЭто не инвестиция.\n\nПреимущества:\n✅ Регенерация x2\n✅ VIP Доступ",
         "btn_buy_prem": "🛡️ ПОДПИСКА (${price}/мес)",
         "btn_buy_energy": "🔋 ЗАРЯДКА ({cost} HIVE)",
-        "pay_txt": "🛡️ **АКТИВАЦИЯ (30 ДНЕЙ)**\n\n🔹 **USDT TRC20**\n`{wallet}`\n\n🔹 **PayPal**\nКнопка ниже.",
-        "btn_paypal": "💳 PayPal",
+        "pay_txt": "🛡️ **АКТИВАЦИЯ (30 ДНЕЙ)**\n\n⚠️ Ускорение опционально.\nЭто не финансовый продукт.\n\n🔹 **USDT TRC20**\n`{wallet}`\n\n🔹 **PayPal**\nКнопка ниже.",
+        "btn_paypal": "💳 Оплата PayPal",
         "team_title": "👥 **РАСШИРЕНИЕ**",
         "team_body": "1 Реф = {bonus} Очков.\n\n🔗 `{link}`",
         "tasks_title": "📡 **ЗОНЫ СБОРА**",
@@ -210,9 +223,9 @@ TEXTS = {
         "no_balance": "❌ Недостаточно HIVE"
     },
     "zh": {
-        "intro_caption": "欢迎来到 The One Hive。\n\n这不是游戏。这不是空投。\n这是一个主动价值提取系统。\n\n探索。系统会适应。",
+        "intro_caption": "欢迎来到 The One Hive。\n\n这不是空投。\n这不是投资。\n\n这是一个活跃的系统。\n参与创造进步。",
         "btn_enter": "👉 进入蜂巢",
-        "intro_step2": "蜂巢靠持续性成长。\n\n有些人很早就进来了。\n其他人来晚了。",
+        "intro_step2": "⚠️ **注意：**\n该系统奖励参与，而非承诺。\n无保证。无投资。",
         "btn_status": "👉 查看状态",
         "dash_header": "🏰 **THE ONE HIVE**",
         "status_unsafe": "⚠️ 节点未保护",
@@ -240,10 +253,10 @@ TEXTS = {
         "email_prompt": "✅ 输入您的 **EMAIL**:",
         "email_success": "✅ **节点已加固**",
         "shop_title": "🛡️ **每月订阅**",
-        "shop_body": "免费节点会退化。订阅保持 100% 效率。",
+        "shop_body": "加速是可选的。\n这不是投资。\n\n福利 (30天):\n✅ 2倍再生\n✅ 网络优先",
         "btn_buy_prem": "🛡️ 订阅 (${price}/月)",
         "btn_buy_energy": "🔋 充电 ({cost} HIVE)",
-        "pay_txt": "🛡️ **激活 (30 天)**\n\n🔹 **USDT TRC20**\n`{wallet}`\n\n🔹 **PayPal**\n下方按钮。",
+        "pay_txt": "🛡️ **激活订阅 (30天)**\n\n⚠️ 加速是可选的。\n这不是理财产品。\n\n🔹 **USDT TRC20**\n`{wallet}`\n\n🔹 **PayPal**\n下方按钮。",
         "btn_paypal": "💳 PayPal 支付",
         "team_title": "👥 **扩张**",
         "team_body": "1 推荐 = {bonus} 分。\n\n🔗 `{link}`",
@@ -260,9 +273,9 @@ TEXTS = {
         "no_balance": "❌ HIVE 不足"
     },
     "pt": {
-        "intro_caption": "Bem-vindo ao The One Hive.\n\nNão é um jogo. Não é airdrop.\nÉ um sistema de extração de valor ativo.\n\nExplore. O sistema se adapta.",
+        "intro_caption": "Bem-vindo ao The One Hive.\n\nIsto não é um airdrop.\nIsto não é investimento.\n\nÉ um sistema vivo.\nA participação cria progresso.",
         "btn_enter": "👉 Entrar na Colmeia",
-        "intro_step2": "A colmeia não cresce de repente.\nCresce pela constância.\n\nAlguns entram cedo.\nOutros chegam quando já está cheia.",
+        "intro_step2": "⚠️ **Aviso:**\nEste sistema recompensa participação, não promessas.\nSem garantias. Sem investimentos.",
         "btn_status": "👉 Ver meu estado",
         "dash_header": "🏰 **THE ONE HIVE**",
         "status_unsafe": "⚠️ NÓ NÃO PROTEGIDO",
@@ -290,10 +303,10 @@ TEXTS = {
         "email_prompt": "✅ Digite seu **EMAIL**:",
         "email_success": "✅ **NÓ BLINDADO**",
         "shop_title": "🛡️ **ASSINATURA MENSAL**",
-        "shop_body": "Nós gratuitos degradam. A assinatura mantém 100% de eficiência.",
+        "shop_body": "Aceleração é opcional.\nNão é investimento.\n\nBenefícios:\n✅ Regen x2\n✅ Prioridade",
         "btn_buy_prem": "🛡️ ASSINAR (${price}/mês)",
         "btn_buy_energy": "🔋 RECARGA ({cost} HIVE)",
-        "pay_txt": "🛡️ **ATIVAR (30 DIAS)**\n\n🔹 **USDT TRC20**\n`{wallet}`\n\n🔹 **PayPal**\nBotão abaixo.",
+        "pay_txt": "🛡️ **ATIVAR (30 DIAS)**\n\n⚠️ Aceleração opcional.\nNão é produto financeiro.\n\n🔹 **USDT TRC20**\n`{wallet}`\n\n🔹 **PayPal**\nBotão abaixo.",
         "btn_paypal": "💳 Pagar com PayPal",
         "team_title": "👥 **EXPANSÃO**",
         "team_body": "1 Ref = {bonus} Pts.\n\n🔗 `{link}`",
@@ -449,7 +462,7 @@ async def request_email_protection(update: Update, context: ContextTypes.DEFAULT
 # STARTUP
 # ==============================================================================
 async def on_startup(application: Application):
-    logger.info("🚀 INICIANDO SISTEMA HIVE V10.4")
+    logger.info("🚀 INICIANDO SISTEMA HIVE V10.5")
     await db.connect() 
 
 async def on_shutdown(application: Application):
@@ -727,16 +740,13 @@ async def buy_energy(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.answer("⚡ OK"); await show_dashboard(update, context)
     else: await q.answer(get_text(lang, "no_balance"), show_alert=True)
 
-# PAGO CON PAYPAL HARDCODED
 async def buy_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    lang = q.from_user.language_code
+    lang = update.callback_query.from_user.language_code
     
     txt = get_text(lang, "pay_txt", price=CONST['PRECIO_ACELERADOR'], wallet=CRYPTO_WALLET_USDT)
     
     kb = [
-        # USA LA VARIABLE LINK_PAYPAL_HARDCODED
-        [InlineKeyboardButton(get_text(lang, "btn_paypal"), url=LINK_PAYPAL_HARDCODED)],
+        [InlineKeyboardButton(get_text(lang, "btn_paypal"), url=LINK_PAYPAL)],
         [InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="shop")]
     ]
     await smart_edit(update, txt, InlineKeyboardMarkup(kb))
@@ -787,5 +797,5 @@ async def reset_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("💀")
 
 async def invite_cmd(u, c): await team_menu(u, c)
-async def help_cmd(u, c): await u.message.reply_text("V10.4 FULL")
+async def help_cmd(u, c): await u.message.reply_text("V10.5 Legal Shield")
 async def broadcast_cmd(u, c): pass
