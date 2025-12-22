@@ -31,8 +31,9 @@ CRYPTO_WALLET_USDT = os.getenv("WALLET_USDT", "TRC20_WALLET_PENDING")
 LINK_PAYPAL_HARDCODED = "https://www.paypal.com/ncp/payment/L6ZRFT2ACGAQC"
 
 # --- IDENTIDAD VISUAL ---
-IMG_GENESIS = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
-IMG_DASHBOARD = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
+# IMAGEN ACTUALIZADA SEGÚN TU ORDEN
+IMG_GENESIS = "https://i.postimg.cc/hv2HXWkN/photo-2025-12-22-16-00-42.jpg"
+IMG_DASHBOARD = "https://i.postimg.cc/hv2HXWkN/photo-2025-12-22-16-00-42.jpg"
 
 # --- CONSTANTES DE ECONOMÍA ---
 CONST = {
