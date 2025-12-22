@@ -18,17 +18,21 @@ from email_validator import validate_email
 from database import db 
 
 # ==============================================================================
-# 🐝 THE ONE HIVE: V12.0 (SCALE-LOCK / FINAL FREEZE)
+# 🐝 THE ONE HIVE: V12.1 (FINAL HARDCODED EDITION)
 # ==============================================================================
 
 logger = logging.getLogger("HiveLogic")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 
-# VARIABLES DE DINERO
-CRYPTO_WALLET_USDT = os.getenv("WALLET_USDT", "TRC20_WALLET_PENDING")
+# ------------------------------------------------------------------------------
+# 💰 ZONA DE DINERO (EDITAR AQUÍ)
+# ------------------------------------------------------------------------------
+# PEGA TU BILLETERA TRC20 AQUÍ ABAJO ENTRE LAS COMILLAS:
+WALLET_TRC20_FIJA = "TU_DIRECCION_USDT_TRC20_AQUI" 
 
-# 🔥 TU ENLACE DE PAYPAL (A FUEGO)
+# ENLACE PAYPAL (YA ESTÁ FIJO)
 LINK_PAYPAL_HARDCODED = "https://www.paypal.com/ncp/payment/L6ZRFT2ACGAQC"
+# ------------------------------------------------------------------------------
 
 # --- IDENTIDAD VISUAL ---
 IMG_GENESIS = "https://i.postimg.cc/W46KZqR6/Gemini-Generated-Image-qm6hoyqm6hoyqm6h-(1).jpg"
@@ -57,7 +61,7 @@ RANGOS_CONFIG = {
 }
 
 # ==============================================================================
-# 🌐 MOTOR DE TRADUCCIÓN (AUTHORITY MODE)
+# 🌐 MOTOR DE TRADUCCIÓN (AUTHORITY / SCALE-LOCK)
 # ==============================================================================
 TEXTS = {
     "es": {
@@ -80,9 +84,9 @@ TEXTS = {
         "btn_shop": "🛡️ PRIORIDAD ($)",
         "viral_1": "El acceso temprano sigue abierto. Un sistema vivo se está formando. Los que entran antes entienden.\n\n{link}",
         "viral_2": "No todos deberían entrar. El acceso temprano sigue abierto.\n\n{link}",
-        "sys_event_1": "⚠️ Prioridad reasignada a nodos activos",
-        "sys_event_2": "⏳ Ventana de expansión abierta",
-        "sys_event_3": "🔒 Capacidad de fase alcanzando límite",
+        "sys_event_1": "ℹ️ Asignando ancho de banda prioritario",
+        "sys_event_2": "ℹ️ Nuevos bloques de tareas disponibles",
+        "sys_event_3": "ℹ️ Ajustando dificultad de red",
         "feed_action_1": "aseguró posición",
         "feed_action_2": "expandió conexión",
         "lock_msg": "🔒 FASE RESTRINGIDA. Nivel {lvl} requerido.",
@@ -130,9 +134,9 @@ TEXTS = {
         "btn_shop": "🛡️ PRIORITY ($)",
         "viral_1": "Early access is open. A live system is forming. Those who enter early understand.\n\n{link}",
         "viral_2": "Not everyone should enter. Early access is still open.\n\n{link}",
-        "sys_event_1": "⚠️ Priority reassigned to active nodes",
-        "sys_event_2": "⏳ Expansion window open",
-        "sys_event_3": "🔒 Phase capacity reaching limit",
+        "sys_event_1": "ℹ️ Allocating priority bandwidth",
+        "sys_event_2": "ℹ️ New task blocks available",
+        "sys_event_3": "ℹ️ Adjusting network difficulty",
         "feed_action_1": "secured position",
         "feed_action_2": "expanded connection",
         "lock_msg": "🔒 RESTRICTED PHASE. Level {lvl} required.",
@@ -180,9 +184,9 @@ TEXTS = {
         "btn_shop": "🛡️ ПРИОРИТЕТ ($)",
         "viral_1": "Ранний доступ открыт. Те, кто заходят раньше, понимают.\n\n{link}",
         "viral_2": "Не всем стоит заходить. Ранний доступ открыт.\n\n{link}",
-        "sys_event_1": "⚠️ Приоритет переназначен активным узлам",
-        "sys_event_2": "⏳ Окно расширения открыто",
-        "sys_event_3": "🔒 Емкость фазы на пределе",
+        "sys_event_1": "ℹ️ Приоритет переназначен активным узлам",
+        "sys_event_2": "ℹ️ Окно расширения открыто",
+        "sys_event_3": "ℹ️ Емкость фазы на пределе",
         "feed_action_1": "закрепил позицию",
         "feed_action_2": "расширил связь",
         "lock_msg": "🔒 ФАЗА ОГРАНИЧЕНА. Требуется уровень {lvl}.",
@@ -230,9 +234,9 @@ TEXTS = {
         "btn_shop": "🛡️ 优先 ($)",
         "viral_1": "早期访问已开放。那些早进入的人明白。\n\n{link}",
         "viral_2": "不是每个人都应该进入。早期访问仍然开放。\n\n{link}",
-        "sys_event_1": "⚠️ 优先级重新分配给活跃节点",
-        "sys_event_2": "⏳ 扩张窗口开启",
-        "sys_event_3": "🔒 阶段容量接近极限",
+        "sys_event_1": "ℹ️ 优先级重新分配给活跃节点",
+        "sys_event_2": "ℹ️ 扩张窗口开启",
+        "sys_event_3": "ℹ️ 阶段容量接近极限",
         "feed_action_1": "锁定位置",
         "feed_action_2": "扩展连接",
         "lock_msg": "🔒 受限阶段。需要等级 {lvl}。",
@@ -280,9 +284,9 @@ TEXTS = {
         "btn_shop": "🛡️ PRIORIDADE ($)",
         "viral_1": "Acesso antecipado aberto. Um sistema vivo está se formando. Quem entra cedo entende.\n\n{link}",
         "viral_2": "Nem todos devem entrar. Acesso antecipado ainda aberto.\n\n{link}",
-        "sys_event_1": "⚠️ Prioridade reatribuída a nós ativos",
-        "sys_event_2": "⏳ Janela de expansão aberta",
-        "sys_event_3": "🔒 Capacidade da fase atingindo limite",
+        "sys_event_1": "ℹ️ Prioridade reatribuída a nós ativos",
+        "sys_event_2": "ℹ️ Janela de expansão aberta",
+        "sys_event_3": "ℹ️ Capacidade da fase atingindo limite",
         "feed_action_1": "assegurou posição",
         "feed_action_2": "expandiu conexão",
         "lock_msg": "🔒 FASE RESTRITA. Nível {lvl} necessário.",
@@ -436,9 +440,6 @@ class BioEngine:
         # CÁLCULO DEL FACTOR X (IIL)
         iil_score = BioEngine.calculate_iil(balance, refs_count, joined_at)
         
-        # El IIL afecta la regeneración (Sinergia oculta)
-        # No mostramos el cálculo, solo el resultado
-        
         poder_total = balance + (refs_count * CONST["BONO_REFERIDO"])
         
         rango = "LARVA"
@@ -496,7 +497,7 @@ async def request_email_protection(update: Update, context: ContextTypes.DEFAULT
 # STARTUP
 # ==============================================================================
 async def on_startup(application: Application):
-    logger.info("🚀 INICIANDO SISTEMA HIVE V12.0 (SCALE-LOCK)")
+    logger.info("🚀 INICIANDO SISTEMA HIVE V12.1 (FINAL HARDCODED)")
     await db.connect() 
 
 async def on_shutdown(application: Application):
@@ -548,10 +549,9 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     if step == 'captcha_wait':
         if text == context.user_data.get('captcha'):
-            context.user_data['step'] = 'consent_wait'
-            kb = [[InlineKeyboardButton("✅ OK", callback_data="accept_terms")]]
-            await update.message.reply_text("✅ OK", reply_markup=InlineKeyboardMarkup(kb))
-        else: await update.message.reply_text("❌ X")
+            context.user_data['step'] = 'email_wait'
+            await smart_edit(update, get_text(lang, "email_prompt"), InlineKeyboardMarkup([]))
+        else: await update.message.reply_text("❌")
         return
 
     if step == 'email_wait':
@@ -784,7 +784,8 @@ async def buy_energy(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def buy_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = update.callback_query.from_user.language_code
     
-    txt = get_text(lang, "pay_txt", price=CONST['PRECIO_ACELERADOR'], wallet=CRYPTO_WALLET_USDT)
+    # AQUÍ ES DONDE SE USA TU WALLET FIJA
+    txt = get_text(lang, "pay_txt", price=CONST['PRECIO_ACELERADOR'], wallet=WALLET_TRC20_FIJA)
     
     kb = [
         [InlineKeyboardButton(get_text(lang, "btn_paypal"), url=LINK_PAYPAL_HARDCODED)],
@@ -836,5 +837,5 @@ async def reset_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("💀")
 
 async def invite_cmd(u, c): await team_menu(u, c)
-async def help_cmd(u, c): await u.message.reply_text("V12.0 SCALE-LOCK")
+async def help_cmd(u, c): await u.message.reply_text("V12.1 FINAL HARDCODED")
 async def broadcast_cmd(u, c): pass
