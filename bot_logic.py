@@ -18,7 +18,7 @@ from email_validator import validate_email
 from database import db 
 
 # ==============================================================================
-# 🐝 THE ONE HIVE: V12.1 (FINAL HARDCODED EDITION)
+# 🐝 THE ONE HIVE: V12.2 (NITRO TAP / FINAL FULL CODE)
 # ==============================================================================
 
 logger = logging.getLogger("HiveLogic")
@@ -457,7 +457,6 @@ class BioEngine:
         if elapsed > 0:
             base_regen_rate = 0.8
             # La velocidad depende del IIL. Más influencia = Más velocidad.
-            # Scale-Lock: Nadie pierde, pero los nuevos son lentos si no tienen IIL.
             final_regen_rate = base_regen_rate * (iil_score * 0.5) 
             if final_regen_rate < 0.1: final_regen_rate = 0.1 # Mínimo vital
             
@@ -469,7 +468,7 @@ class BioEngine:
             node["polen"] = min(node["max_polen"], current_polen + int(regen_amount))
             
         node["last_regen"] = now
-        node["iil"] = iil_score # Guardamos IIL para mostrarlo (sin explicarlo)
+        node["iil"] = iil_score 
         return node
 
 class SecurityEngine:
@@ -480,24 +479,19 @@ class SecurityEngine:
 async def request_email_protection(update: Update, context: ContextTypes.DEFAULT_TYPE, reason: str):
     user = update.effective_user
     lang = user.language_code
-    
     code = SecurityEngine.generate_access_code()
     context.user_data['captcha'] = code
     context.user_data['step'] = 'captcha_wait'
     context.user_data['pending_action'] = reason
     
-    txt = (
-        f"{get_text(lang, 'protect_title', reason=reason)}\n\n"
-        f"{get_text(lang, 'protect_body')}\n"
-        f"`{code}`"
-    )
+    txt = f"{get_text(lang, 'protect_title', reason=reason)}\n\n{get_text(lang, 'protect_body')}\n\n`{code}`"
     await smart_edit(update, txt, InlineKeyboardMarkup([]))
 
 # ==============================================================================
 # STARTUP
 # ==============================================================================
 async def on_startup(application: Application):
-    logger.info("🚀 INICIANDO SISTEMA HIVE V12.1 (FINAL HARDCODED)")
+    logger.info("🚀 INICIANDO SISTEMA HIVE V12.2 (NITRO TAP FULL)")
     await db.connect() 
 
 async def on_shutdown(application: Application):
@@ -524,13 +518,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def intro_step_2(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    user = q.from_user
-    lang = user.language_code
-    
-    await q.answer("Verifying Network Status...")
-    try: await context.bot.send_chat_action(chat_id=q.message.chat_id, action=ChatAction.TYPING)
-    except: pass
-    await asyncio.sleep(1.0)
+    lang = q.from_user.language_code
+    await q.answer("...")
+    await asyncio.sleep(0.8)
     try: await q.message.delete()
     except: pass
 
@@ -602,7 +592,6 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         polen = int(node['polen'])
         max_p = int(node['max_polen'])
-        # Factor X (IIL) mostrado en la UI
         iil = node.get("iil", 1.0)
         bar = render_bar(polen, max_p)
         
@@ -692,15 +681,19 @@ async def forage_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
         node['last_pulse'] = time.time()
         yield_amt = CONST['RECOMPENSA_BASE'] * RANGOS_CONFIG[node['caste']]['bonus_tap']
         
-        # El IIL afecta marginalmente el rendimiento de minado también
         iil = node.get("iil", 1.0)
-        yield_amt *= (iil * 0.2) + 0.8 # Pequeño boost por IIL
+        yield_amt *= (iil * 0.2) + 0.8 
         
         node['honey'] += yield_amt
         
         await db.save_node(uid, node)
+        
+        # NITRO TAP: Solo actualiza el Dash el 5% de las veces para velocidad extrema
+        # El 95% de las veces solo muestra la alerta flotante
         await q.answer(f"✅ +{yield_amt:.4f}")
-        if random.random() < 0.2: await show_dashboard(update, context)
+        if random.random() < 0.05: 
+            await show_dashboard(update, context)
+            
     except Exception: pass
 
 async def rank_info_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -783,10 +776,7 @@ async def buy_energy(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def buy_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = update.callback_query.from_user.language_code
-    
-    # AQUÍ ES DONDE SE USA TU WALLET FIJA
     txt = get_text(lang, "pay_txt", price=CONST['PRECIO_ACELERADOR'], wallet=WALLET_TRC20_FIJA)
-    
     kb = [
         [InlineKeyboardButton(get_text(lang, "btn_paypal"), url=LINK_PAYPAL_HARDCODED)],
         [InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="shop")]
@@ -837,5 +827,5 @@ async def reset_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("💀")
 
 async def invite_cmd(u, c): await team_menu(u, c)
-async def help_cmd(u, c): await u.message.reply_text("V12.1 FINAL HARDCODED")
+async def help_cmd(u, c): await u.message.reply_text("V12.2 FINAL NITRO")
 async def broadcast_cmd(u, c): pass
