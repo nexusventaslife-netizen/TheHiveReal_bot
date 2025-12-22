@@ -14,24 +14,24 @@ from telegram.error import BadRequest
 from loguru import logger
 from email_validator import validate_email
 
-# IMPORTAMOS TU BASE DE DATOS REDIS
+# IMPORTAMOS TU BASE DE DATOS REDIS (NO BORRES DATABASE.PY)
 from database import db 
 
 # ==============================================================================
-# 🐝 THE ONE HIVE: V12.2 (NITRO TAP / FINAL FULL CODE)
+# 🐝 THE ONE HIVE: V12.4 (PRODUCTION MASTER - FULL CODE)
 # ==============================================================================
 
 logger = logging.getLogger("HiveLogic")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 
 # ------------------------------------------------------------------------------
-# 💰 ZONA DE DINERO (EDITAR AQUÍ)
+# 💰 ZONA DE PAGOS (CONFIGURACIÓN A FUEGO)
 # ------------------------------------------------------------------------------
-# PEGA TU BILLETERA TRC20 AQUÍ ABAJO ENTRE LAS COMILLAS:
-WALLET_TRC20_FIJA = "TU_DIRECCION_USDT_TRC20_AQUI" 
-
-# ENLACE PAYPAL (YA ESTÁ FIJO)
+# 1. ENLACE PAYPAL (FIJO)
 LINK_PAYPAL_HARDCODED = "https://www.paypal.com/ncp/payment/L6ZRFT2ACGAQC"
+
+# 2. TU BILLETERA USDT TRC20 (EDITAR AQUÍ ABAJO)
+WALLET_TRC20_FIJA = "PEGAR_TU_USDT_TRC20_AQUI" 
 # ------------------------------------------------------------------------------
 
 # --- IDENTIDAD VISUAL ---
@@ -53,15 +53,50 @@ CONST = {
 
 # --- JERARQUÍA EVOLUTIVA ---
 RANGOS_CONFIG = {
-    "LARVA":      {"nivel": 0, "meta_hive": 0,       "max_energia": 200,  "bonus_tap": 1.0, "icono": "🐛", "acceso": 0},
-    "OBRERO":     {"nivel": 1, "meta_hive": 1000,    "max_energia": 400,  "bonus_tap": 1.1, "icono": "🐝", "acceso": 1},
-    "EXPLORADOR": {"nivel": 2, "meta_hive": 5000,    "max_energia": 800,  "bonus_tap": 1.2, "icono": "🔭", "acceso": 2},
-    "GUARDIAN":   {"nivel": 3, "meta_hive": 20000,   "max_energia": 1500, "bonus_tap": 1.5, "icono": "🛡️", "acceso": 3},
-    "REINA":      {"nivel": 4, "meta_hive": 100000,  "max_energia": 5000, "bonus_tap": 3.0, "icono": "👑", "acceso": 3}
+    "LARVA": {
+        "nivel": 0, 
+        "meta_hive": 0,       
+        "max_energia": 200,  
+        "bonus_tap": 1.0, 
+        "icono": "🐛", 
+        "acceso": 0
+    },
+    "OBRERO": {
+        "nivel": 1, 
+        "meta_hive": 1000,    
+        "max_energia": 400,  
+        "bonus_tap": 1.1, 
+        "icono": "🐝", 
+        "acceso": 1
+    },
+    "EXPLORADOR": {
+        "nivel": 2, 
+        "meta_hive": 5000,    
+        "max_energia": 800,  
+        "bonus_tap": 1.2, 
+        "icono": "🔭", 
+        "acceso": 2
+    },
+    "GUARDIAN": {
+        "nivel": 3, 
+        "meta_hive": 20000,   
+        "max_energia": 1500, 
+        "bonus_tap": 1.5, 
+        "icono": "🛡️", 
+        "acceso": 3
+    },
+    "REINA": {
+        "nivel": 4, 
+        "meta_hive": 100000,  
+        "max_energia": 5000, 
+        "bonus_tap": 3.0, 
+        "icono": "👑", 
+        "acceso": 3
+    }
 }
 
 # ==============================================================================
-# 🌐 MOTOR DE TRADUCCIÓN (AUTHORITY / SCALE-LOCK)
+# 🌐 MOTOR DE TRADUCCIÓN (NARRATIVA SCALE-LOCK / AUTHORITY)
 # ==============================================================================
 TEXTS = {
     "es": {
@@ -397,9 +432,8 @@ async def smart_edit(update: Update, text: str, reply_markup: InlineKeyboardMark
             logger.error(f"Error SmartEdit Rescue: {e2}")
 
 # ==============================================================================
-# BIO ENGINE (FACTOR X: IIL IMPLEMENTATION)
+# BIO ENGINE (FACTOR X: IIL + TYPE SAFETY)
 # ==============================================================================
-
 class BioEngine:
     @staticmethod
     def calculate_iil(balance: float, refs_count: int, joined_at: float) -> float:
@@ -427,20 +461,21 @@ class BioEngine:
         if not isinstance(last_regen, (int, float)): last_regen = now
         elapsed = now - last_regen
         
-        balance = node.get("honey", 0.0)
-        if not isinstance(balance, (int, float)): balance = 0.0
-        
+        balance = float(node.get("honey", 0))
         refs_list = node.get("referrals") or []
         refs_count = len(refs_list)
         
-        # Recuperar joined_at para Factor X
-        joined_at = node.get("joined_at", now)
-        if isinstance(joined_at, str): joined_at = now
-        
-        # CÁLCULO DEL FACTOR X (IIL)
+        joined_at_raw = node.get("joined_at", now)
+        try: joined_at = float(joined_at_raw)
+        except: joined_at = float(now)
+            
         iil_score = BioEngine.calculate_iil(balance, refs_count, joined_at)
-        
+        node["iil_score"] = iil_score 
+
         poder_total = balance + (refs_count * CONST["BONO_REFERIDO"])
+        multiplicador_squad = 1.0 + (refs_count * CONST["VIRAL_FACTOR"])
+        if multiplicador_squad > 5.0: multiplicador_squad = 5.0
+        node["squad_multiplier"] = multiplicador_squad 
         
         rango = "LARVA"
         stats = RANGOS_CONFIG["LARVA"]
@@ -453,22 +488,17 @@ class BioEngine:
         if "max_polen" not in node: node["max_polen"] = 500
         node["max_polen"] = stats["max_energia"]
         
-        # REGENERACIÓN BASADA EN IIL (FACTOR X)
         if elapsed > 0:
             base_regen_rate = 0.8
-            # La velocidad depende del IIL. Más influencia = Más velocidad.
             final_regen_rate = base_regen_rate * (iil_score * 0.5) 
-            if final_regen_rate < 0.1: final_regen_rate = 0.1 # Mínimo vital
+            if final_regen_rate < 0.1: final_regen_rate = 0.1
             
             regen_amount = elapsed * final_regen_rate
-            
-            current_polen = node.get("polen", 0)
-            if not isinstance(current_polen, (int, float)): current_polen = 0
-            
+            current_polen = float(node.get("polen", 0))
             node["polen"] = min(node["max_polen"], current_polen + int(regen_amount))
             
         node["last_regen"] = now
-        node["iil"] = iil_score 
+        node["synergy"] = multiplicador_squad
         return node
 
 class SecurityEngine:
@@ -491,7 +521,7 @@ async def request_email_protection(update: Update, context: ContextTypes.DEFAULT
 # STARTUP
 # ==============================================================================
 async def on_startup(application: Application):
-    logger.info("🚀 INICIANDO SISTEMA HIVE V12.2 (NITRO TAP FULL)")
+    logger.info("🚀 INICIANDO SISTEMA HIVE V12.4 (PRODUCTION MASTER)")
     await db.connect() 
 
 async def on_shutdown(application: Application):
@@ -539,8 +569,10 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     if step == 'captcha_wait':
         if text == context.user_data.get('captcha'):
-            context.user_data['step'] = 'email_wait'
-            await smart_edit(update, get_text(lang, "email_prompt"), InlineKeyboardMarkup([]))
+            context.user_data['step'] = 'consent_wait'
+            # Muestra el botón para aceptar términos que dispara el pedido de email
+            kb = [[InlineKeyboardButton("✅ OK", callback_data="accept_terms")]]
+            await update.message.reply_text("✅ OK", reply_markup=InlineKeyboardMarkup(kb))
         else: await update.message.reply_text("❌")
         return
 
@@ -556,7 +588,7 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 node['honey'] += 15.0 
                 await db.save_node(uid, node)
             
-            kb = [[InlineKeyboardButton("🟢 ACCESS SYSTEM", callback_data="go_dash")]]
+            kb = [[InlineKeyboardButton("🟢 CONTINUAR", callback_data="go_dash")]]
             await update.message.reply_text(get_text(lang, "email_success"), reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
         except: await update.message.reply_text("⚠️ Email Error")
         return
@@ -642,6 +674,7 @@ async def view_tier_generic(update: Update, key: str, context: ContextTypes.DEFA
     lang = q.from_user.language_code
     node = await db.get_node(uid)
     
+    # TRIGGER: Solo pide email aquí si es Tier 2 o Tier 3
     if (key == "v_t2" or key == "v_t3") and not node.get("email"):
         await request_email_protection(update, context, "TIER ACCESS")
         return
@@ -686,11 +719,13 @@ async def forage_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         node['honey'] += yield_amt
         
+        # NITRO TAP: Responder antes de guardar
+        await q.answer(f"✅ +{yield_amt:.4f}")
+
+        # Guardar en DB
         await db.save_node(uid, node)
         
-        # NITRO TAP: Solo actualiza el Dash el 5% de las veces para velocidad extrema
-        # El 95% de las veces solo muestra la alerta flotante
-        await q.answer(f"✅ +{yield_amt:.4f}")
+        # Solo actualiza visualmente el 5% de las veces para evitar Lag
         if random.random() < 0.05: 
             await show_dashboard(update, context)
             
@@ -727,6 +762,7 @@ async def create_squad_logic(update: Update, context: ContextTypes.DEFAULT_TYPE)
     lang = q.from_user.language_code
     node = await db.get_node(uid)
     
+    # TRIGGER: Pide email para CREAR SQUAD (escalar)
     if not node.get("email"):
         await request_email_protection(update, context, "SQUAD")
         return
@@ -752,9 +788,12 @@ async def shop_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; uid = q.from_user.id
     lang = q.from_user.language_code
     node = await db.get_node(uid)
+
+    # TRIGGER: Pide email para PAGAR (Shop)
     if not node.get("email"):
         await request_email_protection(update, context, "SHOP")
         return
+
     kb = [
         [InlineKeyboardButton(get_text(lang, "btn_buy_prem", price=CONST['PRECIO_ACELERADOR']), callback_data="buy_premium")],
         [InlineKeyboardButton(get_text(lang, "btn_buy_energy", cost=CONST['COSTO_RECARGA']), callback_data="buy_energy")],
@@ -776,7 +815,9 @@ async def buy_energy(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def buy_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = update.callback_query.from_user.language_code
+    
     txt = get_text(lang, "pay_txt", price=CONST['PRECIO_ACELERADOR'], wallet=WALLET_TRC20_FIJA)
+    
     kb = [
         [InlineKeyboardButton(get_text(lang, "btn_paypal"), url=LINK_PAYPAL_HARDCODED)],
         [InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="shop")]
@@ -787,27 +828,34 @@ async def team_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; uid = q.from_user.id
     lang = q.from_user.language_code
     node = await db.get_node(uid)
+
+    # TRIGGER: Pide email para EXPANDIR (Referidos)
     if not node.get("email"):
-        await request_email_protection(update, context, "INVITE")
+        await request_email_protection(update, context, "EXPAND")
         return
+
     link = f"https://t.me/{context.bot.username}?start={uid}"
     share_url = f"https://t.me/share/url?url={link}"
     
     txt = get_text(lang, "team_body", bonus=CONST['BONO_REFERIDO'], link=link)
     title = get_text(lang, "team_title")
-    kb = [[InlineKeyboardButton("📤 SHARE", url=share_url)], [InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="go_dash")]]
+    kb = [[InlineKeyboardButton("📤 SHARE LINK", url=share_url)], [InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="go_dash")]]
     await smart_edit(update, f"{title}\n\n{txt}", InlineKeyboardMarkup(kb))
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; d = q.data
     lang = q.from_user.language_code
+
+    # --- LÓGICA DE CAPTCHA/EMAIL FIXED ---
     if d == "accept_terms":
         context.user_data['step'] = 'email_wait'
         await smart_edit(update, get_text(lang, "email_prompt"), InlineKeyboardMarkup([]))
         return
+    # -------------------------------------
+
+    if d == "intro_step_2": await intro_step_2(update, context); return
 
     actions = {
-        "intro_step_2": intro_step_2,
         "go_dash": show_dashboard, "forage": forage_action, "tasks": tasks_menu,
         "rank_info": rank_info_menu,
         "v_t1": lambda u,c: view_tier_generic(u, "v_t1", c),
@@ -824,8 +872,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def reset_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await db.delete_node(update.effective_user.id)
     context.user_data.clear()
-    await update.message.reply_text("💀")
+    await update.message.reply_text("💀 Node Purged")
 
 async def invite_cmd(u, c): await team_menu(u, c)
-async def help_cmd(u, c): await u.message.reply_text("V12.2 FINAL NITRO")
+async def help_cmd(u, c): await u.message.reply_text("V12.4 PROD FINAL")
 async def broadcast_cmd(u, c): pass
