@@ -16,14 +16,15 @@ from email_validator import validate_email
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode, ChatAction
 from telegram.ext import ContextTypes, Application
-from telegram.error import BadRequest, RateLimited
+# CORRECCIÓN AQUÍ: Cambiado 'RateLimited' por 'RetryAfter' (Versión 20.x standard)
+from telegram.error import BadRequest, RetryAfter 
 from loguru import logger
 
 # IMPORTAMOS TU BASE DE DATOS REDIS
 from database import db 
 
 # ==============================================================================
-# 🐝 THE ONE HIVE: V13.4 (TOKENOMICS OPTIMIZED)
+# 🐝 THE ONE HIVE: V13.5 (SCALABLE FIX)
 # ==============================================================================
 
 logger = logging.getLogger("HiveLogic")
@@ -37,7 +38,7 @@ LINK_PAYPAL_HARDCODED = "https://www.paypal.com/ncp/payment/L6ZRFT2ACGAQC"
 IMG_GENESIS = "https://i.postimg.cc/hv2HXWkN/photo-2025-12-22-16-00-42.jpg"
 IMG_DASHBOARD = "https://i.postimg.cc/hv2HXWkN/photo-2025-12-22-16-00-42.jpg"
 
-# --- CONSTANTES DE ECONOMÍA (OPTIMIZADO TOKENOMICS) ---
+# --- CONSTANTES DE ECONOMÍA (TOKENOMICS ACTIVO) ---
 CONST = {
     "COSTO_POLEN": 10,        
     "RECOMPENSA_BASE": 0.05,
@@ -49,14 +50,14 @@ CONST = {
     "TRIGGER_EMAIL_HONEY": 50,
     "SQUAD_MULTIPLIER": 0.05,
     
-    # NUEVO: ESTRATEGIA DEFLACIONARIA & HALVING
+    # ESTRATEGIA DEFLACIONARIA
     "HSP_BASE": 1.0,
     "STREAK_BONUS": 1.1,
     "COMBO_DAILY_MAX": 1000,
-    "TAP_RATE_LIMIT": 0.3,
+    "TAP_RATE_LIMIT": 0.3,     # Anti-bot scale protection
     "VIRAL_FACTOR": 0.05,
-    "BURN_RATE_TAP": 0.10,     # Quema 10% del reward (Deflacionario)
-    "HALVING_FACTOR": 1.0,     # 1.0 = Normal, 0.5 = Halving Activo
+    "BURN_RATE_TAP": 0.10,     # Quema 10% (Deflación)
+    "HALVING_FACTOR": 1.0,     # Futuro Halving
 }
 
 # --- JERARQUÍA EVOLUTIVA ---
@@ -68,12 +69,13 @@ RANGOS_CONFIG = {
     "REINA":      {"nivel": 4, "meta_hive": 100000,  "max_energia": 5000, "bonus_tap": 3.0, "hsp_mult": 5.0, "icono": "👑", "acceso": 3}
 }
 
-# --- RATE LIMITERS ---
+# --- RATE LIMITERS (SCALE PROTECTION) ---
 rate_limiters = {}
 
 async def get_limiter(uid: int) -> AsyncLimiter:
     if uid not in rate_limiters:
-        rate_limiters[uid] = AsyncLimiter(15, 60) # 15 taps por minuto (Human Limit)
+        # Permite 15 acciones por minuto por usuario (evita sobrecarga de CPU)
+        rate_limiters[uid] = AsyncLimiter(15, 60) 
     return rate_limiters[uid]
 
 # --- MODELO PYDANTIC ---
@@ -89,16 +91,17 @@ class NodeModel(BaseModel):
     caste: str = "LARVA"
     squad_id: Optional[str] = None
     email: Optional[str] = None
-    ton_wallet: Optional[str] = None # Nuevo Tokenomics
-    nft_boost: float = 0.0           # Nuevo Tokenomics
+    ton_wallet: Optional[str] = None 
+    nft_boost: float = 0.0           
     joined_at: float = Field(default_factory=time.time)
     referrals: List[int] = Field(default_factory=list)
+    hive_staked: float = 0.0
 
     class Config:
         arbitrary_types_allowed = True
 
 # ==============================================================================
-# 🌐 MOTOR DE TRADUCCIÓN (TEXTOS + WALLET)
+# 🌐 MOTOR DE TRADUCCIÓN
 # ==============================================================================
 TEXTS = {
     "es": {
@@ -122,7 +125,7 @@ TEXTS = {
         "btn_preds": "🧠 PREDICCIONES",
         "btn_combo": "🔥 COMBO",
         "btn_lb": "🏆 TOP 10",
-        "btn_wallet": "💼 CONNECT WALLET", # NUEVO
+        "btn_wallet": "💼 CONNECT WALLET",
         "viral_1": "El acceso temprano sigue abierto.\n\n{link}",
         "viral_2": "No todos deberían entrar.\n\n{link}",
         "sys_event_1": "⚠️ Prioridad reasignada a nodos activos",
@@ -284,14 +287,11 @@ def render_bar(current: float, total: float, length: int = 10) -> str:
     return "▰" * fill + "▱" * (length - fill)
 
 def generate_live_feed(lang: str) -> str:
-    eventos = [get_text(lang, "sys_event_1"), get_text(lang, "sys_event_2")]
-    if random.random() < 0.25:
-        return f"SYSTEM: {random.choice(eventos)}"
-    acciones = [get_text(lang, "feed_action_1"), get_text(lang, "feed_action_2")]
+    acciones = ["conectado", "minando", "HSP UP", "Combo OK", "Wallet Linked"]
     return f"• ID-{random.randint(100,999)} {random.choice(acciones)} ({random.randint(1,9)}m)"
 
 def generate_daily_combo() -> str:
-    combos = ["🐝👑🔥", "🍯⚡🛡️", "🔭🐛🟢", "👑🐝🍯", "🛡️⚡🔥"]
+    combos = ["🐝👑🔥", "🍯⚡🛡️", "🔭🐛🟢", "🐝🍯💰", "👑🛡️⚡"]
     today = datetime.now().strftime("%Y%m%d")
     seed = hash(today) % len(combos)
     return combos[seed]
@@ -311,7 +311,7 @@ async def smart_edit(update: Update, text: str, reply_markup: InlineKeyboardMark
     try:
         if update.callback_query:
             await update.callback_query.message.edit_text(text, reply_markup=reply_markup, parse_mode=ParseMode.MARKDOWN)
-    except (BadRequest, RateLimited) as e:
+    except (BadRequest, RetryAfter) as e: # CORRECCIÓN VITAL: RetryAfter
         logger.error(f"Error SmartEdit Rescue: {e}")
         try: await update.callback_query.message.delete()
         except: pass
@@ -319,7 +319,7 @@ async def smart_edit(update: Update, text: str, reply_markup: InlineKeyboardMark
         except Exception: pass
 
 # ==============================================================================
-# BIO ENGINE (TOKENOMICS INTEGRATED)
+# BIO ENGINE (OPTIMIZADO V13.4 - CRYPTO FACTOR)
 # ==============================================================================
 
 class BioEngine:
@@ -334,7 +334,7 @@ class BioEngine:
 
     @staticmethod
     def calculate_hsp(node_dict: Dict, iil: float) -> float:
-        # OPTIMIZADO: HSP = IIL * Rango * Squad * (1 + NFT_Boost)
+        # HSP = IIL * Rango * Squad * (1 + NFT_Boost)
         rango = node_dict.get("caste", "LARVA")
         mult = RANGOS_CONFIG.get(rango, RANGOS_CONFIG["LARVA"])["hsp_mult"]
         squad_bonus = 0.1 if node_dict.get("squad_id") else 0.0
@@ -375,7 +375,7 @@ class BioEngine:
         node["caste"] = rango 
         node["max_polen"] = stats["max_energia"]
         
-        # 3. HSP con Tokenomics
+        # 3. HSP
         node["hsp"] = BioEngine.calculate_hsp(node, iil_score)
 
         # 4. Regen
@@ -416,7 +416,7 @@ async def request_email_protection(update: Update, context: ContextTypes.DEFAULT
 # STARTUP
 # ==============================================================================
 async def on_startup(application: Application):
-    logger.info("🚀 INICIANDO SISTEMA HIVE V13.4 (TOKENOMICS READY)")
+    logger.info("🚀 INICIANDO SISTEMA HIVE V13.5 (SCALABLE & FIXED)")
     await db.connect() 
 
 async def on_shutdown(application: Application):
@@ -462,7 +462,6 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     
     if text.upper() == "/START": await start_command(update, context); return
 
-    # --- COMBO DIARIO ---
     if context.user_data.get('waiting_combo') and text == context.user_data.get('daily_combo_target'):
         node = await db.get_node(uid)
         bonus = CONST['COMBO_DAILY_MAX'] * random.uniform(0.5, 1.0)
@@ -473,10 +472,9 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data.pop('waiting_combo', None)
         return
 
-    # --- WALLET CONNECT (TOKENOMICS) ---
+    # WALLET CONNECT
     if context.user_data.get('waiting_wallet'):
-        # Simulación de validación TON (Longitud basica)
-        if len(text) > 40: 
+        if len(text) > 40: # Validación básica TON
             await db.link_wallet(uid, text)
             await update.message.reply_text("✅ Wallet Linked! Airdrop Ready.")
             context.user_data.pop('waiting_wallet', None)
@@ -484,26 +482,26 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             await update.message.reply_text("❌ Invalid TON Address")
         return
 
-    # --- CAPTCHA ---
     if step == 'captcha_wait':
         if text == context.user_data.get('captcha'):
             context.user_data['step'] = 'consent_wait'
             kb = [[InlineKeyboardButton("✅ OK", callback_data="accept_terms")]]
             await update.message.reply_text("✅ OK", reply_markup=InlineKeyboardMarkup(kb))
-        else: await update.message.reply_text("❌")
+        else: await update.message.reply_text("❌ X")
         return
 
-    # --- EMAIL ---
     if step == 'email_wait':
         try:
             valid = validate_email(text)
             email = valid.normalized
             await db.update_email(uid, email)
             context.user_data['step'] = None
+            
             node = await db.get_node(uid)
             if node:
                 node['honey'] += 15.0 
                 await db.save_node(uid, node)
+            
             kb = [[InlineKeyboardButton("🟢 ACCESS SYSTEM", callback_data="go_dash")]]
             await update.message.reply_text(get_text(lang, "email_success"), reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
         except: await update.message.reply_text("⚠️ Email Error")
@@ -566,12 +564,11 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"────────────────"
         )
         
-        # UI OPTIMIZADA CON WALLET
         kb = [
             [InlineKeyboardButton(get_text(lang, "btn_mine"), callback_data="forage")],
             [InlineKeyboardButton(get_text(lang, "btn_preds"), callback_data="preds"), InlineKeyboardButton(get_text(lang, "btn_combo"), callback_data="combo")],
             [InlineKeyboardButton(get_text(lang, "btn_lb"), callback_data="lb"), InlineKeyboardButton(get_text(lang, "btn_squad"), callback_data="squad")],
-            [InlineKeyboardButton(get_text(lang, "btn_wallet"), callback_data="connect_wallet")], # NUEVO
+            [InlineKeyboardButton(get_text(lang, "btn_wallet"), callback_data="connect_wallet")],
             [InlineKeyboardButton(get_text(lang, "btn_tasks"), callback_data="tasks"), InlineKeyboardButton(get_text(lang, "btn_shop"), callback_data="shop")],
             [InlineKeyboardButton(get_text(lang, "btn_team"), callback_data="team")]
         ]
@@ -579,8 +576,15 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e: logger.error(f"Dash Error: {e}")
 
 # ==============================================================================
-# SUB-MENÚS MULTI-IDIOMA
+# SUB-MENÚS 
 # ==============================================================================
+
+async def wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = update.callback_query.from_user.language_code
+    txt = get_text(lang, "wallet_prompt")
+    context.user_data['waiting_wallet'] = True
+    kb = [[InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="go_dash")]]
+    await smart_edit(update, txt, InlineKeyboardMarkup(kb))
 
 async def tasks_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = update.callback_query.from_user.language_code
@@ -638,19 +642,15 @@ async def forage_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             node['polen'] -= CONST['COSTO_POLEN']
             
-            # TOKENOMICS: FORMULA DEFLACIONARIA (Burn & Halving)
             streak_mult = CONST['STREAK_BONUS'] ** min(node.get('streak', 0), 10)
             
-            # Calculo Bruto
+            # DEFLACIÓN (TOKENOMICS)
             gross_yield = CONST['RECOMPENSA_BASE'] * RANGOS_CONFIG[node['caste']]['bonus_tap'] * node['hsp'] * streak_mult * CONST['HALVING_FACTOR']
-            
-            # Quema (Deflación)
             burn_amount = gross_yield * CONST['BURN_RATE_TAP']
             net_yield = gross_yield - burn_amount
             
             node['honey'] += net_yield
             
-            # Streak Logic
             now = time.time()
             last = node.get('last_tap', 0)
             if now - last < 15:
@@ -697,28 +697,15 @@ async def prediction_vote(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def leaderboard_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = update.callback_query.from_user.language_code
-    # Obtener Top Real
-    top_data = await db.get_top_hsp(10)
-    if not top_data:
+    tops = await db.get_top_hsp(10)
+    if not tops:
         top10 = "1. HiveMaster\n2. AlphaNode"
     else:
-        top10 = "\n".join([f"{i+1}. {name}: {score:.2f} HSP" for i, (name, score) in enumerate(top_data)])
+        top10 = "\n".join([f"{i+1}. {name}: {score:.2f} HSP" for i, (name, score) in enumerate(tops)])
         
     txt = get_text(lang, "leaderboard", top10=top10)
     kb = [[InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="go_dash")]]
     await smart_edit(update, txt, InlineKeyboardMarkup(kb))
-
-async def connect_wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = update.callback_query.from_user.language_code
-    context.user_data['waiting_wallet'] = True
-    txt = get_text(lang, "wallet_prompt")
-    kb = [[InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="go_dash")]]
-    await smart_edit(update, txt, InlineKeyboardMarkup(kb))
-
-# ------------------------
-
-async def rank_info_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await show_dashboard(update, context) 
 
 async def squad_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; uid = q.from_user.id
@@ -832,13 +819,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "v_t1": lambda u,c: view_tier_generic(u, "v_t1", c),
         "v_t2": lambda u,c: view_tier_generic(u, "v_t2", c),
         "v_t3": lambda u,c: view_tier_generic(u, "v_t3", c),
-        # V13.4 ACCIONES
         "combo": daily_combo_menu,
         "preds": predictions_menu,
         "pred_yes": prediction_vote,
         "pred_no": prediction_vote,
         "lb": leaderboard_menu,
-        "connect_wallet": connect_wallet_menu # NUEVO
+        "connect_wallet": wallet_menu
     }
     
     if d in actions: await actions[d](update, context)
@@ -851,5 +837,5 @@ async def reset_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("💀 Node Purged")
 
 async def invite_cmd(u, c): await team_menu(u, c)
-async def help_cmd(u, c): await u.message.reply_text("V13.4 TOKENOMICS READY")
+async def help_cmd(u, c): await u.message.reply_text("V13.5 SCALABLE & FIXED")
 async def broadcast_cmd(u, c): pass
