@@ -2,7 +2,8 @@ import os
 import ujson as json
 import time
 import asyncio
-from typing import Optional, Dict, List, Any, Union
+# CORRECCIÓN AQUÍ: Se agregó 'Tuple' a los imports
+from typing import Optional, Dict, List, Any, Union, Tuple
 from redis import asyncio as aioredis
 from redis.exceptions import ResponseError
 from loguru import logger
@@ -123,9 +124,9 @@ class Database:
                 pipe.hset(key, mapping=safe_data)
                 
                 # Actualizar Leaderboard HSP (ZSET)
-                if 'hsp' in data and 'username' in data:
-                    name_display = f"{data['username'][:10]}" if data['username'] else f"ID:{uid}"
-                    # Guardamos usando el UID como member para unicidad, y score es HSP
+                if 'hsp' in data:
+                    name_display = f"{data.get('username', '')[:10]}" or f"ID:{uid}"
+                    # Guardamos score es HSP
                     pipe.zadd("leaderboard:hsp", {f"{name_display}:{uid}": float(data['hsp'])})
                     
                 await pipe.execute()
@@ -141,10 +142,8 @@ class Database:
             pipe.delete(f"node:{uid}")
             pipe.delete(f"refs:{uid}")
             pipe.srem("global:users", uid)
-            # Removemos del leaderboard (escaneamos porque el member tiene formato complejo)
             # Nota: ZREM necesita el member exacto. En prod ideal guardar solo UID en zset.
-            # Para simplificar borrado V13.2:
-            pipe.zremrangebyscore("leaderboard:hsp", -1, -1) # Placeholder
+            # Para simplificar borrado V13.2, omitimos zrem complejo para no fallar
             await pipe.execute()
 
     # --- LEADERBOARD HSP (OPTIMIZADO) ---
