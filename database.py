@@ -38,7 +38,7 @@ class Database:
     # --- NODOS (USUARIOS) ---
 
     async def create_node(self, uid: int, first_name: str, username: str, ref_id: Optional[int] = None):
-        """Crea o actualiza un nodo básico de forma segura (OPTIMIZADO TOKENOMICS)"""
+        """Crea o actualiza un nodo básico de forma segura"""
         key = f"node:{uid}"
         
         try:
@@ -48,7 +48,7 @@ class Database:
             exists = False
 
         if not exists:
-            # Estructura V13.4 (Soporte Wallet/NFTs)
+            # Estructura inicial V13
             node_data = {
                 "uid": uid,
                 "first_name": first_name,
@@ -64,10 +64,9 @@ class Database:
                 "last_tap": 0.0,
                 "email": "",
                 "squad_id": "",
-                # CAMPOS TOKENOMICS
-                "ton_wallet": "",       # Para airdrop/connect
-                "staked_hive": 0.0,     # Para staking rewards
-                "nft_boost": 0.0        # Multiplicador extra por NFTs
+                "ton_wallet": "",
+                "staked_hive": 0.0,
+                "nft_boost": 0.0
             }
             async with self.redis.pipeline() as pipe:
                 pipe.hset(key, mapping=node_data)
@@ -86,7 +85,7 @@ class Database:
             data = await self.redis.hgetall(key)
             if not data: return None
             
-            # Conversión segura y Defaults Tokenomics
+            # Conversión segura y Defaults
             return {
                 "uid": int(data.get("uid", uid)),
                 "first_name": data.get("first_name", ""),
@@ -102,7 +101,6 @@ class Database:
                 "last_regen": float(data.get("last_regen", time.time())),
                 "last_tap": float(data.get("last_tap", 0.0)),
                 "joined_at": float(data.get("joined_at", time.time())),
-                # Tokenomics Fields
                 "ton_wallet": data.get("ton_wallet", ""),
                 "staked_hive": float(data.get("staked_hive", 0.0)),
                 "nft_boost": float(data.get("nft_boost", 0.0)),
@@ -137,7 +135,6 @@ class Database:
         await self.redis.hset(f"node:{uid}", "email", email)
 
     async def link_wallet(self, uid: int, wallet: str):
-        """Vincula wallet TON para airdrop/staking"""
         await self.redis.hset(f"node:{uid}", "ton_wallet", wallet)
 
     async def delete_node(self, uid: int):
