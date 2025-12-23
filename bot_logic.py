@@ -21,11 +21,11 @@ from telegram.ext import ContextTypes, Application
 from telegram.error import BadRequest, RetryAfter, NetworkError, Forbidden
 from loguru import logger
 
-# IMPORTAMOS TU BASE DE DATOS REDIS (La misma V13.4 que tienes)
+# IMPORTAMOS TU BASE DE DATOS REDIS
 from database import db 
 
 # ==============================================================================
-# 🐝 THE ONE HIVE: V13.6 (GAMIFIED & ERROR FREE)
+# 🐝 THE ONE HIVE: V13.7 (FULL MONOLITH - CONFLICT RESOLVED)
 # ==============================================================================
 
 logger = logging.getLogger("HiveLogic")
@@ -102,7 +102,7 @@ class NodeModel(BaseModel):
         arbitrary_types_allowed = True
 
 # ==============================================================================
-# 🌐 MOTOR DE TRADUCCIÓN
+# 🌐 MOTOR DE TRADUCCIÓN (TEXTOS COMPLETOS)
 # ==============================================================================
 TEXTS = {
     "es": {
@@ -332,7 +332,6 @@ async def smart_edit(update: Update, text: str, reply_markup: InlineKeyboardMark
 def escape_markdown(text: str) -> str:
     """Escapa caracteres para evitar el error 'Can't parse entities'"""
     if not text: return ""
-    # Escapar caracteres reservados de Markdown V1/V2 que rompen el parseo
     return text.replace("_", "\\_").replace("*", "\\*").replace("`", "\\`").replace("[", "\\[")
 
 # ==============================================================================
@@ -420,6 +419,10 @@ async def request_email_protection(update: Update, context: ContextTypes.DEFAULT
     context.user_data['step'] = 'captcha_wait'
     context.user_data['pending_action'] = reason
     
+    # IMPORTANTE: Limpiamos flag de combo para evitar conflicto
+    context.user_data.pop('waiting_combo', None)
+    context.user_data.pop('waiting_wallet', None)
+    
     txt = (
         f"{get_text(lang, 'protect_title', reason=reason)}\n\n"
         f"{get_text(lang, 'protect_body')}\n"
@@ -431,7 +434,7 @@ async def request_email_protection(update: Update, context: ContextTypes.DEFAULT
 # STARTUP
 # ==============================================================================
 async def on_startup(application: Application):
-    logger.info("🚀 INICIANDO SISTEMA HIVE V13.6 (GAMIFIED & FIXED)")
+    logger.info("🚀 INICIANDO SISTEMA HIVE V13.7 (FULL MONOLITH)")
     await db.connect() 
 
 async def on_shutdown(application: Application):
@@ -477,33 +480,7 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     
     if text.upper() == "/START": await start_command(update, context); return
 
-    # --- COMBO DIARIO (GAMIFICADO) ---
-    if context.user_data.get('waiting_combo'):
-        target = context.user_data.get('daily_combo_target')
-        # Comparar si el texto contiene los emojis (limpiando espacios)
-        cleaned_text = text.replace(" ", "")
-        if target in cleaned_text or cleaned_text == target:
-            node = await db.get_node(uid)
-            bonus = CONST['COMBO_DAILY_MAX']
-            node['honey'] += bonus
-            node['streak'] = node.get('streak', 0) + 5
-            await db.save_node(uid, node)
-            await update.message.reply_text(get_text(lang, "combo_success", amt=int(bonus)), parse_mode=ParseMode.MARKDOWN)
-            context.user_data.pop('waiting_combo', None)
-        else:
-            await update.message.reply_text("❌ Esa no es la secuencia correcta. ¡Intenta descifrar la pista!")
-        return
-
-    # WALLET CONNECT
-    if context.user_data.get('waiting_wallet'):
-        if len(text) > 40: 
-            await db.link_wallet(uid, text)
-            await update.message.reply_text("✅ Wallet Linked! Airdrop Ready.")
-            context.user_data.pop('waiting_wallet', None)
-        else:
-            await update.message.reply_text("❌ Invalid TON Address")
-        return
-
+    # --- 1. PRIORIDAD: CAPTCHA / EMAIL (FIXED) ---
     if step == 'captcha_wait':
         if text == context.user_data.get('captcha'):
             context.user_data['step'] = 'consent_wait'
@@ -527,6 +504,33 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             kb = [[InlineKeyboardButton("🟢 ACCESS SYSTEM", callback_data="go_dash")]]
             await update.message.reply_text(get_text(lang, "email_success"), reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
         except: await update.message.reply_text("⚠️ Email Error")
+        return
+
+    # --- 2. SECUNDARIO: WALLET ---
+    if context.user_data.get('waiting_wallet'):
+        if len(text) > 40: 
+            await db.link_wallet(uid, text)
+            await update.message.reply_text("✅ Wallet Linked! Airdrop Ready.")
+            context.user_data.pop('waiting_wallet', None)
+        else:
+            await update.message.reply_text("❌ Invalid TON Address")
+        return
+
+    # --- 3. TERCIARIO: COMBO DIARIO (GAMIFICADO) ---
+    if context.user_data.get('waiting_combo'):
+        target = context.user_data.get('daily_combo_target')
+        # Comparar si el texto contiene los emojis (limpiando espacios)
+        cleaned_text = text.replace(" ", "")
+        if target in cleaned_text or cleaned_text == target:
+            node = await db.get_node(uid)
+            bonus = CONST['COMBO_DAILY_MAX']
+            node['honey'] += bonus
+            node['streak'] = node.get('streak', 0) + 5
+            await db.save_node(uid, node)
+            await update.message.reply_text(get_text(lang, "combo_success", amt=int(bonus)), parse_mode=ParseMode.MARKDOWN)
+            context.user_data.pop('waiting_combo', None)
+        else:
+            await update.message.reply_text("❌ Esa no es la secuencia correcta. ¡Intenta descifrar la pista!")
         return
 
     try:
@@ -590,14 +594,22 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"────────────────"
         )
         
+        # SI LA WALLET YA ESTA CONECTADA, NO MOSTRAMOS EL BOTON "CONNECT WALLET"
+        btn_wallet = [InlineKeyboardButton(get_text(lang, "btn_wallet"), callback_data="wallet_menu")]
+        if node.get("ton_wallet"):
+            btn_wallet = []
+
         kb = [
             [InlineKeyboardButton(get_text(lang, "btn_mine"), callback_data="forage")],
             [InlineKeyboardButton(get_text(lang, "btn_preds"), callback_data="preds"), InlineKeyboardButton(get_text(lang, "btn_combo"), callback_data="combo")],
             [InlineKeyboardButton(get_text(lang, "btn_lb"), callback_data="lb"), InlineKeyboardButton(get_text(lang, "btn_squad"), callback_data="squad")],
-            [InlineKeyboardButton(get_text(lang, "btn_wallet"), callback_data="wallet_menu")],
+            btn_wallet,
             [InlineKeyboardButton(get_text(lang, "btn_tasks"), callback_data="tasks"), InlineKeyboardButton(get_text(lang, "btn_shop"), callback_data="shop")],
             [InlineKeyboardButton(get_text(lang, "btn_team"), callback_data="team")]
         ]
+        # Limpiar filas vacias
+        kb = [row for row in kb if row]
+
         await smart_edit(update, txt, InlineKeyboardMarkup(kb))
     except Exception as e: logger.error(f"Dash Error: {e}")
 
@@ -609,6 +621,10 @@ async def wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = update.callback_query.from_user.language_code
     txt = get_text(lang, "wallet_prompt")
     context.user_data['waiting_wallet'] = True
+    # LIMPIAR OTROS ESTADOS
+    context.user_data.pop('waiting_combo', None)
+    context.user_data['step'] = None
+
     kb = [[InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="go_dash")]]
     await smart_edit(update, txt, InlineKeyboardMarkup(kb))
 
@@ -699,10 +715,14 @@ async def forage_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def daily_combo_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = update.callback_query.from_user.language_code
-    # OBTENER RETA GAMIFICADO (PISTA)
+    # OBTENER RETO GAMIFICADO (PISTA)
     riddle_data = get_daily_riddle()
     context.user_data['daily_combo_target'] = riddle_data['seq']
     context.user_data['waiting_combo'] = True
+    
+    # LIMPIAR OTROS ESTADOS
+    context.user_data.pop('waiting_wallet', None)
+    context.user_data['step'] = None
     
     txt = get_text(lang, "daily_combo", riddle=riddle_data['riddle'])
     kb = [[InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="go_dash")]]
@@ -870,5 +890,5 @@ async def reset_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("💀 Node Purged")
 
 async def invite_cmd(u, c): await team_menu(u, c)
-async def help_cmd(u, c): await u.message.reply_text("V13.6 GAMIFIED")
+async def help_cmd(u, c): await u.message.reply_text("V13.7 FULL MONOLITH")
 async def broadcast_cmd(u, c): pass
