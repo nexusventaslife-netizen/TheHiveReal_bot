@@ -2,7 +2,6 @@ import os
 import ujson as json
 import time
 import asyncio
-# CORRECCIÓN AQUÍ: Se agregó 'Tuple' a los imports
 from typing import Optional, Dict, List, Any, Union, Tuple
 from redis import asyncio as aioredis
 from redis.exceptions import ResponseError
@@ -39,18 +38,17 @@ class Database:
     # --- NODOS (USUARIOS) ---
 
     async def create_node(self, uid: int, first_name: str, username: str, ref_id: Optional[int] = None):
-        """Crea o actualiza un nodo básico de forma segura"""
+        """Crea o actualiza un nodo básico de forma segura (OPTIMIZADO TOKENOMICS)"""
         key = f"node:{uid}"
         
         try:
             exists = await self.redis.exists(key)
         except ResponseError:
-            # Si da WRONGTYPE, borramos la clave corrupta
             await self.redis.delete(key)
             exists = False
 
         if not exists:
-            # Estructura inicial V13
+            # Estructura V13.4 (Soporte Wallet/NFTs)
             node_data = {
                 "uid": uid,
                 "first_name": first_name,
@@ -65,9 +63,12 @@ class Database:
                 "streak": 0,       
                 "last_tap": 0.0,
                 "email": "",
-                "squad_id": ""
+                "squad_id": "",
+                # CAMPOS TOKENOMICS
+                "ton_wallet": "",       # Para airdrop/connect
+                "staked_hive": 0.0,     # Para staking rewards
+                "nft_boost": 0.0        # Multiplicador extra por NFTs
             }
-            # Usamos pipeline para atomicidad
             async with self.redis.pipeline() as pipe:
                 pipe.hset(key, mapping=node_data)
                 pipe.sadd("global:users", uid)
@@ -85,7 +86,7 @@ class Database:
             data = await self.redis.hgetall(key)
             if not data: return None
             
-            # Conversión segura de tipos
+            # Conversión segura y Defaults Tokenomics
             return {
                 "uid": int(data.get("uid", uid)),
                 "first_name": data.get("first_name", ""),
@@ -101,11 +102,14 @@ class Database:
                 "last_regen": float(data.get("last_regen", time.time())),
                 "last_tap": float(data.get("last_tap", 0.0)),
                 "joined_at": float(data.get("joined_at", time.time())),
-                # Traemos referidos aparte para no ensuciar el hash
+                # Tokenomics Fields
+                "ton_wallet": data.get("ton_wallet", ""),
+                "staked_hive": float(data.get("staked_hive", 0.0)),
+                "nft_boost": float(data.get("nft_boost", 0.0)),
                 "referrals": [] 
             }
         except ResponseError as e:
-            logger.error(f"⚠️ WRONGTYPE en get_node:{uid} -> Reseteando nodo. {e}")
+            logger.error(f"⚠️ WRONGTYPE en get_node:{uid} -> Reseteando. {e}")
             await self.redis.delete(key)
             return None
         except Exception as e:
@@ -115,18 +119,14 @@ class Database:
     async def save_node(self, uid: int, data: Dict):
         """Guarda nodo usando Pipeline y actualiza Leaderboard"""
         key = f"node:{uid}"
-        
-        # Limpiamos datos que no van al Hash (listas, objetos)
         safe_data = {k: v for k, v in data.items() if isinstance(v, (str, int, float))}
         
         try:
             async with self.redis.pipeline() as pipe:
                 pipe.hset(key, mapping=safe_data)
                 
-                # Actualizar Leaderboard HSP (ZSET)
                 if 'hsp' in data:
                     name_display = f"{data.get('username', '')[:10]}" or f"ID:{uid}"
-                    # Guardamos score es HSP
                     pipe.zadd("leaderboard:hsp", {f"{name_display}:{uid}": float(data['hsp'])})
                     
                 await pipe.execute()
@@ -136,26 +136,24 @@ class Database:
     async def update_email(self, uid: int, email: str):
         await self.redis.hset(f"node:{uid}", "email", email)
 
+    async def link_wallet(self, uid: int, wallet: str):
+        """Vincula wallet TON para airdrop/staking"""
+        await self.redis.hset(f"node:{uid}", "ton_wallet", wallet)
+
     async def delete_node(self, uid: int):
-        """Borrado completo con limpieza de índices"""
         async with self.redis.pipeline() as pipe:
             pipe.delete(f"node:{uid}")
             pipe.delete(f"refs:{uid}")
             pipe.srem("global:users", uid)
-            # Nota: ZREM necesita el member exacto. En prod ideal guardar solo UID en zset.
-            # Para simplificar borrado V13.2, omitimos zrem complejo para no fallar
             await pipe.execute()
 
-    # --- LEADERBOARD HSP (OPTIMIZADO) ---
+    # --- LEADERBOARD HSP ---
 
     async def get_top_hsp(self, limit: int = 10) -> List[Tuple[str, float]]:
-        """Devuelve el Top 10 HSP formateado"""
         try:
-            # ZREVRANGE devuelve de mayor a menor score
             raw_data = await self.redis.zrevrange("leaderboard:hsp", 0, limit-1, withscores=True)
             cleaned_data = []
             for member, score in raw_data:
-                # member es "Nombre:UID", lo limpiamos para mostrar solo nombre
                 name = member.split(":")[0] if ":" in member else member
                 cleaned_data.append((name, score))
             return cleaned_data
@@ -163,7 +161,7 @@ class Database:
             logger.error(f"Leaderboard error: {e}")
             return []
 
-    # --- SQUADS (ENJAMBRES) ---
+    # --- SQUADS ---
 
     async def create_cell(self, owner_id: int, name: str) -> Optional[str]:
         cell_id = f"cell:{owner_id}"
