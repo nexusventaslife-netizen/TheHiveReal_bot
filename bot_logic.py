@@ -5,6 +5,7 @@ import time
 import math
 import os
 import ujson as json
+import re
 from typing import Tuple, List, Dict, Any, Optional
 from datetime import datetime, timedelta
 
@@ -16,15 +17,15 @@ from email_validator import validate_email
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode, ChatAction
 from telegram.ext import ContextTypes, Application
-# CORRECCIÓN AQUÍ: Cambiado 'RateLimited' por 'RetryAfter' (Versión 20.x standard)
-from telegram.error import BadRequest, RetryAfter 
+# IMPORTANTE: Usamos RetryAfter y BadRequest para manejar errores de Telegram
+from telegram.error import BadRequest, RetryAfter, NetworkError, Forbidden
 from loguru import logger
 
-# IMPORTAMOS TU BASE DE DATOS REDIS
+# IMPORTAMOS TU BASE DE DATOS REDIS (La misma V13.4 que tienes)
 from database import db 
 
 # ==============================================================================
-# 🐝 THE ONE HIVE: V13.5 (SCALABLE FIX)
+# 🐝 THE ONE HIVE: V13.6 (GAMIFIED & ERROR FREE)
 # ==============================================================================
 
 logger = logging.getLogger("HiveLogic")
@@ -74,7 +75,7 @@ rate_limiters = {}
 
 async def get_limiter(uid: int) -> AsyncLimiter:
     if uid not in rate_limiters:
-        # Permite 15 acciones por minuto por usuario (evita sobrecarga de CPU)
+        # Permite 15 acciones por minuto por usuario
         rate_limiters[uid] = AsyncLimiter(15, 60) 
     return rate_limiters[uid]
 
@@ -117,13 +118,13 @@ TEXTS = {
         "lbl_feed": "📊 **Red:**",
         "footer_msg": "📝 _Prioridad de red calculada en tiempo real._",
         "btn_mine": "⚡ TAP (HSP)",
-        "btn_tasks": "🟢 PANALES",
+        "btn_tasks": "🟢 PANALES (GANAR)",
         "btn_rank": "🧬 EVOLUCIÓN",
         "btn_squad": "🐝 SQUAD",
         "btn_team": "👥 EXPANDIR",
-        "btn_shop": "🛡️ PRIORIDAD ($)",
+        "btn_shop": "🛡️ MEJORAS/SHOP",
         "btn_preds": "🧠 PREDICCIONES",
-        "btn_combo": "🔥 COMBO",
+        "btn_combo": "🔥 COMBO DIARIO",
         "btn_lb": "🏆 TOP 10",
         "btn_wallet": "💼 CONNECT WALLET",
         "viral_1": "El acceso temprano sigue abierto.\n\n{link}",
@@ -138,8 +139,8 @@ TEXTS = {
         "protect_body": "Al registrar un email:\n• Preservas tu progreso\n\nNo vendemos cuentas.",
         "email_prompt": "🛡️ **REGISTRO DE NODO**\n\nIngresa tu EMAIL para asegurar persistencia:",
         "email_success": "✅ **NODO ASEGURADO**",
-        "shop_title": "🛡️ **ACCESO PRIORITARIO MENSUAL**",
-        "shop_body": "Mejora velocidad y acceso.\n\nIncluye (30 Días):\n✅ Regeneración rápida\n✅ Acceso a tareas avanzadas",
+        "shop_title": "🛡️ **TIENDA DE RECURSOS**",
+        "shop_body": "Usa tu HIVE (Néctar) para comprar mejoras.\nLas compras queman tokens (Deflación).\n\n🔹 **Premium:** Regeneración x2\n🔹 **Recarga:** Energía instantánea",
         "btn_buy_prem": "🛡️ PRIORIDAD (30 DÍAS) - ${price}",
         "btn_buy_energy": "🔋 RECARGA ({cost} HIVE)",
         "pay_txt": "🛡️ **ACCESO PRIORITARIO (30 DÍAS)**\n\n🔹 **Cripto (USDT)**\n`{wallet}`\n\n🔹 **PayPal**\nBotón abajo.",
@@ -147,24 +148,25 @@ TEXTS = {
         "team_title": "👥 **EXPANSIÓN DE RED**",
         "team_body": "Nodos con conexiones activas avanzan más rápido.\n\n🔗 Tu Enlace de Nodo:\n`{link}`",
         "tasks_title": "📡 **ZONAS DE ACTIVIDAD**",
-        "tasks_body": "Selecciona el Panal según tu rango:",
+        "tasks_body": "Completa tareas en los Paneles para ganar HIVE gratis.\nLos fondos se acumulan en tu balance principal.",
         "btn_back": "🔙 VOLVER",
-        "green_hive": "PANAL VERDE",
-        "gold_hive": "PANAL DORADO",
-        "red_hive": "PANAL ROJO",
+        "green_hive": "PANAL VERDE (Fácil)",
+        "gold_hive": "PANAL DORADO (Medio)",
+        "red_hive": "PANAL ROJO (Difícil)",
         "squad_none_title": "⚠️ NODO INDIVIDUAL",
-        "squad_none_body": "Los nodos individuales tienen menor prioridad.\nConecta con otros para escalar.",
-        "btn_create_squad": "➕ CONECTAR ({cost} HIVE)",
+        "squad_none_body": "Los nodos individuales tienen menor prioridad.\nFormar un ENJAMBRE aumenta el valor de tus tokens y NFTs.",
+        "btn_create_squad": "➕ CREAR ENJAMBRE ({cost} HIVE)",
         "squad_active": "🐝 **CONEXIÓN ACTIVA**\n👥 Nodos: {members}\n🔥 IIL Boost: ACTIVO",
-        "no_balance": "❌ HIVE Insuficiente",
+        "no_balance": "❌ HIVE Insuficiente (Ve a Panales para ganar más)",
         "hsp_lbl": "🌐 HSP: x{hsp:.2f}",
-        "daily_combo": "🔥 **COMBO DIARIO**\n\nEncuentra la secuencia secreta.\nIngresa los 3 emojis correctos en el chat.",
+        "daily_combo": "🔥 **RETO DIARIO**\n\nAdivina la secuencia de 3 emojis basada en la pista:\n\n🕵️ **Pista:** _{riddle}_\n\n_Escribe los 3 emojis en el chat para ganar +1000 HIVE._",
         "combo_success": "🚀 **COMBO CORRECTO**\n+{amt} HIVE! Streak aumentado.",
         "leaderboard": "🏆 **TOP HSP GLOBAL**\n\n{top10}",
         "predictions": "🧠 **PREDICCIONES HIVE**\n\nEvento: {evento}",
         "streak_lbl": "🔥 Racha: {streak}",
         "pred_vote_ok": "✅ Voto registrado. Si aciertas, tu HSP subirá.",
-        "wallet_prompt": "💼 **CONEXIÓN TON**\n\nEnvía tu dirección de Wallet TON (Address) en el chat para recibir el Airdrop futuro.\n\nEjemplo: `UQ...`"
+        "wallet_prompt": "💼 **CONEXIÓN TON**\n\nEnvía tu dirección de Wallet TON (Address) en el chat para recibir el Airdrop futuro.\n\nEjemplo: `UQ...`",
+        "wallet_linked": "💼 Wallet Conectada: `{wallet}`"
     },
     "en": {
          "intro_caption": "Welcome to The One Hive.",
@@ -177,13 +179,13 @@ TEXTS = {
         "lbl_energy": "⚡ Energy",
         "lbl_honey": "🍯 Nectar",
         "lbl_feed": "📊 **Network:**",
-        "footer_msg": "📝 _Network priority calculated in real-time._",
+        "footer_msg": "📝 _Real-time priority._",
         "btn_mine": "⚡ TAP (HSP)",
-        "btn_tasks": "🟢 HIVES",
+        "btn_tasks": "🟢 HIVES (EARN)",
         "btn_rank": "🧬 EVOLUTION",
         "btn_squad": "🐝 SQUAD",
         "btn_team": "👥 EXPAND",
-        "btn_shop": "🛡️ PRIORITY ($)",
+        "btn_shop": "🛡️ SHOP/UPGRADES",
         "btn_preds": "🧠 PREDS",
         "btn_combo": "🔥 COMBO",
         "btn_lb": "🏆 TOP 10",
@@ -198,10 +200,10 @@ TEXTS = {
         "lock_msg": "🔒 RESTRICTED. Level {lvl} required.",
         "protect_title": "⚠️ **SECURE NODE: {reason}**",
         "protect_body": "Register email to save progress.",
-        "email_prompt": "🛡️ **NODE REGISTRATION**\n\nEnter EMAIL:",
+        "email_prompt": "🛡️ **REGISTER**\n\nEnter EMAIL:",
         "email_success": "✅ **SECURED**",
-        "shop_title": "🛡️ **PRIORITY ACCESS**",
-        "shop_body": "Faster regen & access.",
+        "shop_title": "🛡️ **RESOURCE SHOP**",
+        "shop_body": "Use HIVE to buy upgrades. Burning tokens increases value.",
         "btn_buy_prem": "🛡️ PRIORITY - ${price}",
         "btn_buy_energy": "🔋 RECHARGE ({cost} HIVE)",
         "pay_txt": "🛡️ **PRIORITY ACCESS**\n\n🔹 USDT: `{wallet}`\n🔹 PayPal below.",
@@ -209,24 +211,25 @@ TEXTS = {
         "team_title": "👥 **EXPANSION**",
         "team_body": "Link:\n`{link}`",
         "tasks_title": "📡 **ZONES**",
-        "tasks_body": "Select Hive:",
+        "tasks_body": "Complete tasks to earn free HIVE.",
         "btn_back": "🔙 BACK",
         "green_hive": "GREEN HIVE",
         "gold_hive": "GOLD HIVE",
         "red_hive": "RED HIVE",
         "squad_none_title": "⚠️ ISOLATED",
         "squad_none_body": "Connect to scale.",
-        "btn_create_squad": "➕ CONNECT ({cost} HIVE)",
+        "btn_create_squad": "➕ CREATE SQUAD ({cost} HIVE)",
         "squad_active": "🐝 **ACTIVE**\nNodes: {members}",
         "no_balance": "❌ Insufficient Funds",
         "hsp_lbl": "🌐 HSP: x{hsp:.2f}",
-        "daily_combo": "🔥 **DAILY COMBO**\n\nFind the secret sequence.",
+        "daily_combo": "🔥 **DAILY CHALLENGE**\n\nGuess the emojis based on the clue:\n\n🕵️ **Clue:** _{riddle}_",
         "combo_success": "🚀 **COMBO MATCH**\n+{amt} HIVE!",
         "leaderboard": "🏆 **GLOBAL TOP**\n\n{top10}",
         "predictions": "🧠 **PREDICTIONS**\n\nEvent: {evento}",
         "streak_lbl": "🔥 Streak: {streak}",
         "pred_vote_ok": "✅ Vote registered.",
-        "wallet_prompt": "💼 **TON CONNECT**\n\nSend your TON Wallet Address in chat for future Airdrop."
+        "wallet_prompt": "💼 **TON CONNECT**\n\nSend your TON Wallet Address in chat for future Airdrop.",
+        "wallet_linked": "💼 Linked: `{wallet}`"
     }
 }
 
@@ -277,7 +280,7 @@ FORRAJEO_DB = {
 }
 
 # ==============================================================================
-# UTILIDADES
+# UTILIDADES & GAMIFICACIÓN
 # ==============================================================================
 
 def render_bar(current: float, total: float, length: int = 10) -> str:
@@ -290,11 +293,19 @@ def generate_live_feed(lang: str) -> str:
     acciones = ["conectado", "minando", "HSP UP", "Combo OK", "Wallet Linked"]
     return f"• ID-{random.randint(100,999)} {random.choice(acciones)} ({random.randint(1,9)}m)"
 
-def generate_daily_combo() -> str:
-    combos = ["🐝👑🔥", "🍯⚡🛡️", "🔭🐛🟢", "🐝🍯💰", "👑🛡️⚡"]
+# GAMIFICACIÓN MEJORADA: PISTAS
+def get_daily_riddle() -> Dict:
+    """Retorna un dict con la secuencia y la pista (riddle)"""
+    riddles = [
+        {"seq": "🐝👑🔥", "riddle": "El trabajador, la monarca y el elemento que quema."},
+        {"seq": "🍯⚡🛡️", "riddle": "Dulce néctar, energía pura y protección."},
+        {"seq": "🔭🐛🟢", "riddle": "El que mira lejos, el inicio de la vida y el color de la esperanza."},
+        {"seq": "👑🛡️⚡", "riddle": "Poder real, defensa sólida y velocidad."},
+        {"seq": "🐝🍯💰", "riddle": "Trabajo duro, el resultado dulce y la riqueza final."}
+    ]
     today = datetime.now().strftime("%Y%m%d")
-    seed = hash(today) % len(combos)
-    return combos[seed]
+    seed = hash(today) % len(riddles)
+    return riddles[seed]
 
 async def get_evento_diario() -> Dict:
     eventos = [
@@ -311,15 +322,21 @@ async def smart_edit(update: Update, text: str, reply_markup: InlineKeyboardMark
     try:
         if update.callback_query:
             await update.callback_query.message.edit_text(text, reply_markup=reply_markup, parse_mode=ParseMode.MARKDOWN)
-    except (BadRequest, RetryAfter) as e: # CORRECCIÓN VITAL: RetryAfter
+    except (BadRequest, RetryAfter) as e: 
         logger.error(f"Error SmartEdit Rescue: {e}")
         try: await update.callback_query.message.delete()
         except: pass
         try: await update.callback_query.message.reply_text(text, reply_markup=reply_markup, parse_mode=ParseMode.MARKDOWN)
         except Exception: pass
 
+def escape_markdown(text: str) -> str:
+    """Escapa caracteres para evitar el error 'Can't parse entities'"""
+    if not text: return ""
+    # Escapar caracteres reservados de Markdown V1/V2 que rompen el parseo
+    return text.replace("_", "\\_").replace("*", "\\*").replace("`", "\\`").replace("[", "\\[")
+
 # ==============================================================================
-# BIO ENGINE (OPTIMIZADO V13.4 - CRYPTO FACTOR)
+# BIO ENGINE
 # ==============================================================================
 
 class BioEngine:
@@ -334,13 +351,14 @@ class BioEngine:
 
     @staticmethod
     def calculate_hsp(node_dict: Dict, iil: float) -> float:
-        # HSP = IIL * Rango * Squad * (1 + NFT_Boost)
         rango = node_dict.get("caste", "LARVA")
         mult = RANGOS_CONFIG.get(rango, RANGOS_CONFIG["LARVA"])["hsp_mult"]
         squad_bonus = 0.1 if node_dict.get("squad_id") else 0.0
-        nft_bonus = float(node_dict.get("nft_boost", 0.0)) # Tokenomics NFT
-
-        return iil * mult * (1 + squad_bonus + nft_bonus)
+        nft_bonus = float(node_dict.get("nft_boost", 0.0)) 
+        staked = float(node_dict.get("hive_staked", 0.0))
+        staking_bonus = math.log1p(staked) * 0.1 if staked > 0 else 0.0
+            
+        return iil * mult * (1 + squad_bonus + staking_bonus) * (1 + nft_bonus)
 
     @staticmethod
     def calculate_state(node_data: Dict) -> Dict:
@@ -360,10 +378,8 @@ class BioEngine:
         refs_count = len(node.get("referrals") or [])
         joined_at = node.get("joined_at", now)
         
-        # 1. Calc IIL
         iil_score = BioEngine.calculate_iil(balance, refs_count, joined_at)
         
-        # 2. Rango
         poder_total = balance + (refs_count * CONST["BONO_REFERIDO"])
         rango = "LARVA"
         stats = RANGOS_CONFIG["LARVA"]
@@ -375,14 +391,13 @@ class BioEngine:
         node["caste"] = rango 
         node["max_polen"] = stats["max_energia"]
         
-        # 3. HSP
         node["hsp"] = BioEngine.calculate_hsp(node, iil_score)
 
-        # 4. Regen
         if elapsed > 0:
             base_regen_rate = 0.8
             final_regen_rate = base_regen_rate * (node["hsp"] * 0.3) 
             if final_regen_rate < 0.1: final_regen_rate = 0.1
+            
             regen_amount = elapsed * final_regen_rate
             current_polen = float(node.get("polen", 0))
             node["polen"] = min(node["max_polen"], current_polen + int(regen_amount))
@@ -416,7 +431,7 @@ async def request_email_protection(update: Update, context: ContextTypes.DEFAULT
 # STARTUP
 # ==============================================================================
 async def on_startup(application: Application):
-    logger.info("🚀 INICIANDO SISTEMA HIVE V13.5 (SCALABLE & FIXED)")
+    logger.info("🚀 INICIANDO SISTEMA HIVE V13.6 (GAMIFIED & FIXED)")
     await db.connect() 
 
 async def on_shutdown(application: Application):
@@ -462,19 +477,26 @@ async def general_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     
     if text.upper() == "/START": await start_command(update, context); return
 
-    if context.user_data.get('waiting_combo') and text == context.user_data.get('daily_combo_target'):
-        node = await db.get_node(uid)
-        bonus = CONST['COMBO_DAILY_MAX'] * random.uniform(0.5, 1.0)
-        node['honey'] += bonus
-        node['streak'] = node.get('streak', 0) + 5
-        await db.save_node(uid, node)
-        await update.message.reply_text(get_text(lang, "combo_success", amt=int(bonus)), parse_mode=ParseMode.MARKDOWN)
-        context.user_data.pop('waiting_combo', None)
+    # --- COMBO DIARIO (GAMIFICADO) ---
+    if context.user_data.get('waiting_combo'):
+        target = context.user_data.get('daily_combo_target')
+        # Comparar si el texto contiene los emojis (limpiando espacios)
+        cleaned_text = text.replace(" ", "")
+        if target in cleaned_text or cleaned_text == target:
+            node = await db.get_node(uid)
+            bonus = CONST['COMBO_DAILY_MAX']
+            node['honey'] += bonus
+            node['streak'] = node.get('streak', 0) + 5
+            await db.save_node(uid, node)
+            await update.message.reply_text(get_text(lang, "combo_success", amt=int(bonus)), parse_mode=ParseMode.MARKDOWN)
+            context.user_data.pop('waiting_combo', None)
+        else:
+            await update.message.reply_text("❌ Esa no es la secuencia correcta. ¡Intenta descifrar la pista!")
         return
 
     # WALLET CONNECT
     if context.user_data.get('waiting_wallet'):
-        if len(text) > 40: # Validación básica TON
+        if len(text) > 40: 
             await db.link_wallet(uid, text)
             await update.message.reply_text("✅ Wallet Linked! Airdrop Ready.")
             context.user_data.pop('waiting_wallet', None)
@@ -536,9 +558,13 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         info = RANGOS_CONFIG.get(rango, RANGOS_CONFIG["LARVA"])
         status_msg = get_text(lang, "status_unsafe") if not node.get("email") else get_text(lang, "status_safe")
         
+        # MOSTRAR WALLET SI ESTÁ CONECTADA
+        if node.get("ton_wallet"):
+            short_wallet = node["ton_wallet"][:4] + "..." + node["ton_wallet"][-4:]
+            status_msg += f"\n{get_text(lang, 'wallet_linked', wallet=short_wallet)}"
+
         polen = int(node['polen'])
         max_p = int(node['max_polen'])
-        
         hsp = node.get("hsp", 1.0)
         streak = node.get("streak", 0)
         
@@ -568,7 +594,7 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(get_text(lang, "btn_mine"), callback_data="forage")],
             [InlineKeyboardButton(get_text(lang, "btn_preds"), callback_data="preds"), InlineKeyboardButton(get_text(lang, "btn_combo"), callback_data="combo")],
             [InlineKeyboardButton(get_text(lang, "btn_lb"), callback_data="lb"), InlineKeyboardButton(get_text(lang, "btn_squad"), callback_data="squad")],
-            [InlineKeyboardButton(get_text(lang, "btn_wallet"), callback_data="connect_wallet")],
+            [InlineKeyboardButton(get_text(lang, "btn_wallet"), callback_data="wallet_menu")],
             [InlineKeyboardButton(get_text(lang, "btn_tasks"), callback_data="tasks"), InlineKeyboardButton(get_text(lang, "btn_shop"), callback_data="shop")],
             [InlineKeyboardButton(get_text(lang, "btn_team"), callback_data="team")]
         ]
@@ -673,10 +699,12 @@ async def forage_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def daily_combo_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = update.callback_query.from_user.language_code
-    combo = generate_daily_combo()
-    context.user_data['daily_combo_target'] = combo
+    # OBTENER RETA GAMIFICADO (PISTA)
+    riddle_data = get_daily_riddle()
+    context.user_data['daily_combo_target'] = riddle_data['seq']
     context.user_data['waiting_combo'] = True
-    txt = get_text(lang, "daily_combo")
+    
+    txt = get_text(lang, "daily_combo", riddle=riddle_data['riddle'])
     kb = [[InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="go_dash")]]
     await smart_edit(update, txt, InlineKeyboardMarkup(kb))
 
@@ -698,12 +726,17 @@ async def prediction_vote(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def leaderboard_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = update.callback_query.from_user.language_code
     tops = await db.get_top_hsp(10)
-    if not tops:
-        top10 = "1. HiveMaster\n2. AlphaNode"
-    else:
-        top10 = "\n".join([f"{i+1}. {name}: {score:.2f} HSP" for i, (name, score) in enumerate(tops)])
-        
-    txt = get_text(lang, "leaderboard", top10=top10)
+    top_text = ""
+    
+    # CORRECCIÓN DE ERROR "CAN'T PARSE ENTITIES"
+    # Escapamos nombres para que no rompan el Markdown
+    for i, (name, score) in enumerate(tops):
+        safe_name = escape_markdown(name)
+        top_text += f"{i+1}. {safe_name}: `{score:.2f}` HSP\n"
+    
+    if not top_text: top_text = "Loading data..."
+
+    txt = get_text(lang, "leaderboard", top10=top_text)
     kb = [[InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="go_dash")]]
     await smart_edit(update, txt, InlineKeyboardMarkup(kb))
 
@@ -824,7 +857,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "pred_yes": prediction_vote,
         "pred_no": prediction_vote,
         "lb": leaderboard_menu,
-        "connect_wallet": wallet_menu
+        "wallet_menu": wallet_menu
     }
     
     if d in actions: await actions[d](update, context)
@@ -837,5 +870,5 @@ async def reset_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("💀 Node Purged")
 
 async def invite_cmd(u, c): await team_menu(u, c)
-async def help_cmd(u, c): await u.message.reply_text("V13.5 SCALABLE & FIXED")
+async def help_cmd(u, c): await u.message.reply_text("V13.6 GAMIFIED")
 async def broadcast_cmd(u, c): pass
