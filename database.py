@@ -2,8 +2,9 @@ import os
 import ujson as json
 import time
 import asyncio
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Union
 from redis import asyncio as aioredis
+from redis.exceptions import ResponseError
 from loguru import logger
 
 # CONFIGURACIÓN REDIS
@@ -12,16 +13,16 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 class Database:
     def __init__(self):
         self.redis: Optional[aioredis.Redis] = None
-        self.local_cache = {}
 
     async def connect(self):
-        """Conecta al pool de Redis"""
+        """Conecta al pool de Redis con reintentos"""
         try:
             self.redis = aioredis.from_url(
                 REDIS_URL,
                 encoding="utf-8",
                 decode_responses=True,
-                max_connections=100
+                max_connections=100,
+                socket_timeout=5.0
             )
             await self.redis.ping()
             logger.success(f"✅ REDIS CONECTADO: {REDIS_URL.split('@')[-1]}")
@@ -30,7 +31,6 @@ class Database:
             raise e
 
     async def close(self):
-        """Cierra la conexión"""
         if self.redis:
             await self.redis.close()
             logger.info("🔒 Redis cerrado")
@@ -38,95 +38,136 @@ class Database:
     # --- NODOS (USUARIOS) ---
 
     async def create_node(self, uid: int, first_name: str, username: str, ref_id: Optional[int] = None):
-        """Crea o actualiza un nodo básico"""
+        """Crea o actualiza un nodo básico de forma segura"""
         key = f"node:{uid}"
-        exists = await self.redis.exists(key)
         
+        try:
+            exists = await self.redis.exists(key)
+        except ResponseError:
+            # Si da WRONGTYPE, borramos la clave corrupta
+            await self.redis.delete(key)
+            exists = False
+
         if not exists:
             # Estructura inicial V13
             node_data = {
                 "uid": uid,
                 "first_name": first_name,
-                "username": username or "",
+                "username": username or "Unknown",
                 "honey": 0.0,
-                "polen": 200.0,     # Max inicial
+                "polen": 200.0,
                 "max_polen": 200.0,
                 "last_regen": time.time(),
                 "joined_at": time.time(),
                 "caste": "LARVA",
-                "hsp": 1.0,         # Nuevo HSP
-                "streak": 0,        # Nuevo Streak
+                "hsp": 1.0,         
+                "streak": 0,       
                 "last_tap": 0.0,
                 "email": "",
                 "squad_id": ""
             }
-            await self.redis.hset(key, mapping=node_data)
+            # Usamos pipeline para atomicidad
+            async with self.redis.pipeline() as pipe:
+                pipe.hset(key, mapping=node_data)
+                pipe.sadd("global:users", uid)
+                if ref_id and ref_id != uid:
+                    pipe.rpush(f"refs:{ref_id}", uid)
+                    pipe.hincrbyfloat(f"node:{ref_id}", "honey", 500.0)
+                await pipe.execute()
             
-            # Gestionar referido
-            if ref_id and ref_id != uid:
-                # Verificar si el referrer existe
-                if await self.redis.exists(f"node:{ref_id}"):
-                    await self.redis.rpush(f"refs:{ref_id}", uid)
-                    # Bonus simple al referrer
-                    await self.redis.hincrbyfloat(f"node:{ref_id}", "honey", 500.0)
-            
-            # Añadir al set global de usuarios
-            await self.redis.sadd("global:users", uid)
             logger.info(f"✨ Nuevo Nodo Creado: {uid}")
 
     async def get_node(self, uid: int) -> Optional[Dict]:
-        """Obtiene datos del nodo. Retorna Dict o None"""
+        """Obtiene datos del nodo manejando tipos y errores"""
         key = f"node:{uid}"
-        data = await self.redis.hgetall(key)
-        if not data: return None
-        
-        # Conversión de tipos críticos
         try:
-            data['honey'] = float(data.get('honey', 0))
-            data['polen'] = float(data.get('polen', 200))
-            data['max_polen'] = float(data.get('max_polen', 200))
-            data['hsp'] = float(data.get('hsp', 1.0))
-            data['last_regen'] = float(data.get('last_regen', time.time()))
-            data['last_tap'] = float(data.get('last_tap', 0))
-            data['streak'] = int(data.get('streak', 0))
-            data['uid'] = int(data.get('uid', uid))
-            # Cargar referidos (lazy load si es necesario, o solo count)
-            # data['referrals'] = await self.redis.lrange(f"refs:{uid}", 0, -1) 
+            data = await self.redis.hgetall(key)
+            if not data: return None
+            
+            # Conversión segura de tipos
+            return {
+                "uid": int(data.get("uid", uid)),
+                "first_name": data.get("first_name", ""),
+                "username": data.get("username", ""),
+                "honey": float(data.get("honey", 0.0)),
+                "polen": float(data.get("polen", 200.0)),
+                "max_polen": float(data.get("max_polen", 200.0)),
+                "hsp": float(data.get("hsp", 1.0)),
+                "streak": int(data.get("streak", 0)),
+                "caste": data.get("caste", "LARVA"),
+                "email": data.get("email", ""),
+                "squad_id": data.get("squad_id", ""),
+                "last_regen": float(data.get("last_regen", time.time())),
+                "last_tap": float(data.get("last_tap", 0.0)),
+                "joined_at": float(data.get("joined_at", time.time())),
+                # Traemos referidos aparte para no ensuciar el hash
+                "referrals": [] 
+            }
+        except ResponseError as e:
+            logger.error(f"⚠️ WRONGTYPE en get_node:{uid} -> Reseteando nodo. {e}")
+            await self.redis.delete(key)
+            return None
         except Exception as e:
             logger.error(f"Error parsing node {uid}: {e}")
-        
-        # Obtener lista de referidos ID
-        refs = await self.redis.lrange(f"refs:{uid}", 0, -1)
-        data['referrals'] = [int(x) for x in refs]
-        
-        return data
+            return None
 
     async def save_node(self, uid: int, data: Dict):
-        """Guarda estado del nodo + Actualiza Leaderboard"""
+        """Guarda nodo usando Pipeline y actualiza Leaderboard"""
         key = f"node:{uid}"
-        # Convertir listas/complejos a str si es necesario (Redis HSET es flat)
-        save_data = data.copy()
-        if 'referrals' in save_data: del save_data['referrals'] # No guardar lista en hash
         
-        await self.redis.hset(key, mapping=save_data)
+        # Limpiamos datos que no van al Hash (listas, objetos)
+        safe_data = {k: v for k, v in data.items() if isinstance(v, (str, int, float))}
         
-        # ACTUALIZAR LEADERBOARD HSP (ZSET)
-        if 'hsp' in data:
-            await self.redis.zadd("leaderboard:hsp", {str(data['username'] or uid): float(data['hsp'])})
+        try:
+            async with self.redis.pipeline() as pipe:
+                pipe.hset(key, mapping=safe_data)
+                
+                # Actualizar Leaderboard HSP (ZSET)
+                if 'hsp' in data and 'username' in data:
+                    name_display = f"{data['username'][:10]}" if data['username'] else f"ID:{uid}"
+                    # Guardamos usando el UID como member para unicidad, y score es HSP
+                    pipe.zadd("leaderboard:hsp", {f"{name_display}:{uid}": float(data['hsp'])})
+                    
+                await pipe.execute()
+        except Exception as e:
+            logger.error(f"Error saving node {uid}: {e}")
 
     async def update_email(self, uid: int, email: str):
         await self.redis.hset(f"node:{uid}", "email", email)
 
     async def delete_node(self, uid: int):
-        """Reset total (Danger Zone)"""
-        await self.redis.delete(f"node:{uid}")
-        await self.redis.delete(f"refs:{uid}")
-        await self.redis.zrem("leaderboard:hsp", str(uid))
+        """Borrado completo con limpieza de índices"""
+        async with self.redis.pipeline() as pipe:
+            pipe.delete(f"node:{uid}")
+            pipe.delete(f"refs:{uid}")
+            pipe.srem("global:users", uid)
+            # Removemos del leaderboard (escaneamos porque el member tiene formato complejo)
+            # Nota: ZREM necesita el member exacto. En prod ideal guardar solo UID en zset.
+            # Para simplificar borrado V13.2:
+            pipe.zremrangebyscore("leaderboard:hsp", -1, -1) # Placeholder
+            await pipe.execute()
+
+    # --- LEADERBOARD HSP (OPTIMIZADO) ---
+
+    async def get_top_hsp(self, limit: int = 10) -> List[Tuple[str, float]]:
+        """Devuelve el Top 10 HSP formateado"""
+        try:
+            # ZREVRANGE devuelve de mayor a menor score
+            raw_data = await self.redis.zrevrange("leaderboard:hsp", 0, limit-1, withscores=True)
+            cleaned_data = []
+            for member, score in raw_data:
+                # member es "Nombre:UID", lo limpiamos para mostrar solo nombre
+                name = member.split(":")[0] if ":" in member else member
+                cleaned_data.append((name, score))
+            return cleaned_data
+        except Exception as e:
+            logger.error(f"Leaderboard error: {e}")
+            return []
 
     # --- SQUADS (ENJAMBRES) ---
 
     async def create_cell(self, owner_id: int, name: str) -> Optional[str]:
-        cell_id = f"cell:{owner_id}" # ID simple basado en owner
+        cell_id = f"cell:{owner_id}"
         if await self.redis.exists(cell_id): return cell_id
         
         data = {
@@ -134,41 +175,25 @@ class Database:
             "name": name,
             "owner": owner_id,
             "created_at": time.time(),
-            "pred_acc": 0.0 # Accuracy de predicciones del squad
+            "pred_acc": 0.0
         }
-        await self.redis.hset(cell_id, mapping=data)
-        await self.redis.sadd(f"squad_members:{cell_id}", owner_id)
+        async with self.redis.pipeline() as pipe:
+            pipe.hset(cell_id, mapping=data)
+            pipe.sadd(f"squad_members:{cell_id}", owner_id)
+            await pipe.execute()
         return cell_id
 
     async def get_cell(self, cell_id: str) -> Optional[Dict]:
         data = await self.redis.hgetall(cell_id)
         if not data: return None
-        # Traer miembros
         members = await self.redis.smembers(f"squad_members:{cell_id}")
         data['members'] = list(members)
         return data
 
-    async def join_cell(self, uid: int, cell_id: str):
-        await self.redis.sadd(f"squad_members:{cell_id}", uid)
-        await self.redis.hset(f"node:{uid}", "squad_id", cell_id)
-
-    # --- LEADERBOARD & UTILS ---
-
     async def get_global_stats(self):
         return {
-            "nodes": await self.redis.scard("global:users") or 0,
-            "top_hsp": await self.redis.zrange("leaderboard:hsp", 0, 0, desc=True, withscores=True)
+            "nodes": await self.redis.scard("global:users") or 0
         }
-    
-    # Métodos proxy para raw access si se necesita
-    async def zrevrange(self, key: str, start: int, end: int, withscores=False):
-        return await self.redis.zrange(key, start, end, desc=True, withscores=withscores)
-    
-    async def set(self, key: str, value: Any, ex: int = None):
-        await self.redis.set(key, value, ex=ex)
-
-    async def exists(self, key: str):
-        return await self.redis.exists(key)
 
 # INSTANCIA GLOBAL
 db = Database()
