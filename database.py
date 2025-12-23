@@ -1,183 +1,174 @@
-import ujson as json
 import os
+import ujson as json
 import time
 import asyncio
-import redis.asyncio as redis
-from datetime import datetime
-# AQUI ESTABA EL ERROR, AHORA ESTA Dict INCLUIDO
-from typing import Optional, Dict, List, Union, Any
+from typing import Optional, Dict, List, Any
+from redis import asyncio as aioredis
 from loguru import logger
 
-# ==============================================================================
-# HIVE DATABASE CORE - V303 (FULL STABLE)
-# ==============================================================================
+# CONFIGURACIÓN REDIS
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
-class DatabaseManager:
+class Database:
     def __init__(self):
-        self.redis_url = os.getenv("REDIS_URL")
-        self.r: Optional[redis.Redis] = None
-        self._max_retries = 10
-        self._retry_delay = 2
-        
-        # --- ESQUEMA MAESTRO DEL NODO ---
-        self.DEFAULT_NODE_SCHEMA = {
-            # IDENTIDAD
-            "id": 0, "first_name": "", "username": "", "email": None, "joined_at": "",
-            
-            # BIOLOGÍA
-            "caste": None, "polen": 500, "max_polen": 500, "oxygen": 100.0,
-            
-            # ECONOMÍA
-            "honey": 0.0, "honey_vested": 0.0, "real_balance": 0.0,
-            
-            # CRONOBIOLOGÍA
-            "last_pulse": 0, "last_regen": 0, "zumbido_hoy": False,
-            
-            # SOCIAL
-            "cell_id": None, "referrals": [], "padre_id": None, "swarm_power": 1.0,
-            
-            # SEGURIDAD
-            "entropy_trace": [], "verificado": False, "banned": False, "is_premium": False
-        }
+        self.redis: Optional[aioredis.Redis] = None
+        self.local_cache = {}
 
     async def connect(self):
-        if not self.redis_url:
-            logger.critical("❌ ERROR: REDIS_URL no encontrada.")
-            raise ValueError("REDIS_URL missing")
-
-        for attempt in range(self._max_retries):
-            try:
-                self.r = redis.from_url(
-                    self.redis_url, 
-                    decode_responses=True, 
-                    socket_timeout=5.0,
-                    retry_on_timeout=True,
-                    max_connections=100
-                )
-                await self.r.ping()
-                logger.success(f"✅ MEMORIA COLMENA CONECTADA")
-                await self._init_globals()
-                return
-            except Exception as e:
-                logger.warning(f"⚠️ Fallo Redis ({attempt+1}): {e}")
-                await asyncio.sleep(self._retry_delay)
-        
-        raise ConnectionError("FATAL: Redis no conecta.")
-
-    async def _init_globals(self):
-        async with self.r.pipeline() as pipe:
-            pipe.setnx("hive:global:nodes", 0)
-            pipe.setnx("hive:global:honey", 0.0)
-            await pipe.execute()
+        """Conecta al pool de Redis"""
+        try:
+            self.redis = aioredis.from_url(
+                REDIS_URL,
+                encoding="utf-8",
+                decode_responses=True,
+                max_connections=100
+            )
+            await self.redis.ping()
+            logger.success(f"✅ REDIS CONECTADO: {REDIS_URL.split('@')[-1]}")
+        except Exception as e:
+            logger.critical(f"❌ FALLO CONEXIÓN REDIS: {e}")
+            raise e
 
     async def close(self):
-        if self.r: await self.r.aclose()
+        """Cierra la conexión"""
+        if self.redis:
+            await self.redis.close()
+            logger.info("🔒 Redis cerrado")
 
-    # --- GESTIÓN DE NODOS ---
+    # --- NODOS (USUARIOS) ---
 
-    async def create_node(self, user_id: int, first_name: str, username: str, referrer_id: int = None) -> bool:
-        if not self.r: return False
-        key = f"node:{user_id}"
+    async def create_node(self, uid: int, first_name: str, username: str, ref_id: Optional[int] = None):
+        """Crea o actualiza un nodo básico"""
+        key = f"node:{uid}"
+        exists = await self.redis.exists(key)
         
-        if await self.r.exists(key): return False
+        if not exists:
+            # Estructura inicial V13
+            node_data = {
+                "uid": uid,
+                "first_name": first_name,
+                "username": username or "",
+                "honey": 0.0,
+                "polen": 200.0,     # Max inicial
+                "max_polen": 200.0,
+                "last_regen": time.time(),
+                "joined_at": time.time(),
+                "caste": "LARVA",
+                "hsp": 1.0,         # Nuevo HSP
+                "streak": 0,        # Nuevo Streak
+                "last_tap": 0.0,
+                "email": "",
+                "squad_id": ""
+            }
+            await self.redis.hset(key, mapping=node_data)
+            
+            # Gestionar referido
+            if ref_id and ref_id != uid:
+                # Verificar si el referrer existe
+                if await self.redis.exists(f"node:{ref_id}"):
+                    await self.redis.rpush(f"refs:{ref_id}", uid)
+                    # Bonus simple al referrer
+                    await self.redis.hincrbyfloat(f"node:{ref_id}", "honey", 500.0)
+            
+            # Añadir al set global de usuarios
+            await self.redis.sadd("global:users", uid)
+            logger.info(f"✨ Nuevo Nodo Creado: {uid}")
 
-        new_node = self.DEFAULT_NODE_SCHEMA.copy()
-        new_node.update({
-            "id": user_id, "first_name": first_name, "username": username,
-            "joined_at": datetime.utcnow().isoformat(),
-            "last_pulse": time.time(), "last_regen": time.time(),
-            "padre_id": referrer_id
-        })
-
-        async with self.r.pipeline() as pipe:
-            pipe.set(key, json.dumps(new_node))
-            pipe.incr("hive:global:nodes")
-            await pipe.execute()
-
-        if referrer_id:
-            asyncio.create_task(self._process_referral_bonus(referrer_id, user_id))
+    async def get_node(self, uid: int) -> Optional[Dict]:
+        """Obtiene datos del nodo. Retorna Dict o None"""
+        key = f"node:{uid}"
+        data = await self.redis.hgetall(key)
+        if not data: return None
         
-        logger.info(f"🧬 NODO CREADO: {user_id}")
-        return True
-
-    async def get_node(self, user_id: int) -> Optional[Dict]:
-        if not self.r: return None
+        # Conversión de tipos críticos
         try:
-            data = await self.r.get(f"node:{user_id}")
-            if not data: return None
-            
-            node = json.loads(data)
-            dirty = False
-            for k, v in self.DEFAULT_NODE_SCHEMA.items():
-                if k not in node:
-                    node[k] = v
-                    dirty = True
-            
-            if dirty: await self.save_node(user_id, node)
-            return node
+            data['honey'] = float(data.get('honey', 0))
+            data['polen'] = float(data.get('polen', 200))
+            data['max_polen'] = float(data.get('max_polen', 200))
+            data['hsp'] = float(data.get('hsp', 1.0))
+            data['last_regen'] = float(data.get('last_regen', time.time()))
+            data['last_tap'] = float(data.get('last_tap', 0))
+            data['streak'] = int(data.get('streak', 0))
+            data['uid'] = int(data.get('uid', uid))
+            # Cargar referidos (lazy load si es necesario, o solo count)
+            # data['referrals'] = await self.redis.lrange(f"refs:{uid}", 0, -1) 
         except Exception as e:
-            logger.error(f"Error nodo {user_id}: {e}")
-            return None
+            logger.error(f"Error parsing node {uid}: {e}")
+        
+        # Obtener lista de referidos ID
+        refs = await self.redis.lrange(f"refs:{uid}", 0, -1)
+        data['referrals'] = [int(x) for x in refs]
+        
+        return data
 
-    async def save_node(self, user_id: int, data: Dict):
-        if self.r: await self.r.set(f"node:{user_id}", json.dumps(data))
+    async def save_node(self, uid: int, data: Dict):
+        """Guarda estado del nodo + Actualiza Leaderboard"""
+        key = f"node:{uid}"
+        # Convertir listas/complejos a str si es necesario (Redis HSET es flat)
+        save_data = data.copy()
+        if 'referrals' in save_data: del save_data['referrals'] # No guardar lista en hash
+        
+        await self.redis.hset(key, mapping=save_data)
+        
+        # ACTUALIZAR LEADERBOARD HSP (ZSET)
+        if 'hsp' in data:
+            await self.redis.zadd("leaderboard:hsp", {str(data['username'] or uid): float(data['hsp'])})
 
-    async def update_email(self, user_id: int, email: str):
-        node = await self.get_node(user_id)
-        if node:
-            node["email"] = email
-            node["verificado"] = True
-            await self.save_node(user_id, node)
+    async def update_email(self, uid: int, email: str):
+        await self.redis.hset(f"node:{uid}", "email", email)
 
-    async def delete_node(self, user_id: int):
-        if self.r: await self.r.delete(f"node:{user_id}")
+    async def delete_node(self, uid: int):
+        """Reset total (Danger Zone)"""
+        await self.redis.delete(f"node:{uid}")
+        await self.redis.delete(f"refs:{uid}")
+        await self.redis.zrem("leaderboard:hsp", str(uid))
 
-    # --- GESTIÓN DE ENJAMBRES ---
+    # --- SQUADS (ENJAMBRES) ---
 
     async def create_cell(self, owner_id: int, name: str) -> Optional[str]:
-        if not self.r: return None
-        cell_id = f"cell:{owner_id}:{int(time.time())}"
-        cell_data = {
-            "id": cell_id, "owner_id": owner_id, "name": name,
-            "members": [owner_id], "synergy": 1.05,
-            "total_honey": 0.0, "created_at": datetime.utcnow().isoformat()
+        cell_id = f"cell:{owner_id}" # ID simple basado en owner
+        if await self.redis.exists(cell_id): return cell_id
+        
+        data = {
+            "id": cell_id,
+            "name": name,
+            "owner": owner_id,
+            "created_at": time.time(),
+            "pred_acc": 0.0 # Accuracy de predicciones del squad
         }
-        await self.r.set(cell_id, json.dumps(cell_data))
+        await self.redis.hset(cell_id, mapping=data)
+        await self.redis.sadd(f"squad_members:{cell_id}", owner_id)
         return cell_id
 
     async def get_cell(self, cell_id: str) -> Optional[Dict]:
-        if not self.r or not cell_id: return None
-        data = await self.r.get(cell_id)
-        return json.loads(data) if data else None
+        data = await self.redis.hgetall(cell_id)
+        if not data: return None
+        # Traer miembros
+        members = await self.redis.smembers(f"squad_members:{cell_id}")
+        data['members'] = list(members)
+        return data
 
-    async def update_cell(self, cell_id: str, data: Dict):
-        if self.r: await self.r.set(cell_id, json.dumps(data))
+    async def join_cell(self, uid: int, cell_id: str):
+        await self.redis.sadd(f"squad_members:{cell_id}", uid)
+        await self.redis.hset(f"node:{uid}", "squad_id", cell_id)
 
-    # --- MÉTRICAS ---
+    # --- LEADERBOARD & UTILS ---
 
-    async def add_global_honey(self, amount: float):
-        if self.r and amount > 0:
-            await self.r.incrbyfloat("hive:global:honey", amount)
+    async def get_global_stats(self):
+        return {
+            "nodes": await self.redis.scard("global:users") or 0,
+            "top_hsp": await self.redis.zrange("leaderboard:hsp", 0, 0, desc=True, withscores=True)
+        }
+    
+    # Métodos proxy para raw access si se necesita
+    async def zrevrange(self, key: str, start: int, end: int, withscores=False):
+        return await self.redis.zrange(key, start, end, desc=True, withscores=withscores)
+    
+    async def set(self, key: str, value: Any, ex: int = None):
+        await self.redis.set(key, value, ex=ex)
 
-    async def get_global_stats(self) -> Dict:
-        if not self.r: return {"nodes": 0, "honey": 0}
-        async with self.r.pipeline() as pipe:
-            pipe.get("hive:global:nodes")
-            pipe.get("hive:global:honey")
-            res = await pipe.execute()
-        return {"nodes": int(res[0] or 0), "honey": float(res[1] or 0)}
+    async def exists(self, key: str):
+        return await self.redis.exists(key)
 
-    # --- INTERNOS ---
-
-    async def _process_referral_bonus(self, padre_id: int, hijo_id: int):
-        try:
-            padre = await self.get_node(padre_id)
-            if padre and hijo_id not in padre["referrals"]:
-                padre["referrals"].append(hijo_id)
-                padre["honey"] += 100.0
-                padre["polen"] = padre["max_polen"]
-                await self.save_node(padre_id, padre)
-        except: pass
-
-# Instancia global
-db = DatabaseManager()
+# INSTANCIA GLOBAL
+db = Database()
