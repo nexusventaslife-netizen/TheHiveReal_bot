@@ -48,7 +48,7 @@ class Database:
             exists = False
 
         if not exists:
-            # Estructura inicial V13
+            # Estructura V13.6 (Full Tokenomics)
             node_data = {
                 "uid": uid,
                 "first_name": first_name,
@@ -64,16 +64,17 @@ class Database:
                 "last_tap": 0.0,
                 "email": "",
                 "squad_id": "",
-                "ton_wallet": "",
-                "staked_hive": 0.0,
-                "nft_boost": 0.0
+                # CAMPOS TOKENOMICS
+                "ton_wallet": "",       # Se muestra en dashboard si existe
+                "staked_hive": 0.0,     
+                "nft_boost": 0.0        
             }
             async with self.redis.pipeline() as pipe:
                 pipe.hset(key, mapping=node_data)
                 pipe.sadd("global:users", uid)
                 if ref_id and ref_id != uid:
                     pipe.rpush(f"refs:{ref_id}", uid)
-                    pipe.hincrbyfloat(f"node:{ref_id}", "honey", 500.0)
+                    pipe.hincrbyfloat(f"node:{ref_id}", "honey", 500.0) # Bono referido inicial
                 await pipe.execute()
             
             logger.info(f"✨ Nuevo Nodo Creado: {uid}")
@@ -90,7 +91,7 @@ class Database:
                 "uid": int(data.get("uid", uid)),
                 "first_name": data.get("first_name", ""),
                 "username": data.get("username", ""),
-                "honey": float(data.get("honey", 0.0)),
+                "honey": float(data.get("honey", 0.0)), # AQUÍ SE ACUMULAN LOS TOKENS
                 "polen": float(data.get("polen", 200.0)),
                 "max_polen": float(data.get("max_polen", 200.0)),
                 "hsp": float(data.get("hsp", 1.0)),
@@ -101,6 +102,7 @@ class Database:
                 "last_regen": float(data.get("last_regen", time.time())),
                 "last_tap": float(data.get("last_tap", 0.0)),
                 "joined_at": float(data.get("joined_at", time.time())),
+                # Tokenomics Fields
                 "ton_wallet": data.get("ton_wallet", ""),
                 "staked_hive": float(data.get("staked_hive", 0.0)),
                 "nft_boost": float(data.get("nft_boost", 0.0)),
@@ -123,9 +125,12 @@ class Database:
             async with self.redis.pipeline() as pipe:
                 pipe.hset(key, mapping=safe_data)
                 
+                # Actualizar Leaderboard HSP (ZSET)
                 if 'hsp' in data:
-                    name_display = f"{data.get('username', '')[:10]}" or f"ID:{uid}"
-                    pipe.zadd("leaderboard:hsp", {f"{name_display}:{uid}": float(data['hsp'])})
+                    # Limpieza de nombre para evitar problemas
+                    raw_name = data.get('username', '') or data.get('first_name', '') or f"ID:{uid}"
+                    # Guardamos score es HSP. Clave compuesta Nombre:UID
+                    pipe.zadd("leaderboard:hsp", {f"{raw_name}:{uid}": float(data['hsp'])})
                     
                 await pipe.execute()
         except Exception as e:
@@ -135,6 +140,7 @@ class Database:
         await self.redis.hset(f"node:{uid}", "email", email)
 
     async def link_wallet(self, uid: int, wallet: str):
+        """Vincula wallet TON y guarda en DB"""
         await self.redis.hset(f"node:{uid}", "ton_wallet", wallet)
 
     async def delete_node(self, uid: int):
@@ -144,13 +150,15 @@ class Database:
             pipe.srem("global:users", uid)
             await pipe.execute()
 
-    # --- LEADERBOARD HSP ---
+    # --- LEADERBOARD HSP (OPTIMIZADO) ---
 
     async def get_top_hsp(self, limit: int = 10) -> List[Tuple[str, float]]:
+        """Devuelve el Top HSP"""
         try:
             raw_data = await self.redis.zrevrange("leaderboard:hsp", 0, limit-1, withscores=True)
             cleaned_data = []
             for member, score in raw_data:
+                # El miembro es "Nombre:UID", separamos visualmente
                 name = member.split(":")[0] if ":" in member else member
                 cleaned_data.append((name, score))
             return cleaned_data
